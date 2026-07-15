@@ -17,6 +17,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(express.static("public"));
 
 app.get("/", (req, res) => {
   res.send("G-Floor chat backend is running.");
@@ -41,10 +42,10 @@ app.post("/chat/message", async (req, res) => {
       requestedLiveAgent
     } = req.body;
 
-    if (!name || !email || !message) {
+   if (!name || !email || !phone || !message) {
       return res.status(400).json({
         success: false,
-        error: "Name, email, and message are required."
+        error: "Name, email, phone, and message are required."
       });
     }
 
