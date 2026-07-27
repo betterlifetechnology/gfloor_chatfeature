@@ -21,26 +21,70 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Settings
+  | Knowledge Base Matching Configuration
   |--------------------------------------------------------------------------
-  |
-  | Exact/strong matches can answer automatically.
-  | Medium-confidence matches can still be shown but should encourage
-  | Customer Service assistance when appropriate.
-  |
   */
 
   const MATCH_CONFIG = {
     strongMatchScore: 0.72,
-    minimumMatchScore: 0.42
+    minimumMatchScore: 0.43,
+    intentMatchBonus: 0.32,
+    intentMismatchPenalty: 0.24,
+    exactPhraseBonus: 0.3,
+    importantWordBonus: 0.08
   };
 
+  const STOP_WORDS = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "can",
+    "could",
+    "do",
+    "does",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "the",
+    "this",
+    "to",
+    "use",
+    "what",
+    "where",
+    "which",
+    "with",
+    "would",
+    "you",
+    "your"
+  ]);
+
+  const GENERIC_WORDS = new Set([
+    "floor",
+    "floors",
+    "flooring",
+    "gfloor",
+    "g",
+    "product",
+    "products",
+    "vinyl"
+  ]);
+
   let knowledgeBase = [];
-
   let knowledgeBaseLoaded = false;
-
   let knowledgeBaseLoading = false;
-
   let knowledgeBaseLoadPromise = null;
 
   /*
@@ -484,7 +528,6 @@
 
     <div class="gfloor-chat-body">
 
-      <!-- HOME VIEW -->
       <div id="gfloor-chat-home">
 
         <p class="gfloor-chat-intro">
@@ -623,7 +666,6 @@
 
       </div>
 
-      <!-- HUMAN CONFIRMATION VIEW -->
       <div
         id="gfloor-human-view"
         hidden
@@ -676,7 +718,6 @@
 
       </div>
 
-      <!-- CONTACT VIEW -->
       <div
         id="gfloor-contact-view"
         hidden
@@ -704,7 +745,6 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-name">
               Name
             </label>
@@ -716,11 +756,9 @@
               autocomplete="name"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-email">
               Email
             </label>
@@ -732,11 +770,9 @@
               autocomplete="email"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-phone">
               Phone
             </label>
@@ -748,11 +784,9 @@
               autocomplete="tel"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-message">
               How can we help?
             </label>
@@ -762,7 +796,6 @@
               name="message"
               required
             ></textarea>
-
           </div>
 
           <button
@@ -955,9 +988,7 @@
   */
 
   let lastQuestion = "";
-
   let lastMatchedIntent = null;
-
   let lastMatchScore = 0;
 
   let currentSupportStatus = {
@@ -991,6 +1022,8 @@
   function normalizeText(value) {
     return String(value || "")
       .toLowerCase()
+      .replace(/g-floor/g, "gfloor")
+      .replace(/g floor/g, "gfloor")
       .replace(/®/g, "")
       .replace(/&/g, " and ")
       .replace(/[^a-z0-9\\s]/g, " ")
@@ -1006,45 +1039,12 @@
       return [];
     }
 
-    const stopWords = new Set([
-      "a",
-      "an",
-      "and",
-      "are",
-      "as",
-      "at",
-      "be",
-      "can",
-      "do",
-      "does",
-      "for",
-      "from",
-      "how",
-      "i",
-      "in",
-      "is",
-      "it",
-      "my",
-      "of",
-      "on",
-      "or",
-      "the",
-      "this",
-      "to",
-      "what",
-      "where",
-      "which",
-      "with",
-      "you",
-      "your"
-    ]);
-
     return normalized
       .split(" ")
       .filter(function (word) {
         return (
           word.length > 1 &&
-          !stopWords.has(word)
+          !STOP_WORDS.has(word)
         );
       });
   }
@@ -1055,18 +1055,353 @@
     );
   }
 
-  function calculateTokenScore(
+  function hasAnyPhrase(
+    text,
+    phrases
+  ) {
+    const normalized =
+      normalizeText(text);
+
+    return phrases.some(
+      function (phrase) {
+        return normalized.includes(
+          normalizeText(phrase)
+        );
+      }
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Intent Detection
+  |--------------------------------------------------------------------------
+  */
+
+  function detectQuestionIntent(
+    question
+  ) {
+    const normalized =
+      normalizeText(question);
+
+    const intentRules = [
+      {
+        intent:
+          "installation",
+
+        phrases: [
+          "glue down",
+          "glue",
+          "adhesive",
+          "install",
+          "installation",
+          "lay vinyl",
+          "lay flooring",
+          "seam",
+          "seams",
+          "seam tape",
+          "tape",
+          "floating floor",
+          "floating flooring",
+          "threshold",
+          "trim",
+          "subfloor",
+          "acclimate"
+        ]
+      },
+
+      {
+        intent:
+          "cleaning",
+
+        phrases: [
+          "clean",
+          "cleaning",
+          "wash",
+          "washing",
+          "stain",
+          "stains",
+          "remove stain",
+          "tar",
+          "scrub",
+          "cleaner",
+          "bleach",
+          "remove glue",
+          "get glue off",
+          "chalk",
+          "yellowing"
+        ]
+      },
+
+      {
+        intent:
+          "shipping",
+
+        phrases: [
+          "shipping",
+          "ship",
+          "delivery",
+          "deliver",
+          "freight",
+          "tracking",
+          "track my",
+          "when will it arrive"
+        ]
+      },
+
+      {
+        intent:
+          "ordering",
+
+        phrases: [
+          "order",
+          "buy",
+          "purchase",
+          "price",
+          "pricing",
+          "cost",
+          "where can i buy",
+          "where to buy",
+          "cancel my order"
+        ]
+      },
+
+      {
+        intent:
+          "warranty",
+
+        phrases: [
+          "warranty",
+          "return",
+          "returns",
+          "claim",
+          "defect",
+          "defective",
+          "replacement"
+        ]
+      },
+
+      {
+        intent:
+          "pet",
+
+        phrases: [
+          "dog",
+          "dogs",
+          "cat",
+          "cats",
+          "pet",
+          "pets",
+          "crate",
+          "kennel",
+          "litter",
+          "food bowl",
+          "water bowl"
+        ]
+      },
+
+      {
+        intent:
+          "marine",
+
+        phrases: [
+          "boat",
+          "boats",
+          "pontoon",
+          "marine",
+          "dock",
+          "deck",
+          "outdoor",
+          "outside"
+        ]
+      },
+
+      {
+        intent:
+          "shed",
+
+        phrases: [
+          "shed",
+          "sheds"
+        ]
+      },
+
+      {
+        intent:
+          "garage",
+
+        phrases: [
+          "garage",
+          "garages",
+          "epoxy"
+        ]
+      },
+
+      {
+        intent:
+          "sport",
+
+        phrases: [
+          "gym",
+          "gymnastics",
+          "cheer",
+          "cheerleading",
+          "tumbling",
+          "sport",
+          "sports",
+          "exercise"
+        ]
+      }
+    ];
+
+    for (
+      let i = 0;
+      i < intentRules.length;
+      i += 1
+    ) {
+      const rule =
+        intentRules[i];
+
+      if (
+        rule.phrases.some(
+          function (phrase) {
+            return normalized.includes(
+              normalizeText(phrase)
+            );
+          }
+        )
+      ) {
+        return rule.intent;
+      }
+    }
+
+    return null;
+  }
+
+  function getEntryIntent(entry) {
+    const category =
+      normalizeText(
+        entry.category
+      );
+
+    const question =
+      normalizeText(
+        entry.question
+      );
+
+    if (
+      category.includes(
+        "installation"
+      )
+    ) {
+      return "installation";
+    }
+
+    if (
+      category.includes(
+        "cleaning"
+      )
+    ) {
+      return "cleaning";
+    }
+
+    if (
+      category.includes(
+        "shipping"
+      )
+    ) {
+      return "shipping";
+    }
+
+    if (
+      category.includes(
+        "ordering"
+      )
+    ) {
+      return "ordering";
+    }
+
+    if (
+      category.includes(
+        "warranty"
+      ) ||
+      question.includes(
+        "warranty"
+      ) ||
+      question.includes(
+        "return"
+      )
+    ) {
+      return "warranty";
+    }
+
+    if (
+      category.includes(
+        "pet"
+      )
+    ) {
+      return "pet";
+    }
+
+    if (
+      category.includes(
+        "marine"
+      ) ||
+      category.includes(
+        "outdoor"
+      )
+    ) {
+      return "marine";
+    }
+
+    if (
+      category.includes(
+        "shed"
+      )
+    ) {
+      return "shed";
+    }
+
+    if (
+      category.includes(
+        "garage"
+      )
+    ) {
+      return "garage";
+    }
+
+    if (
+      category.includes(
+        "sport"
+      )
+    ) {
+      return "sport";
+    }
+
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Match Scoring
+  |--------------------------------------------------------------------------
+  */
+
+  function calculateWeightedTokenScore(
     customerQuestion,
     knowledgePhrase
   ) {
     const questionWords =
       uniqueWords(
-        getWords(customerQuestion)
+        getWords(
+          customerQuestion
+        )
       );
 
     const phraseWords =
       uniqueWords(
-        getWords(knowledgePhrase)
+        getWords(
+          knowledgePhrase
+        )
       );
 
     if (
@@ -1076,37 +1411,81 @@
       return 0;
     }
 
-    const questionSet =
-      new Set(questionWords);
+    let totalQuestionWeight =
+      0;
 
-    const phraseSet =
-      new Set(phraseWords);
+    let totalPhraseWeight =
+      0;
 
-    let intersection = 0;
+    let matchedWeight =
+      0;
 
-    phraseSet.forEach(function (word) {
-      if (questionSet.has(word)) {
-        intersection += 1;
+    const questionWeights =
+      {};
+
+    questionWords.forEach(
+      function (word) {
+        const weight =
+          GENERIC_WORDS.has(word)
+            ? 0.35
+            : 1;
+
+        questionWeights[word] =
+          weight;
+
+        totalQuestionWeight +=
+          weight;
       }
-    });
+    );
 
-    if (intersection === 0) {
+    phraseWords.forEach(
+      function (word) {
+        const weight =
+          GENERIC_WORDS.has(word)
+            ? 0.35
+            : 1;
+
+        totalPhraseWeight +=
+          weight;
+
+        if (
+          Object.prototype.hasOwnProperty.call(
+            questionWeights,
+            word
+          )
+        ) {
+          matchedWeight +=
+            Math.min(
+              weight,
+              questionWeights[word]
+            );
+        }
+      }
+    );
+
+    if (
+      matchedWeight === 0
+    ) {
       return 0;
     }
 
     const precision =
-      intersection /
-      questionSet.size;
+      matchedWeight /
+      totalQuestionWeight;
 
     const recall =
-      intersection /
-      phraseSet.size;
+      matchedWeight /
+      totalPhraseWeight;
 
-    const f1 =
-      (2 * precision * recall) /
-      (precision + recall);
-
-    return f1;
+    return (
+      2 *
+      precision *
+      recall
+    ) /
+    (
+      precision +
+      recall
+    );
   }
 
   function calculatePhraseScore(
@@ -1114,22 +1493,35 @@
     knowledgePhrase
   ) {
     const question =
-      normalizeText(customerQuestion);
+      normalizeText(
+        customerQuestion
+      );
 
     const phrase =
-      normalizeText(knowledgePhrase);
+      normalizeText(
+        knowledgePhrase
+      );
 
-    if (!question || !phrase) {
+    if (
+      !question ||
+      !phrase
+    ) {
       return 0;
     }
 
-    if (question === phrase) {
+    if (
+      question === phrase
+    ) {
       return 1;
     }
 
     if (
-      question.includes(phrase) ||
-      phrase.includes(question)
+      question.includes(
+        phrase
+      ) ||
+      phrase.includes(
+        question
+      )
     ) {
       const shorterLength =
         Math.min(
@@ -1144,13 +1536,13 @@
         );
 
       return Math.max(
-        0.8,
+        0.82,
         shorterLength /
           longerLength
       );
     }
 
-    return calculateTokenScore(
+    return calculateWeightedTokenScore(
       customerQuestion,
       knowledgePhrase
     );
@@ -1163,130 +1555,138 @@
   */
 
   function loadKnowledgeBase() {
-    if (knowledgeBaseLoaded) {
+    if (
+      knowledgeBaseLoaded
+    ) {
       return Promise.resolve(
         knowledgeBase
       );
     }
 
-    if (knowledgeBaseLoading) {
+    if (
+      knowledgeBaseLoading
+    ) {
       return knowledgeBaseLoadPromise;
     }
 
-    knowledgeBaseLoading = true;
+    knowledgeBaseLoading =
+      true;
 
     kbStatus.textContent =
       "Loading support answers...";
 
     knowledgeBaseLoadPromise =
-      new Promise(function (
-        resolve,
-        reject
-      ) {
-        /*
-         * If another script already loaded it,
-         * use the existing global variable.
-         */
-
-        if (
-          Array.isArray(
-            window.GFloorKnowledgeBase
-          )
+      new Promise(
+        function (
+          resolve,
+          reject
         ) {
-          knowledgeBase =
-            window.GFloorKnowledgeBase;
+          if (
+            Array.isArray(
+              window
+                .GFloorKnowledgeBase
+            )
+          ) {
+            knowledgeBase =
+              window
+                .GFloorKnowledgeBase;
 
-          knowledgeBaseLoaded =
+            knowledgeBaseLoaded =
+              true;
+
+            knowledgeBaseLoading =
+              false;
+
+            kbStatus.textContent =
+              "";
+
+            resolve(
+              knowledgeBase
+            );
+
+            return;
+          }
+
+          const script =
+            document.createElement(
+              "script"
+            );
+
+          script.src =
+            KNOWLEDGE_BASE_URL +
+            "?v=" +
+            Date.now();
+
+          script.async =
             true;
 
-          knowledgeBaseLoading =
-            false;
+          script.onload =
+            function () {
+              if (
+                Array.isArray(
+                  window
+                    .GFloorKnowledgeBase
+                )
+              ) {
+                knowledgeBase =
+                  window
+                    .GFloorKnowledgeBase;
 
-          kbStatus.textContent =
-            "";
+                knowledgeBaseLoaded =
+                  true;
 
-          resolve(knowledgeBase);
+                knowledgeBaseLoading =
+                  false;
 
-          return;
-        }
+                kbStatus.textContent =
+                  "";
 
-        const script =
-          document.createElement(
-            "script"
-          );
+                console.log(
+                  "G-Floor knowledge base loaded:",
+                  knowledgeBase.length,
+                  "intents"
+                );
 
-        script.src =
-          KNOWLEDGE_BASE_URL +
-          "?v=" +
-          Date.now();
+                resolve(
+                  knowledgeBase
+                );
 
-        script.async =
-          true;
-
-        script.onload =
-          function () {
-            if (
-              Array.isArray(
-                window.GFloorKnowledgeBase
-              )
-            ) {
-              knowledgeBase =
-                window.GFloorKnowledgeBase;
-
-              knowledgeBaseLoaded =
-                true;
+                return;
+              }
 
               knowledgeBaseLoading =
                 false;
 
               kbStatus.textContent =
-                "";
+                "Support answers are temporarily unavailable.";
 
-              console.log(
-                "G-Floor knowledge base loaded:",
-                knowledgeBase.length,
-                "intents"
+              reject(
+                new Error(
+                  "Knowledge base did not initialize."
+                )
               );
+            };
 
-              resolve(
-                knowledgeBase
+          script.onerror =
+            function () {
+              knowledgeBaseLoading =
+                false;
+
+              kbStatus.textContent =
+                "Support answers are temporarily unavailable.";
+
+              reject(
+                new Error(
+                  "Knowledge base could not be loaded."
+                )
               );
+            };
 
-              return;
-            }
-
-            knowledgeBaseLoading =
-              false;
-
-            kbStatus.textContent =
-              "Support answers are temporarily unavailable.";
-
-            reject(
-              new Error(
-                "Knowledge base did not initialize."
-              )
-            );
-          };
-
-        script.onerror =
-          function () {
-            knowledgeBaseLoading =
-              false;
-
-            kbStatus.textContent =
-              "Support answers are temporarily unavailable.";
-
-            reject(
-              new Error(
-                "Knowledge base could not be loaded."
-              )
-            );
-          };
-
-        document.head.appendChild(
-          script
-        );
-      });
+          document.head.appendChild(
+            script
+          );
+        }
+      );
 
     return knowledgeBaseLoadPromise;
   }
@@ -1309,7 +1709,18 @@
       return null;
     }
 
-    let bestResult = null;
+    const detectedIntent =
+      detectQuestionIntent(
+        customerQuestion
+      );
+
+    const normalizedQuestion =
+      normalizeText(
+        customerQuestion
+      );
+
+    let bestResult =
+      null;
 
     knowledgeBase.forEach(
       function (entry) {
@@ -1328,15 +1739,33 @@
           );
         }
 
-        let entryBestScore = 0;
+        let entryBestScore =
+          0;
+
+        let bestPhrase =
+          "";
 
         phrases.forEach(
           function (phrase) {
-            const score =
+            let score =
               calculatePhraseScore(
                 customerQuestion,
                 phrase
               );
+
+            const normalizedPhrase =
+              normalizeText(
+                phrase
+              );
+
+            if (
+              normalizedQuestion ===
+              normalizedPhrase
+            ) {
+              score +=
+                MATCH_CONFIG
+                  .exactPhraseBonus;
+            }
 
             if (
               score >
@@ -1344,54 +1773,171 @@
             ) {
               entryBestScore =
                 score;
+
+              bestPhrase =
+                phrase;
             }
           }
         );
 
+        const entryIntent =
+          getEntryIntent(
+            entry
+          );
+
         /*
-         * Small category/product bonus.
+         * Intent is one of the most important signals.
          */
 
-        const customerNormalized =
-          normalizeText(
-            customerQuestion
-          );
-
-        const categoryNormalized =
-          normalizeText(
-            entry.category
-          );
-
-        const productNormalized =
-          normalizeText(
-            entry.product
-          );
-
         if (
-          categoryNormalized &&
-          customerNormalized.includes(
-            categoryNormalized
-          )
+          detectedIntent &&
+          entryIntent
         ) {
-          entryBestScore +=
-            0.05;
+          if (
+            detectedIntent ===
+            entryIntent
+          ) {
+            entryBestScore +=
+              MATCH_CONFIG
+                .intentMatchBonus;
+          } else {
+            entryBestScore -=
+              MATCH_CONFIG
+                .intentMismatchPenalty;
+          }
         }
 
+        /*
+         * Installation-specific signals.
+         *
+         * This prevents "glue down" from matching
+         * cleaning answers about removing glue.
+         */
+
         if (
-          productNormalized &&
-          productNormalized !== "n a" &&
-          customerNormalized.includes(
-            productNormalized
-          )
+          detectedIntent ===
+          "installation"
         ) {
-          entryBestScore +=
-            0.05;
+          if (
+            hasAnyPhrase(
+              customerQuestion,
+              [
+                "glue down",
+                "adhesive",
+                "install",
+                "installation",
+                "lay flooring",
+                "floating"
+              ]
+            ) &&
+            entryIntent ===
+            "installation"
+          ) {
+            entryBestScore +=
+              0.22;
+          }
+
+          if (
+            entryIntent ===
+            "cleaning"
+          ) {
+            entryBestScore -=
+              0.2;
+          }
         }
+
+        /*
+         * Cleaning-specific removal signals.
+         */
+
+        if (
+          detectedIntent ===
+          "cleaning"
+        ) {
+          if (
+            hasAnyPhrase(
+              customerQuestion,
+              [
+                "remove glue",
+                "get glue off",
+                "remove tar",
+                "stain",
+                "clean",
+                "wash"
+              ]
+            ) &&
+            entryIntent ===
+            "cleaning"
+          ) {
+            entryBestScore +=
+              0.18;
+          }
+        }
+
+        /*
+         * Reward important non-generic shared words.
+         */
+
+        const customerWords =
+          uniqueWords(
+            getWords(
+              customerQuestion
+            )
+          );
+
+        const entryWords =
+          uniqueWords(
+            getWords(
+              [
+                entry.question,
+                ...(Array.isArray(
+                  entry.variations
+                )
+                  ? entry.variations
+                  : [])
+              ].join(" ")
+            )
+          );
+
+        const entryWordSet =
+          new Set(
+            entryWords
+          );
+
+        let importantMatches =
+          0;
+
+        customerWords.forEach(
+          function (word) {
+            if (
+              !GENERIC_WORDS.has(
+                word
+              ) &&
+              entryWordSet.has(
+                word
+              )
+            ) {
+              importantMatches +=
+                1;
+            }
+          }
+        );
+
+        entryBestScore +=
+          Math.min(
+            importantMatches *
+              MATCH_CONFIG
+                .importantWordBonus,
+            0.24
+          );
 
         entryBestScore =
-          Math.min(
-            entryBestScore,
-            1
+          Math.max(
+            0,
+            Math.min(
+              entryBestScore,
+              1
+            )
           );
 
         if (
@@ -1404,7 +1950,16 @@
               entry,
 
             score:
-              entryBestScore
+              entryBestScore,
+
+            detectedIntent:
+              detectedIntent,
+
+            entryIntent:
+              entryIntent,
+
+            bestPhrase:
+              bestPhrase
           };
         }
       }
@@ -1413,7 +1968,8 @@
     if (
       !bestResult ||
       bestResult.score <
-        MATCH_CONFIG.minimumMatchScore
+        MATCH_CONFIG
+          .minimumMatchScore
     ) {
       return null;
     }
@@ -1440,12 +1996,14 @@
 
     if (open) {
       loadKnowledgeBase()
-        .catch(function (error) {
-          console.error(
-            "Knowledge base load error:",
-            error
-          );
-        });
+        .catch(
+          function (error) {
+            console.error(
+              "Knowledge base load error:",
+              error
+            );
+          }
+        );
     }
   }
 
@@ -1461,12 +2019,15 @@
   }
 
   function scrollToTop() {
-    setTimeout(function () {
-      chatBody.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
-    }, 50);
+    setTimeout(
+      function () {
+        chatBody.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      },
+      50
+    );
   }
 
   function showHome() {
@@ -1480,7 +2041,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Agent Availability
+  | Customer Service Availability
   |--------------------------------------------------------------------------
   */
 
@@ -1490,7 +2051,9 @@
         await fetch(
           STATUS_API_URL,
           {
-            method: "GET",
+            method:
+              "GET",
+
             headers: {
               Accept:
                 "application/json"
@@ -1501,7 +2064,9 @@
       const data =
         await response.json();
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           data.message ||
             "Availability could not be checked."
@@ -1514,7 +2079,8 @@
           true,
 
         estimatedWaitMinutes:
-          data.estimatedWaitMinutes,
+          data
+            .estimatedWaitMinutes,
 
         businessHours:
           data.businessHours,
@@ -1598,12 +2164,11 @@
 
         <div class="gfloor-wait-time">
           Estimated wait time: approximately
-          ${
-            escapeHtml(
-              status.estimatedWaitMinutes ||
-                "2-5"
-            )
-          } minutes.
+          ${escapeHtml(
+            status
+              .estimatedWaitMinutes ||
+              "2-5"
+          )} minutes.
         </div>
       `;
 
@@ -1652,7 +2217,9 @@
     contactView.hidden =
       false;
 
-    if (lastQuestion) {
+    if (
+      lastQuestion
+    ) {
       messageField.value =
         lastQuestion;
     }
@@ -1682,37 +2249,44 @@
 
     scrollToTop();
 
-    setTimeout(function () {
-      const firstField =
-        panel.querySelector(
-          "#gfloor-chat-name"
-        );
+    setTimeout(
+      function () {
+        const firstField =
+          panel.querySelector(
+            "#gfloor-chat-name"
+          );
 
-      if (firstField) {
-        firstField.focus();
-      }
-    }, 150);
+        if (
+          firstField
+        ) {
+          firstField.focus();
+        }
+      },
+      150
+    );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Topic Button Responses
+  | Topic Prompts
   |--------------------------------------------------------------------------
   */
 
-  function getTopicPrompt(topic) {
+  function getTopicPrompt(
+    topic
+  ) {
     const prompts = {
       flooring:
         "What is the best flooring for a garage?",
 
       installation:
-        "Does G-Floor require adhesive for installation?",
+        "Do I have to glue G-Floor down?",
 
       shipping:
         "What are your shipping and delivery details?",
 
       order:
-        "I need help with my G-Floor order.",
+        "Where can I buy G-Floor?",
 
       cleaning:
         "How do I clean G-Floor?",
@@ -1737,25 +2311,31 @@
   */
 
   function scrollToResponse() {
-    setTimeout(function () {
-      responseBox.scrollIntoView({
-        behavior:
-          "smooth",
-
-        block:
-          "nearest"
-      });
-
-      setTimeout(function () {
-        helpfulActions.scrollIntoView({
+    setTimeout(
+      function () {
+        responseBox.scrollIntoView({
           behavior:
             "smooth",
 
           block:
             "nearest"
         });
-      }, 150);
-    }, 100);
+
+        setTimeout(
+          function () {
+            helpfulActions.scrollIntoView({
+              behavior:
+                "smooth",
+
+              block:
+                "nearest"
+            });
+          },
+          150
+        );
+      },
+      100
+    );
   }
 
   function showNoMatchResponse() {
@@ -1860,7 +2440,8 @@
 
     const confidenceHtml =
       score <
-      MATCH_CONFIG.strongMatchScore
+      MATCH_CONFIG
+        .strongMatchScore
         ? `
           <div class="gfloor-match-note">
             I found a related answer, but your question may need additional review.
@@ -1932,10 +2513,14 @@
     question
   ) {
     const cleanQuestion =
-      String(question || "")
-        .trim();
+      String(
+        question ||
+        ""
+      ).trim();
 
-    if (!cleanQuestion) {
+    if (
+      !cleanQuestion
+    ) {
       responseBox.innerHTML = `
         <span class="gfloor-response-title">
           Please enter a question.
@@ -1988,7 +2573,44 @@
           cleanQuestion
         );
 
-      if (!match) {
+      console.log(
+        "G-Floor KB match:",
+        {
+          question:
+            cleanQuestion,
+
+          matchedQuestion:
+            match
+              ? match.entry.question
+              : null,
+
+          category:
+            match
+              ? match.entry.category
+              : null,
+
+          score:
+            match
+              ? match.score
+              : null,
+
+          detectedIntent:
+            match
+              ? match.detectedIntent
+              : detectQuestionIntent(
+                  cleanQuestion
+                ),
+
+          matchedIntent:
+            match
+              ? match.entryIntent
+              : null
+        }
+      );
+
+      if (
+        !match
+      ) {
         showNoMatchResponse();
 
         return;
@@ -2033,7 +2655,9 @@
   closeButton.addEventListener(
     "click",
     function () {
-      togglePanel(false);
+      togglePanel(
+        false
+      );
 
       button.focus();
     }
@@ -2046,21 +2670,26 @@
   */
 
   topicButtons.forEach(
-    function (topicButton) {
+    function (
+      topicButton
+    ) {
       topicButton.addEventListener(
         "click",
         async function () {
           const topic =
-            topicButton.dataset.topic;
+            topicButton.dataset
+              .topic;
 
           if (
-            topic === "other"
+            topic ===
+            "other"
           ) {
             questionInput.focus();
 
             chatBody.scrollTo({
               top:
-                questionInput.offsetTop -
+                questionInput
+                  .offsetTop -
                 20,
 
               behavior:
@@ -2105,7 +2734,8 @@
     "keydown",
     function (event) {
       if (
-        event.key === "Enter" &&
+        event.key ===
+          "Enter" &&
         !event.shiftKey
       ) {
         event.preventDefault();
@@ -2127,7 +2757,8 @@
     "click",
     function () {
       const mode =
-        helpfulActions.dataset
+        helpfulActions
+          .dataset
           .mode;
 
       if (
@@ -2159,7 +2790,8 @@
     "click",
     function () {
       const mode =
-        helpfulActions.dataset
+        helpfulActions
+          .dataset
           .mode;
 
       if (
@@ -2236,7 +2868,9 @@
 
   form.addEventListener(
     "submit",
-    async function (event) {
+    async function (
+      event
+    ) {
       event.preventDefault();
 
       result.textContent =
@@ -2247,11 +2881,6 @@
 
       submitButton.textContent =
         "Sending...";
-
-      /*
-       * Refresh server-side availability immediately
-       * before sending the request.
-       */
 
       await getAgentAvailability();
 
@@ -2285,7 +2914,8 @@
 
         matchedQuestion:
           lastMatchedIntent
-            ? lastMatchedIntent.question
+            ? lastMatchedIntent
+                .question
             : null,
 
         matchScore:
@@ -2312,7 +2942,8 @@
             }
           );
 
-        let data = {};
+        let data =
+          {};
 
         try {
           data =
@@ -2320,10 +2951,13 @@
         } catch (
           jsonError
         ) {
-          data = {};
+          data =
+            {};
         }
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             data.error ||
               "Message could not be sent."
@@ -2368,12 +3002,15 @@
     "keydown",
     function (event) {
       if (
-        event.key === "Escape" &&
+        event.key ===
+          "Escape" &&
         panel.classList.contains(
           "open"
         )
       ) {
-        togglePanel(false);
+        togglePanel(
+          false
+        );
 
         button.focus();
       }
@@ -2384,19 +3021,20 @@
   |--------------------------------------------------------------------------
   | Preload Knowledge Base
   |--------------------------------------------------------------------------
-  |
-  | Don't block page loading. Give the storefront a moment to finish,
-  | then load the support data in the background.
-  |
   */
 
-  setTimeout(function () {
-    loadKnowledgeBase()
-      .catch(function (error) {
-        console.error(
-          "G-Floor knowledge base preload error:",
-          error
+  setTimeout(
+    function () {
+      loadKnowledgeBase()
+        .catch(
+          function (error) {
+            console.error(
+              "G-Floor knowledge base preload error:",
+              error
+            );
+          }
         );
-      });
-  }, 1000);
+    },
+    1000
+  );
 })();
