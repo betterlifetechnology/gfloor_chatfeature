@@ -6,222 +6,274 @@
   | G-Floor Chat Small Talk
   |--------------------------------------------------------------------------
   |
-  | STEP 19B
+  | VERSION 19.4
   |
-  | Handles basic conversational/customer-service messages BEFORE they are
-  | passed into the G-Floor product knowledge-base matching system.
+  | Handles conversational/customer-service messages BEFORE widget.js
+  | sends them through product matching and confidence scoring.
   |
-  | Examples:
+  | Includes:
   |
-  | Hello
-  | Hi
-  | Good morning
-  | How are you?
-  | How are you today?
-  | Thank you
-  | Thanks
-  | Goodbye
-  | Who are you?
-  | Are you a real person?
-  | Can you help me?
-  | What can you help with?
+  | - Greetings
+  | - How are you?
+  | - Thank you
+  | - Goodbye
+  | - Basic assistant/customer-service conversation
+  | - Kansas City Chiefs small talk
   |
-  | Product/support questions continue through widget.js normally.
+  | Chiefs schedule data is stored in Central Time-compatible UTC timestamps.
   |
   |--------------------------------------------------------------------------
   */
 
-  const SMALL_TALK_VERSION =
-    "19.2";
+  const SMALL_TALK_VERSION = "19.4";
+
+  const CHIEFS_SCHEDULE_URL =
+    "https://www.chiefs.com/schedule/";
 
   /*
   |--------------------------------------------------------------------------
-  | Configuration
-  |--------------------------------------------------------------------------
-  */
-
-  const MAX_SMALL_TALK_WORDS =
-    14;
-
-  /*
-  |--------------------------------------------------------------------------
-  | G-Floor Support Keywords
+  | Kansas City Chiefs 2026 Schedule
   |--------------------------------------------------------------------------
   |
-  | If a message contains one of these AND has a real support question,
-  | we allow widget.js to handle it instead of small talk.
+  | Known scheduled games from the official Kansas City Chiefs schedule.
+  |
+  | Week 17 and Week 18 have not been assigned exact dates/times yet and are
+  | handled separately below.
   |
   |--------------------------------------------------------------------------
   */
 
-  const SUPPORT_WORDS =
-    new Set([
-      "floor",
-      "flooring",
-      "gfloor",
-      "garage",
-      "vinyl",
-      "mat",
-      "mats",
-      "trailer",
-      "marine",
-      "outdoor",
-      "outside",
-      "pet",
-      "kennel",
+  const CHIEFS_GAMES_2026 = [
+    {
+      type: "Preseason",
+      week: "Preseason Week 1",
+      kickoffUtc: "2026-08-15T20:00:00Z",
+      opponent: "Los Angeles Rams",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-      "install",
-      "installation",
-      "glue",
-      "adhesive",
-      "tape",
-      "seam",
-      "seams",
-      "subfloor",
-      "substrate",
-      "wood",
-      "concrete",
+    {
+      type: "Preseason",
+      week: "Preseason Week 2",
+      kickoffUtc: "2026-08-22T23:30:00Z",
+      opponent: "Tampa Bay Buccaneers",
+      location: "Raymond James Stadium",
+      home: false
+    },
 
-      "clean",
-      "cleaning",
-      "wash",
-      "stain",
-      "chemical",
+    {
+      type: "Preseason",
+      week: "Preseason Week 3",
+      kickoffUtc: "2026-08-29T00:00:00Z",
+      opponent: "Seattle Seahawks",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-      "waterproof",
-      "water",
-      "wet",
+    {
+      type: "Regular Season",
+      week: "Week 1",
+      kickoffUtc: "2026-09-15T00:15:00Z",
+      opponent: "Denver Broncos",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-      "size",
-      "sizes",
-      "color",
-      "colors",
-      "sku",
-      "price",
-      "cost",
-      "stock",
-      "available",
-      "availability",
+    {
+      type: "Regular Season",
+      week: "Week 2",
+      kickoffUtc: "2026-09-21T00:20:00Z",
+      opponent: "Indianapolis Colts",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-      "shipping",
-      "delivery",
-      "freight",
-      "tracking",
+    {
+      type: "Regular Season",
+      week: "Week 3",
+      kickoffUtc: "2026-09-27T17:00:00Z",
+      opponent: "Miami Dolphins",
+      location: "Hard Rock Stadium",
+      home: false
+    },
 
-      "order",
-      "purchase",
+    {
+      type: "Regular Season",
+      week: "Week 4",
+      kickoffUtc: "2026-10-04T20:25:00Z",
+      opponent: "Las Vegas Raiders",
+      location: "Allegiant Stadium",
+      home: false
+    },
 
-      "warranty",
-      "return",
-      "refund"
-    ]);
+    /*
+     * Week 5 = BYE
+     */
 
-  /*
-  |--------------------------------------------------------------------------
-  | Helpers
-  |--------------------------------------------------------------------------
-  */
+    {
+      type: "Regular Season",
+      week: "Week 6",
+      kickoffUtc: "2026-10-18T20:25:00Z",
+      opponent: "Los Angeles Chargers",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-  function cleanText(
-    value
-  ) {
-    return String(
-      value || ""
-    )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim();
-  }
+    {
+      type: "Regular Season",
+      week: "Week 7",
+      kickoffUtc: "2026-10-26T00:20:00Z",
+      opponent: "Seattle Seahawks",
+      location: "Lumen Field",
+      home: false
+    },
 
-  function normalizeText(
-    value
-  ) {
-    return cleanText(
-      value
-    )
-      .toLowerCase()
-      .replace(
-        /g-floor/g,
-        "gfloor"
-      )
-      .replace(
-        /g floor/g,
-        "gfloor"
-      )
-      .replace(
-        /®/g,
-        ""
-      )
-      .replace(
-        /™/g,
-        ""
-      )
-      .replace(
-        /[^a-z0-9'\s]/g,
-        " "
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim();
-  }
+    {
+      type: "Regular Season",
+      week: "Week 8",
+      kickoffUtc: "2026-11-01T21:25:00Z",
+      opponent: "Denver Broncos",
+      location: "Empower Field at Mile High",
+      home: false
+    },
 
-  function getWords(
-    value
-  ) {
-    const normalized =
-      normalizeText(
-        value
-      );
+    {
+      type: "Regular Season",
+      week: "Week 9",
+      kickoffUtc: "2026-11-08T18:00:00Z",
+      opponent: "New York Jets",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
 
-    if (
-      !normalized
-    ) {
-      return [];
+    {
+      type: "Regular Season",
+      week: "Week 10",
+      kickoffUtc: "2026-11-15T18:00:00Z",
+      opponent: "Atlanta Falcons",
+      location: "Mercedes-Benz Stadium",
+      home: false
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 11",
+      kickoffUtc: "2026-11-22T18:00:00Z",
+      opponent: "Arizona Cardinals",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 12",
+      kickoffUtc: "2026-11-27T01:20:00Z",
+      opponent: "Buffalo Bills",
+      location: "Highmark Stadium",
+      home: false
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 13",
+      kickoffUtc: "2026-12-04T01:15:00Z",
+      opponent: "Los Angeles Rams",
+      location: "SoFi Stadium",
+      home: false
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 14",
+      kickoffUtc: "2026-12-13T21:25:00Z",
+      opponent: "Cincinnati Bengals",
+      location: "Paycor Stadium",
+      home: false
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 15",
+      kickoffUtc: "2026-12-22T01:15:00Z",
+      opponent: "New England Patriots",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
+    },
+
+    {
+      type: "Regular Season",
+      week: "Week 16",
+      kickoffUtc: "2026-12-27T21:25:00Z",
+      opponent: "San Francisco 49ers",
+      location: "GEHA Field at Arrowhead Stadium",
+      home: true
     }
+  ];
 
-    return normalized.split(
-      " "
-    );
+  /*
+  |--------------------------------------------------------------------------
+  | Chiefs Games Without Final Date / Time
+  |--------------------------------------------------------------------------
+  */
+
+  const CHIEFS_TBD_GAMES_2026 = [
+    {
+      week: "Week 17",
+      opponent: "Los Angeles Chargers",
+      home: false
+    },
+
+    {
+      week: "Week 18",
+      opponent: "Las Vegas Raiders",
+      home: true
+    }
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | General Helpers
+  |--------------------------------------------------------------------------
+  */
+
+  function cleanText(value) {
+    return String(value || "")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
-  function containsSupportWord(
-    value
-  ) {
-    const words =
-      getWords(
-        value
-      );
+  function normalizeText(value) {
+    return cleanText(value)
+      .toLowerCase()
+      .replace(/g-floor/g, "gfloor")
+      .replace(/g floor/g, "gfloor")
+      .replace(/®/g, "")
+      .replace(/™/g, "")
+      .replace(/[?!.,;:]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
-    return words.some(
-      function (
-        word
-      ) {
-        return SUPPORT_WORDS.has(
-          word
-        );
-      }
-    );
+  function escapeHtml(value) {
+    const element =
+      document.createElement("div");
+
+    element.textContent =
+      String(value || "");
+
+    return element.innerHTML;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Element Getters
+  | Element Helpers
   |--------------------------------------------------------------------------
   */
 
   function getQuestionInput() {
     return document.getElementById(
       "gfloor-chat-question"
-    );
-  }
-
-  function getQuestionButton() {
-    return document.getElementById(
-      "gfloor-question-submit"
     );
   }
 
@@ -237,9 +289,217 @@
     );
   }
 
+  function getProcessingMascot() {
+    return document.getElementById(
+      "gfloor-mascot-processing"
+    );
+  }
+
   /*
   |--------------------------------------------------------------------------
-  | Small Talk Detection
+  | Central Time Formatting
+  |--------------------------------------------------------------------------
+  */
+
+  function formatChiefsDate(date) {
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/Chicago",
+
+        weekday:
+          "long",
+
+        month:
+          "long",
+
+        day:
+          "numeric",
+
+        year:
+          "numeric"
+      }
+    ).format(date);
+  }
+
+  function formatChiefsTime(date) {
+    return new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/Chicago",
+
+        hour:
+          "numeric",
+
+        minute:
+          "2-digit",
+
+        timeZoneName:
+          "short"
+      }
+    ).format(date);
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Determine Next Chiefs Game
+  |--------------------------------------------------------------------------
+  */
+
+  function getNextChiefsGame() {
+    const now =
+      new Date();
+
+    /*
+     * Keep a game considered "current" for about four hours after kickoff.
+     *
+     * That way:
+     *
+     * "What time does the Chiefs game start?"
+     *
+     * asked during a game still refers to today's game rather than immediately
+     * jumping to next week's game.
+     */
+
+    const gameWindowStart =
+      now.getTime() -
+      (
+        4 *
+        60 *
+        60 *
+        1000
+      );
+
+    return (
+      CHIEFS_GAMES_2026.find(
+        function (game) {
+          const kickoff =
+            new Date(
+              game.kickoffUtc
+            );
+
+          return (
+            kickoff.getTime() >=
+            gameWindowStart
+          );
+        }
+      ) ||
+      null
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Chiefs Response Builder
+  |--------------------------------------------------------------------------
+  */
+
+  function buildChiefsGameResponse() {
+    const game =
+      getNextChiefsGame();
+
+    if (!game) {
+      return (
+        "The currently scheduled 2026 Chiefs games with confirmed kickoff times have passed. " +
+        "Weeks 17 and 18 are still listed as TBD on the Chiefs schedule. " +
+        "Check Chiefs.com for the latest schedule update."
+      );
+    }
+
+    const kickoff =
+      new Date(
+        game.kickoffUtc
+      );
+
+    const dateText =
+      formatChiefsDate(
+        kickoff
+      );
+
+    const timeText =
+      formatChiefsTime(
+        kickoff
+      );
+
+    const matchup =
+      game.home
+        ? (
+          "the " +
+          game.opponent +
+          " at " +
+          game.location
+        )
+        : (
+          "the " +
+          game.opponent +
+          " at " +
+          game.location
+        );
+
+    return (
+      "Go Chiefs! The next Kansas City Chiefs game is " +
+      game.week +
+      " against " +
+      matchup +
+      " on " +
+      dateText +
+      " at " +
+      timeText +
+      "."
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Chiefs Small-Talk Detection
+  |--------------------------------------------------------------------------
+  */
+
+  function isChiefsQuestion(message) {
+    const normalized =
+      normalizeText(
+        message
+      );
+
+    /*
+     * We deliberately require "Chiefs" or Kansas City football wording so
+     * unrelated sports questions don't take over the customer-service chat.
+     */
+
+    const mentionsChiefs =
+      /\bchiefs\b/.test(
+        normalized
+      ) ||
+      /\bkansas city football\b/.test(
+        normalized
+      ) ||
+      /\bkc football\b/.test(
+        normalized
+      );
+
+    if (!mentionsChiefs) {
+      return false;
+    }
+
+    return (
+      /\bgame\b/.test(normalized) ||
+      /\bplay\b/.test(normalized) ||
+      /\bplaying\b/.test(normalized) ||
+      /\bkickoff\b/.test(normalized) ||
+      /\bstart\b/.test(normalized) ||
+      /\bschedule\b/.test(normalized) ||
+      /\bwhen\b/.test(normalized) ||
+      /\bwhat time\b/.test(normalized) ||
+      /\bnext\b/.test(normalized) ||
+      normalized === "chiefs"
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Small Talk Rules
   |--------------------------------------------------------------------------
   */
 
@@ -251,39 +511,50 @@
         rawMessage
       );
 
-    if (
-      !message
-    ) {
-      return null;
-    }
-
-    const words =
-      getWords(
-        message
-      );
-
-    /*
-     * Avoid treating long messages as casual conversation.
-     */
-
-    if (
-      words.length >
-      MAX_SMALL_TALK_WORDS
-    ) {
+    if (!message) {
       return null;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Greetings
+    | Kansas City Chiefs
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | This comes before all product/knowledge-base routing.
+    |
     |--------------------------------------------------------------------------
     */
 
     if (
-      /^(hi|hello|hey|hiya|howdy)$/.test(
+      isChiefsQuestion(
         message
-      ) ||
-      /^(hi|hello|hey)\s+(there|gfloor|g floor)$/.test(
+      )
+    ) {
+      return {
+        type:
+          "chiefs",
+
+        category:
+          "Kansas City",
+
+        response:
+          buildChiefsGameResponse(),
+
+        sourceUrl:
+          CHIEFS_SCHEDULE_URL
+      };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hello / Greeting
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      /^(hi|hello|hey|hiya|howdy|hello there|hi there|hey there)$/.test(
         message
       )
     ) {
@@ -291,8 +562,11 @@
         type:
           "greeting",
 
+        category:
+          "Customer Service",
+
         response:
-          "Hi! Thanks for visiting G-Floor. I'm here to help with product questions, installation, cleaning, shipping, orders, warranties, and finding the right flooring."
+          "Hi! Thanks for visiting G-Floor. I'm here to help. What can I help you with today?"
       };
     }
 
@@ -303,13 +577,16 @@
     */
 
     if (
-      /^good morning/.test(
+      /^(good morning|morning)$/.test(
         message
       )
     ) {
       return {
         type:
           "good_morning",
+
+        category:
+          "Customer Service",
 
         response:
           "Good morning! Thanks for visiting G-Floor. What can I help you with today?"
@@ -323,13 +600,16 @@
     */
 
     if (
-      /^good afternoon/.test(
+      /^(good afternoon|afternoon)$/.test(
         message
       )
     ) {
       return {
         type:
           "good_afternoon",
+
+        category:
+          "Customer Service",
 
         response:
           "Good afternoon! I'm happy to help. What can I help you with today?"
@@ -343,7 +623,7 @@
     */
 
     if (
-      /^good evening/.test(
+      /^(good evening|evening)$/.test(
         message
       )
     ) {
@@ -351,8 +631,11 @@
         type:
           "good_evening",
 
+        category:
+          "Customer Service",
+
         response:
-          "Good evening! I'm here to help with your G-Floor questions."
+          "Good evening! Thanks for visiting G-Floor. How can I help?"
       };
     }
 
@@ -370,6 +653,9 @@
       return {
         type:
           "how_are_you",
+
+        category:
+          "Customer Service",
 
         response:
           "I'm doing great, thank you for asking! I'm ready to help with your G-Floor questions. What can I help you with today?"
@@ -391,8 +677,11 @@
         type:
           "whats_up",
 
+        category:
+          "Customer Service",
+
         response:
-          "Not much—just here and ready to help with G-Floor! What can I help you find?"
+          "Not much—just here and ready to help with G-Floor! What can I help you with?"
       };
     }
 
@@ -403,13 +692,16 @@
     */
 
     if (
-      /^(thank you|thank you so much|thanks|thanks so much|thank you very much|thanks a lot|appreciate it|i appreciate it|perfect thanks|great thanks)$/.test(
+      /^(thank you|thanks|thank you so much|thanks so much|thank you very much|thanks a lot|appreciate it|i appreciate it)$/.test(
         message
       )
     ) {
       return {
         type:
           "thanks",
+
+        category:
+          "Customer Service",
 
         response:
           "You're very welcome! I'm glad I could help. Let me know if you have another G-Floor question."
@@ -418,7 +710,7 @@
 
     /*
     |--------------------------------------------------------------------------
-    | Compliments
+    | Positive Responses
     |--------------------------------------------------------------------------
     */
 
@@ -429,7 +721,10 @@
     ) {
       return {
         type:
-          "compliment",
+          "positive_feedback",
+
+        category:
+          "Customer Service",
 
         response:
           "Glad to hear it! I'm here if you need help with anything else."
@@ -451,6 +746,9 @@
         type:
           "goodbye",
 
+        category:
+          "Customer Service",
+
         response:
           "Thanks for visiting G-Floor! Have a great day."
       };
@@ -458,7 +756,7 @@
 
     /*
     |--------------------------------------------------------------------------
-    | Who Are You?
+    | Identity
     |--------------------------------------------------------------------------
     */
 
@@ -471,19 +769,22 @@
         type:
           "identity",
 
+        category:
+          "Customer Service",
+
         response:
-          "I'm G-Floor's automated support assistant. I can help answer common G-Floor product and customer-service questions, and I can connect you with our Customer Service team when you need additional help."
+          "I'm G-Floor's automated support assistant. I can help with common G-Floor product and Customer Service questions, and I can connect you with our Customer Service team when needed."
       };
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Are You Human?
+    | Human / Bot Question
     |--------------------------------------------------------------------------
     */
 
     if (
-      /^(are you human|are you a human|are you real|are you a real person|am i talking to a person|am i talking to a human|is this a real person|are you a bot|are you an ai|are you ai)$/.test(
+      /^(are you human|are you a human|are you real|are you a real person|is this a real person|are you a bot|are you an ai|are you ai|am i talking to a human|am i talking to a person)$/.test(
         message
       )
     ) {
@@ -491,14 +792,17 @@
         type:
           "human_question",
 
+        category:
+          "Customer Service",
+
         response:
-          "I'm G-Floor's automated support assistant, not a live Customer Service representative. I can answer many common questions, or you can select “Talk to a Customer Service Representative” below whenever you'd like help from our team."
+          "I'm G-Floor's automated support assistant, not a live representative. I can answer many common questions, or you can select “Talk to a Customer Service Representative” whenever you'd like help from our team."
       };
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Can You Help?
+    | General Help
     |--------------------------------------------------------------------------
     */
 
@@ -511,6 +815,9 @@
         type:
           "help_request",
 
+        category:
+          "Customer Service",
+
         response:
           "Absolutely! Ask me your G-Floor question and I'll do my best to help. I can also connect you with Customer Service if your question needs additional review."
       };
@@ -518,7 +825,7 @@
 
     /*
     |--------------------------------------------------------------------------
-    | What Can You Help With?
+    | Capabilities
     |--------------------------------------------------------------------------
     */
 
@@ -531,14 +838,17 @@
         type:
           "capabilities",
 
+        category:
+          "Customer Service",
+
         response:
-          "I can help with G-Floor product selection, sizes, colors, SKUs, pricing, availability, installation, cleaning and maintenance, outdoor use, shipping and delivery, orders, warranties, and returns. I can also connect you with a Customer Service representative."
+          "I can help with G-Floor product selection, sizes, colors, SKUs, pricing, availability, installation, cleaning and maintenance, outdoor use, shipping and delivery, orders, warranties, and returns. I can also connect you with Customer Service."
       };
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Sorry / Apology
+    | Apology
     |--------------------------------------------------------------------------
     */
 
@@ -551,6 +861,9 @@
         type:
           "apology",
 
+        category:
+          "Customer Service",
+
         response:
           "No problem at all! What can I help you with?"
       };
@@ -558,42 +871,33 @@
 
     /*
     |--------------------------------------------------------------------------
-    | Yes / No Conversation
-    |--------------------------------------------------------------------------
-    |
-    | Do NOT intercept generic Yes/No because those can be important answers
-    | inside other customer-service flows.
+    | Not Small Talk
     |--------------------------------------------------------------------------
     */
-
-    /*
-    |--------------------------------------------------------------------------
-    | Greeting + Actual Product Question
-    |--------------------------------------------------------------------------
-    |
-    | Example:
-    |
-    | "Hi, how do I clean G-Floor?"
-    |
-    | This should go through widget.js rather than being treated as a simple
-    | greeting.
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      containsSupportWord(
-        message
-      )
-    ) {
-      return null;
-    }
 
     return null;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Render Small Talk
+  | Stop Mascot Processing
+  |--------------------------------------------------------------------------
+  */
+
+  function stopProcessingMascot() {
+    const processing =
+      getProcessingMascot();
+
+    if (processing) {
+      processing.classList.remove(
+        "show"
+      );
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render Small-Talk Response
   |--------------------------------------------------------------------------
   */
 
@@ -613,26 +917,47 @@
       return;
     }
 
+    stopProcessingMascot();
+
+    const category =
+      smallTalk.category ||
+      "Customer Service";
+
+    const sourceLink =
+      smallTalk.sourceUrl
+        ? `
+          <div class="gfloor-response-source">
+            <a
+              href="${escapeHtml(
+                smallTalk.sourceUrl
+              )}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View Chiefs Schedule
+            </a>
+          </div>
+        `
+        : "";
+
     responseBox.innerHTML = `
-      <span
-        class="gfloor-response-title"
-      >
+      <span class="gfloor-response-title">
         G-Floor Support
       </span>
 
-      <span
-        class="gfloor-response-category"
-      >
-        Customer Service
+      <span class="gfloor-response-category">
+        ${escapeHtml(
+          category
+        )}
       </span>
 
-      <div
-        class="gfloor-smalltalk-response"
-      >
+      <div class="gfloor-smalltalk-response">
         ${escapeHtml(
           smallTalk.response
         )}
       </div>
+
+      ${sourceLink}
     `;
 
     responseBox.classList.add(
@@ -641,13 +966,10 @@
 
     /*
      * Small talk does not need the
-     * "Did this answer your question?"
-     * workflow.
+     * Did this answer your question buttons.
      */
 
-    if (
-      helpfulActions
-    ) {
+    if (helpfulActions) {
       helpfulActions.classList.remove(
         "show"
       );
@@ -657,26 +979,9 @@
     }
 
     /*
-     * Scroll response into view.
-     */
-
-    window.setTimeout(
-      function () {
-        responseBox.scrollIntoView({
-          behavior:
-            "smooth",
-
-          block:
-            "nearest"
-        });
-      },
-      50
-    );
-
-    /*
-     * Custom analytics event.
+     * GA4-safe event.
      *
-     * Does NOT include the customer's
+     * We intentionally do not send the customer's
      * raw typed message.
      */
 
@@ -702,7 +1007,7 @@
     });
 
     console.log(
-      "G-Floor small talk:",
+      "G-Floor small talk handled:",
       {
         version:
           SMALL_TALK_VERSION,
@@ -711,43 +1016,32 @@
           smallTalk.type
       }
     );
+
+    window.setTimeout(
+      function () {
+        responseBox.scrollIntoView({
+          behavior:
+            "smooth",
+
+          block:
+            "nearest"
+        });
+      },
+      50
+    );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | HTML Escape
+  | Process Possible Small Talk
   |--------------------------------------------------------------------------
   */
 
-  function escapeHtml(
-    value
-  ) {
-    const element =
-      document.createElement(
-        "div"
-      );
-
-    element.textContent =
-      String(
-        value || ""
-      );
-
-    return element.innerHTML;
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Attempt Small Talk
-  |--------------------------------------------------------------------------
-  */
-
-  function handleQuestion() {
+  function trySmallTalk() {
     const questionInput =
       getQuestionInput();
 
-    if (
-      !questionInput
-    ) {
+    if (!questionInput) {
       return false;
     }
 
@@ -756,9 +1050,7 @@
         questionInput.value
       );
 
-    if (
-      !question
-    ) {
+    if (!question) {
       return false;
     }
 
@@ -767,9 +1059,7 @@
         question
       );
 
-    if (
-      !smallTalk
-    ) {
+    if (!smallTalk) {
       return false;
     }
 
@@ -782,115 +1072,105 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Question Button Interception
+  | DOCUMENT-LEVEL CLICK INTERCEPTOR
   |--------------------------------------------------------------------------
   |
-  | Capture phase is intentional.
+  | Capture phase makes this run before widget.js.
   |
-  | For small talk:
-  | - stop before widget.js product matching runs
-  |
-  | For normal questions:
-  | - do nothing
-  | - widget.js continues normally
   |--------------------------------------------------------------------------
   */
 
-  function bindQuestionButton() {
-    const questionButton =
-      getQuestionButton();
+  document.addEventListener(
+    "click",
+    function (event) {
+      const target =
+        event.target;
 
-    if (
-      !questionButton
-    ) {
-      return false;
-    }
-
-    questionButton.addEventListener(
-      "click",
-      function (
-        event
+      if (
+        !target ||
+        !target.closest
       ) {
-        const handled =
-          handleQuestion();
+        return;
+      }
 
-        if (
-          !handled
-        ) {
-          return;
-        }
+      const submitButton =
+        target.closest(
+          "#gfloor-question-submit"
+        );
 
-        event.preventDefault();
+      if (!submitButton) {
+        return;
+      }
 
-        event.stopPropagation();
+      const handled =
+        trySmallTalk();
 
-        event.stopImmediatePropagation();
-      },
-      true
-    );
+      /*
+       * Normal product/customer-support question.
+       *
+       * Let widget.js handle it.
+       */
 
-    return true;
-  }
+      if (!handled) {
+        return;
+      }
+
+      /*
+       * Small talk was handled.
+       *
+       * Do NOT let widget.js send it into
+       * confidence/knowledge-base matching.
+       */
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      event.stopImmediatePropagation();
+    },
+    true
+  );
 
   /*
   |--------------------------------------------------------------------------
-  | Optional Enter Key Support
-  |--------------------------------------------------------------------------
-  |
-  | Enter submits.
-  | Shift + Enter creates a new line.
+  | Enter Key Interceptor
   |--------------------------------------------------------------------------
   */
 
-  function bindKeyboard() {
-    const questionInput =
-      getQuestionInput();
-
-    if (
-      !questionInput
-    ) {
-      return false;
-    }
-
-    questionInput.addEventListener(
-      "keydown",
-      function (
-        event
-      ) {
-        if (
-          event.key !==
+  document.addEventListener(
+    "keydown",
+    function (event) {
+      if (
+        event.key !==
           "Enter" ||
-          event.shiftKey
-        ) {
-          return;
-        }
+        event.shiftKey
+      ) {
+        return;
+      }
 
-        const smallTalk =
-          detectSmallTalk(
-            questionInput.value
-          );
+      if (
+        !event.target ||
+        event.target.id !==
+          "gfloor-chat-question"
+      ) {
+        return;
+      }
 
-        if (
-          !smallTalk
-        ) {
-          return;
-        }
+      const handled =
+        trySmallTalk();
 
-        event.preventDefault();
+      if (!handled) {
+        return;
+      }
 
-        event.stopPropagation();
+      event.preventDefault();
 
-        event.stopImmediatePropagation();
+      event.stopPropagation();
 
-        renderSmallTalk(
-          smallTalk
-        );
-      },
-      true
-    );
-
-    return true;
-  }
+      event.stopImmediatePropagation();
+    },
+    true
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -898,81 +1178,15 @@
   |--------------------------------------------------------------------------
   */
 
-  let initializationAttempts =
-    0;
+  console.log(
+    "G-Floor chat small talk loaded:",
+    {
+      version:
+        SMALL_TALK_VERSION,
 
-  const MAX_INITIALIZATION_ATTEMPTS =
-    40;
-
-  const INITIALIZATION_DELAY =
-    250;
-
-  function initialize() {
-    const questionInput =
-      getQuestionInput();
-
-    const questionButton =
-      getQuestionButton();
-
-    const responseBox =
-      getResponseBox();
-
-    if (
-      !questionInput ||
-      !questionButton ||
-      !responseBox
-    ) {
-      initializationAttempts +=
-        1;
-
-      if (
-        initializationAttempts >=
-        MAX_INITIALIZATION_ATTEMPTS
-      ) {
-        console.warn(
-          "G-Floor small talk could not initialize because the chat widget was not found."
-        );
-
-        return;
-      }
-
-      window.setTimeout(
-        initialize,
-        INITIALIZATION_DELAY
-      );
-
-      return;
+      chiefsSchedule:
+        true
     }
-
-    bindQuestionButton();
-
-    bindKeyboard();
-
-    console.log(
-      "G-Floor chat small talk loaded:",
-      {
-        version:
-          SMALL_TALK_VERSION
-      }
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Start
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    document.readyState ===
-    "loading"
-  ) {
-    document.addEventListener(
-      "DOMContentLoaded",
-      initialize
-    );
-  } else {
-    initialize();
-  }
+  );
 
 })();
