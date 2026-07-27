@@ -1,7 +1,16 @@
 (function () {
-  const API_URL = "https://gfloor-chatfeature.onrender.com/chat/message";
+  const API_BASE_URL =
+    "https://gfloor-chatfeature.onrender.com";
 
-  const style = document.createElement("style");
+  const MESSAGE_API_URL =
+    API_BASE_URL + "/chat/message";
+
+  const STATUS_API_URL =
+    API_BASE_URL + "/chat/status";
+
+  const style =
+    document.createElement("style");
+
   style.textContent = `
     #gfloor-chat-button {
       position: fixed;
@@ -90,13 +99,13 @@
       padding: 11px 12px;
       font: 700 14px Arial, sans-serif;
       cursor: pointer;
-      text-align: left;
     }
 
     .gfloor-topic-button {
       border: 1px solid #c9c9c9;
       background: #ffffff;
       color: #222222;
+      text-align: center;
     }
 
     .gfloor-topic-button:hover,
@@ -253,23 +262,29 @@
       padding: 0;
     }
 
-    .gfloor-back:hover,
-    .gfloor-back:focus {
-      color: #d2232a;
-      outline: none;
-    }
-
     .gfloor-chat-field {
       margin-bottom: 12px;
     }
 
     .gfloor-status-box {
-      padding: 10px;
-      margin-bottom: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
       border-radius: 6px;
       background: #f2f3f4;
       font-size: 13px;
-      line-height: 1.4;
+      line-height: 1.5;
+    }
+
+    .gfloor-status-box.loading {
+      color: #666666;
+    }
+
+    .gfloor-status-box.available {
+      border-left: 4px solid #16733c;
+    }
+
+    .gfloor-status-box.offline {
+      border-left: 4px solid #d2232a;
     }
 
     .gfloor-form-note {
@@ -300,13 +315,21 @@
 
   document.head.appendChild(style);
 
-  const panel = document.createElement("section");
-  panel.id = "gfloor-chat-panel";
-  panel.setAttribute("aria-label", "G-Floor customer support chat");
+  const panel =
+    document.createElement("section");
+
+  panel.id =
+    "gfloor-chat-panel";
+
+  panel.setAttribute(
+    "aria-label",
+    "G-Floor customer support chat"
+  );
 
   panel.innerHTML = `
     <div class="gfloor-chat-header">
       <strong>Chat with G-Floor</strong>
+
       <button
         id="gfloor-chat-close"
         type="button"
@@ -319,11 +342,13 @@
     <div class="gfloor-chat-body">
 
       <div id="gfloor-chat-home">
+
         <p class="gfloor-chat-intro">
           Hi! How can we help you today?
         </p>
 
         <div class="gfloor-topic-list">
+
           <button
             class="gfloor-topic-button"
             type="button"
@@ -379,9 +404,11 @@
           >
             Something Else
           </button>
+
         </div>
 
         <div class="gfloor-question-row">
+
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -390,6 +417,7 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
+
         </div>
 
         <button
@@ -412,6 +440,7 @@
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
+
           <button
             id="gfloor-helpful-yes"
             class="gfloor-small-button"
@@ -427,6 +456,7 @@
           >
             No
           </button>
+
         </div>
 
         <div class="gfloor-divider">
@@ -440,9 +470,14 @@
         >
           Talk to a Customer Service Representative
         </button>
+
       </div>
 
-      <div id="gfloor-contact-view" hidden>
+      <div
+        id="gfloor-contact-view"
+        hidden
+      >
+
         <button
           id="gfloor-back-button"
           class="gfloor-back"
@@ -457,12 +492,17 @@
 
         <div
           id="gfloor-agent-status"
-          class="gfloor-status-box"
-        ></div>
+          class="gfloor-status-box loading"
+          role="status"
+          aria-live="polite"
+        >
+          Checking Customer Service availability...
+        </div>
 
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-name">
               Name
             </label>
@@ -474,9 +514,11 @@
               autocomplete="name"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-email">
               Email
             </label>
@@ -488,9 +530,11 @@
               autocomplete="email"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-phone">
               Phone
             </label>
@@ -502,9 +546,11 @@
               autocomplete="tel"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-message">
               How can we help?
             </label>
@@ -514,6 +560,7 @@
               name="message"
               required
             ></textarea>
+
           </div>
 
           <button
@@ -531,94 +578,150 @@
           ></div>
 
         </form>
+
       </div>
 
     </div>
   `;
 
-  const button = document.createElement("button");
-  button.id = "gfloor-chat-button";
-  button.type = "button";
-  button.textContent = "Chat with us";
-  button.setAttribute("aria-expanded", "false");
-  button.setAttribute("aria-controls", "gfloor-chat-panel");
+  const button =
+    document.createElement("button");
+
+  button.id =
+    "gfloor-chat-button";
+
+  button.type =
+    "button";
+
+  button.textContent =
+    "Chat with us";
+
+  button.setAttribute(
+    "aria-expanded",
+    "false"
+  );
+
+  button.setAttribute(
+    "aria-controls",
+    "gfloor-chat-panel"
+  );
 
   document.body.appendChild(panel);
   document.body.appendChild(button);
 
-  const chatBody = panel.querySelector(".gfloor-chat-body");
-  const closeButton = panel.querySelector("#gfloor-chat-close");
+  const chatBody =
+    panel.querySelector(
+      ".gfloor-chat-body"
+    );
 
-  const homeView = panel.querySelector("#gfloor-chat-home");
-  const contactView = panel.querySelector("#gfloor-contact-view");
+  const closeButton =
+    panel.querySelector(
+      "#gfloor-chat-close"
+    );
 
-  const topicButtons = panel.querySelectorAll(
-    ".gfloor-topic-button"
-  );
+  const homeView =
+    panel.querySelector(
+      "#gfloor-chat-home"
+    );
 
-  const questionInput = panel.querySelector(
-    "#gfloor-chat-question"
-  );
+  const contactView =
+    panel.querySelector(
+      "#gfloor-contact-view"
+    );
 
-  const questionSubmit = panel.querySelector(
-    "#gfloor-question-submit"
-  );
+  const topicButtons =
+    panel.querySelectorAll(
+      ".gfloor-topic-button"
+    );
 
-  const responseBox = panel.querySelector(
-    "#gfloor-response-box"
-  );
+  const questionInput =
+    panel.querySelector(
+      "#gfloor-chat-question"
+    );
 
-  const helpfulActions = panel.querySelector(
-    "#gfloor-helpful-actions"
-  );
+  const questionSubmit =
+    panel.querySelector(
+      "#gfloor-question-submit"
+    );
 
-  const helpfulYes = panel.querySelector(
-    "#gfloor-helpful-yes"
-  );
+  const responseBox =
+    panel.querySelector(
+      "#gfloor-response-box"
+    );
 
-  const helpfulNo = panel.querySelector(
-    "#gfloor-helpful-no"
-  );
+  const helpfulActions =
+    panel.querySelector(
+      "#gfloor-helpful-actions"
+    );
 
-  const humanButton = panel.querySelector(
-    "#gfloor-human-button"
-  );
+  const helpfulYes =
+    panel.querySelector(
+      "#gfloor-helpful-yes"
+    );
 
-  const backButton = panel.querySelector(
-    "#gfloor-back-button"
-  );
+  const helpfulNo =
+    panel.querySelector(
+      "#gfloor-helpful-no"
+    );
 
-  const agentStatus = panel.querySelector(
-    "#gfloor-agent-status"
-  );
+  const humanButton =
+    panel.querySelector(
+      "#gfloor-human-button"
+    );
 
-  const form = panel.querySelector(
-    "#gfloor-chat-form"
-  );
+  const backButton =
+    panel.querySelector(
+      "#gfloor-back-button"
+    );
 
-  const messageField = panel.querySelector(
-    "#gfloor-chat-message"
-  );
+  const agentStatus =
+    panel.querySelector(
+      "#gfloor-agent-status"
+    );
 
-  const submitButton = panel.querySelector(
-    "#gfloor-chat-submit"
-  );
+  const form =
+    panel.querySelector(
+      "#gfloor-chat-form"
+    );
 
-  const result = panel.querySelector(
-    "#gfloor-chat-result"
-  );
+  const messageField =
+    panel.querySelector(
+      "#gfloor-chat-message"
+    );
+
+  const submitButton =
+    panel.querySelector(
+      "#gfloor-chat-submit"
+    );
+
+  const result =
+    panel.querySelector(
+      "#gfloor-chat-result"
+    );
 
   let lastQuestion = "";
 
-  function togglePanel(open) {
-    panel.classList.toggle("open", open);
-    button.setAttribute("aria-expanded", String(open));
+  let currentSupportStatus = {
+    liveAgentAvailable: false,
+    estimatedWaitMinutes: null
+  };
 
-    if (open) {
-      setTimeout(function () {
-        closeButton.focus();
-      }, 50);
-    }
+  /*
+  |--------------------------------------------------------------------------
+  | Panel Controls
+  |--------------------------------------------------------------------------
+  */
+
+  function togglePanel(open) {
+    panel.classList.toggle(
+      "open",
+      open
+    );
+
+    button.setAttribute(
+      "aria-expanded",
+      String(open)
+    );
   }
 
   function showHome() {
@@ -633,26 +736,115 @@
     }, 50);
   }
 
-  function showContactForm(prefilledMessage) {
+  /*
+  |--------------------------------------------------------------------------
+  | Server Availability Check
+  |--------------------------------------------------------------------------
+  */
+
+  async function getAgentAvailability() {
+    agentStatus.className =
+      "gfloor-status-box loading";
+
+    agentStatus.textContent =
+      "Checking Customer Service availability...";
+
+    try {
+      const response =
+        await fetch(
+          STATUS_API_URL,
+          {
+            method: "GET",
+            headers: {
+              "Accept":
+                "application/json"
+            }
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+          "Availability could not be checked."
+        );
+      }
+
+      currentSupportStatus = {
+        liveAgentAvailable:
+          data.liveAgentAvailable === true,
+
+        estimatedWaitMinutes:
+          data.estimatedWaitMinutes
+      };
+
+      if (
+        currentSupportStatus
+          .liveAgentAvailable
+      ) {
+        agentStatus.className =
+          "gfloor-status-box available";
+      } else {
+        agentStatus.className =
+          "gfloor-status-box offline";
+      }
+
+      agentStatus.textContent =
+        data.message;
+
+      return currentSupportStatus;
+    } catch (error) {
+      console.error(
+        "G-Floor availability error:",
+        error
+      );
+
+      currentSupportStatus = {
+        liveAgentAvailable: false,
+        estimatedWaitMinutes: null
+      };
+
+      agentStatus.className =
+        "gfloor-status-box offline";
+
+      agentStatus.textContent =
+        "Customer Service availability could not be checked right now. Live support hours are Monday-Friday, 8 AM-5 PM Central Time.";
+
+      return currentSupportStatus;
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Customer Service Form
+  |--------------------------------------------------------------------------
+  */
+
+  async function showContactForm(
+    prefilledMessage
+  ) {
     homeView.hidden = true;
     contactView.hidden = false;
 
-    const availability = getAgentAvailability();
-    agentStatus.textContent = availability.message;
-
     if (prefilledMessage) {
-      messageField.value = prefilledMessage;
+      messageField.value =
+        prefilledMessage;
     }
 
-    setTimeout(function () {
-      chatBody.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
+    chatBody.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
 
-      const firstField = panel.querySelector(
-        "#gfloor-chat-name"
-      );
+    await getAgentAvailability();
+
+    setTimeout(function () {
+      const firstField =
+        panel.querySelector(
+          "#gfloor-chat-name"
+        );
 
       if (firstField) {
         firstField.focus();
@@ -660,66 +852,11 @@
     }, 100);
   }
 
-  function getAgentAvailability() {
-    const now = new Date();
-
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    }).formatToParts(now);
-
-    const values = {};
-
-    parts.forEach(function (part) {
-      values[part.type] = part.value;
-    });
-
-    const weekday = values.weekday;
-    const hour = Number(values.hour);
-    const minute = Number(values.minute);
-
-    const businessDays = [
-      "Mon",
-      "Tue",
-      "Wed",
-      "Thu",
-      "Fri"
-    ];
-
-    const isBusinessDay =
-      businessDays.includes(weekday);
-
-    const minutesSinceMidnight =
-      hour * 60 + minute;
-
-    const openingMinutes =
-      8 * 60;
-
-    const closingMinutes =
-      17 * 60;
-
-    const open =
-      isBusinessDay &&
-      minutesSinceMidnight >= openingMinutes &&
-      minutesSinceMidnight < closingMinutes;
-
-    if (open) {
-      return {
-        open: true,
-        message:
-          "A Customer Service representative is currently available. Estimated wait time: approximately 2–5 minutes."
-      };
-    }
-
-    return {
-      open: false,
-      message:
-        "Our Customer Service team is currently offline. Live support hours are Monday–Friday, 8 AM–5 PM Central Time. Please leave a message and our team will follow up."
-    };
-  }
+  /*
+  |--------------------------------------------------------------------------
+  | Temporary Topic Answers
+  |--------------------------------------------------------------------------
+  */
 
   function getTopicResponse(topic) {
     const responses = {
@@ -742,11 +879,18 @@
         "We can help with warranty and return questions. Some warranty or return situations may need to be reviewed by Customer Service.",
 
       other:
-        "Please type your question below and we’ll help point you in the right direction."
+        "Please type your question below and we'll help point you in the right direction."
     };
 
-    return responses[topic] || responses.other;
+    return responses[topic] ||
+      responses.other;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Response Display
+  |--------------------------------------------------------------------------
+  */
 
   function scrollToResponse() {
     setTimeout(function () {
@@ -772,41 +916,82 @@
 
       ${message}
 
-      <div style="margin-top:10px;font-weight:700;">
+      <div
+        style="
+          margin-top:10px;
+          font-weight:700;
+        "
+      >
         Did this answer your question?
       </div>
     `;
 
-    responseBox.classList.add("show");
-    helpfulActions.classList.add("show");
+    responseBox.classList.add(
+      "show"
+    );
+
+    helpfulActions.classList.add(
+      "show"
+    );
 
     scrollToResponse();
   }
 
-  button.addEventListener("click", function () {
-    togglePanel(
-      !panel.classList.contains("open")
-    );
-  });
+  /*
+  |--------------------------------------------------------------------------
+  | Open / Close
+  |--------------------------------------------------------------------------
+  */
 
-  closeButton.addEventListener("click", function () {
-    togglePanel(false);
-    button.focus();
-  });
-
-  topicButtons.forEach(function (topicButton) {
-    topicButton.addEventListener("click", function () {
-      const topic =
-        topicButton.dataset.topic;
-
-      lastQuestion =
-        topicButton.textContent.trim();
-
-      showResponse(
-        getTopicResponse(topic)
+  button.addEventListener(
+    "click",
+    function () {
+      togglePanel(
+        !panel.classList.contains(
+          "open"
+        )
       );
-    });
-  });
+    }
+  );
+
+  closeButton.addEventListener(
+    "click",
+    function () {
+      togglePanel(false);
+      button.focus();
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Topic Buttons
+  |--------------------------------------------------------------------------
+  */
+
+  topicButtons.forEach(
+    function (topicButton) {
+      topicButton.addEventListener(
+        "click",
+        function () {
+          const topic =
+            topicButton.dataset.topic;
+
+          lastQuestion =
+            topicButton.textContent.trim();
+
+          showResponse(
+            getTopicResponse(topic)
+          );
+        }
+      );
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Typed Questions
+  |--------------------------------------------------------------------------
+  */
 
   questionSubmit.addEventListener(
     "click",
@@ -821,22 +1006,21 @@
           </span>
         `;
 
-        responseBox.classList.add("show");
-        helpfulActions.classList.remove("show");
+        responseBox.classList.add(
+          "show"
+        );
 
-        setTimeout(function () {
-          responseBox.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest"
-          });
-        }, 100);
+        helpfulActions.classList.remove(
+          "show"
+        );
 
         questionInput.focus();
 
         return;
       }
 
-      lastQuestion = question;
+      lastQuestion =
+        question;
 
       showResponse(
         "Thanks for your question. Our approved automated answer library is still being built. For now, you can connect with Customer Service for help with this question."
@@ -852,10 +1036,17 @@
         !event.shiftKey
       ) {
         event.preventDefault();
+
         questionSubmit.click();
       }
     }
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Helpful Buttons
+  |--------------------------------------------------------------------------
+  */
 
   helpfulYes.addEventListener(
     "click",
@@ -868,28 +1059,33 @@
         You can choose another topic or ask another question anytime.
       `;
 
-      helpfulActions.classList.remove("show");
-
-      setTimeout(function () {
-        responseBox.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest"
-        });
-      }, 100);
+      helpfulActions.classList.remove(
+        "show"
+      );
     }
   );
 
   helpfulNo.addEventListener(
     "click",
     function () {
-      showContactForm(lastQuestion);
+      showContactForm(
+        lastQuestion
+      );
     }
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Human Support Button
+  |--------------------------------------------------------------------------
+  */
 
   humanButton.addEventListener(
     "click",
     function () {
-      showContactForm(lastQuestion);
+      showContactForm(
+        lastQuestion
+      );
     }
   );
 
@@ -900,6 +1096,12 @@
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Form Submission
+  |--------------------------------------------------------------------------
+  */
+
   form.addEventListener(
     "submit",
     async function (event) {
@@ -908,10 +1110,16 @@
       result.textContent = "";
 
       submitButton.disabled = true;
-      submitButton.textContent = "Sending...";
 
-      const availability =
-        getAgentAvailability();
+      submitButton.textContent =
+        "Sending...";
+
+      /*
+       * Check availability again immediately
+       * before submitting.
+       */
+
+      await getAgentAvailability();
 
       const payload = {
         name:
@@ -933,27 +1141,34 @@
           document.title,
 
         requestedLiveAgent:
-          availability.open
+          currentSupportStatus
+            .liveAgentAvailable
       };
 
       try {
-        const response = await fetch(
-          API_URL,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify(payload)
-          }
-        );
+        const response =
+          await fetch(
+            MESSAGE_API_URL,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  payload
+                )
+            }
+          );
 
         let data = {};
 
         try {
-          data = await response.json();
+          data =
+            await response.json();
         } catch (jsonError) {
           data = {};
         }
@@ -961,56 +1176,55 @@
         if (!response.ok) {
           throw new Error(
             data.error ||
-              "Message could not be sent."
+            "Message could not be sent."
           );
         }
 
-        result.style.color = "#16733c";
+        result.style.color =
+          "#16733c";
 
         result.textContent =
           "Thank you. Your message has been sent to G-Floor Customer Service.";
 
         form.reset();
-
-        setTimeout(function () {
-          result.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest"
-          });
-        }, 100);
       } catch (error) {
         console.error(
           "G-Floor chat submission error:",
           error
         );
 
-        result.style.color = "#b42318";
+        result.style.color =
+          "#b42318";
 
         result.textContent =
           "Email delivery is not active yet. Your chat interface is working, but Microsoft Graph email delivery is still being configured.";
-
-        setTimeout(function () {
-          result.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest"
-          });
-        }, 100);
       } finally {
-        submitButton.disabled = false;
+        submitButton.disabled =
+          false;
+
         submitButton.textContent =
           "Send Message";
       }
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Escape Key
+  |--------------------------------------------------------------------------
+  */
+
   document.addEventListener(
     "keydown",
     function (event) {
       if (
         event.key === "Escape" &&
-        panel.classList.contains("open")
+        panel.classList.contains(
+          "open"
+        )
       ) {
         togglePanel(false);
+
         button.focus();
       }
     }
