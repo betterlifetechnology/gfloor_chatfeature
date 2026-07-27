@@ -28,10 +28,6 @@ if (
 app.use(
   cors({
     origin: function (origin, callback) {
-      /*
-       * Allow requests with no Origin header.
-       * This includes direct health checks and server-side requests.
-       */
       if (!origin) {
         return callback(null, true);
       }
@@ -61,15 +57,66 @@ app.use(express.static("public"));
 
 /*
 |--------------------------------------------------------------------------
+| Live Chat Configuration
+|--------------------------------------------------------------------------
+|
+| Render environment variables:
+|
+| LIVE_AGENT_QUEUE_STATUS=normal
+| LIVE_AGENT_NORMAL_WAIT=2-5
+| LIVE_AGENT_BUSY_WAIT=5-10
+|
+| Queue status options:
+|
+| normal
+| busy
+|
+|--------------------------------------------------------------------------
+*/
+
+function getLiveAgentWaitEstimate() {
+  const queueStatus =
+    (
+      process.env.LIVE_AGENT_QUEUE_STATUS ||
+      "normal"
+    )
+      .trim()
+      .toLowerCase();
+
+  const normalWait =
+    (
+      process.env.LIVE_AGENT_NORMAL_WAIT ||
+      "2-5"
+    ).trim();
+
+  const busyWait =
+    (
+      process.env.LIVE_AGENT_BUSY_WAIT ||
+      "5-10"
+    ).trim();
+
+  if (queueStatus === "busy") {
+    return {
+      queueStatus: "busy",
+      estimatedWaitMinutes: busyWait
+    };
+  }
+
+  return {
+    queueStatus: "normal",
+    estimatedWaitMinutes: normalWait
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
 | Customer Service Business Hours
 |--------------------------------------------------------------------------
 |
-| Business hours:
 | Monday-Friday
 | 8:00 AM-5:00 PM
 | Central Time
 |
-| America/Chicago automatically handles CST/CDT.
 |--------------------------------------------------------------------------
 */
 
@@ -93,9 +140,14 @@ function getCustomerServiceStatus() {
     }
   });
 
-  const weekday = centralTime.weekday;
-  const hour = Number(centralTime.hour);
-  const minute = Number(centralTime.minute);
+  const weekday =
+    centralTime.weekday;
+
+  const hour =
+    Number(centralTime.hour);
+
+  const minute =
+    Number(centralTime.minute);
 
   const businessDays = [
     "Mon",
@@ -123,23 +175,46 @@ function getCustomerServiceStatus() {
     minutesSinceMidnight < closingMinutes;
 
   if (liveAgentAvailable) {
+    const waitEstimate =
+      getLiveAgentWaitEstimate();
+
     return {
       liveAgentAvailable: true,
+
       businessHours:
         "Monday-Friday, 8 AM-5 PM Central Time",
-      estimatedWaitMinutes: "2-5",
+
+      queueStatus:
+        waitEstimate.queueStatus,
+
+      estimatedWaitMinutes:
+        waitEstimate.estimatedWaitMinutes,
+
       message:
-        "A Customer Service representative is currently available. Estimated wait time: approximately 2-5 minutes."
+        "A Customer Service representative is currently available. " +
+        "Estimated wait time: approximately " +
+        waitEstimate.estimatedWaitMinutes +
+        " minutes."
     };
   }
 
   return {
     liveAgentAvailable: false,
+
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
-    estimatedWaitMinutes: null,
+
+    queueStatus:
+      "offline",
+
+    estimatedWaitMinutes:
+      null,
+
     message:
-      "Our Customer Service team is currently offline. Live support hours are Monday-Friday, 8 AM-5 PM Central Time. Please leave a message and our team will follow up."
+      "Our Customer Service team is currently offline. " +
+      "Live support hours are Monday-Friday, " +
+      "8 AM-5 PM Central Time. " +
+      "Please leave a message and our team will follow up."
   };
 }
 
@@ -178,25 +253,38 @@ app.get("/health", function (req, res) {
       }
     );
 
+  const supportStatus =
+    getCustomerServiceStatus();
+
   res.json({
     status: "ok",
-    app: "gfloor-chatfeature",
-    serverTime: new Date().toISOString(),
+
+    app:
+      "gfloor-chatfeature",
+
+    serverTime:
+      new Date().toISOString(),
+
     emailConfigured:
       missingEnvironmentVariables.length === 0,
+
     missingEnvironmentVariables:
-      missingEnvironmentVariables
+      missingEnvironmentVariables,
+
+    liveAgentAvailable:
+      supportStatus.liveAgentAvailable,
+
+    queueStatus:
+      supportStatus.queueStatus,
+
+    estimatedWaitMinutes:
+      supportStatus.estimatedWaitMinutes
   });
 });
 
 /*
 |--------------------------------------------------------------------------
 | Chat Status
-|--------------------------------------------------------------------------
-|
-| Shopify calls this endpoint whenever the customer wants to connect
-| with a live representative.
-|
 |--------------------------------------------------------------------------
 */
 
@@ -207,12 +295,19 @@ app.get("/chat/status", function (req, res) {
 
     return res.status(200).json({
       success: true,
+
       liveAgentAvailable:
         status.liveAgentAvailable,
+
       businessHours:
         status.businessHours,
+
+      queueStatus:
+        status.queueStatus,
+
       estimatedWaitMinutes:
         status.estimatedWaitMinutes,
+
       message:
         status.message
     });
@@ -224,10 +319,19 @@ app.get("/chat/status", function (req, res) {
 
     return res.status(500).json({
       success: false,
-      liveAgentAvailable: false,
+
+      liveAgentAvailable:
+        false,
+
       businessHours:
         "Monday-Friday, 8 AM-5 PM Central Time",
-      estimatedWaitMinutes: null,
+
+      queueStatus:
+        "unavailable",
+
+      estimatedWaitMinutes:
+        null,
+
       message:
         "Customer Service availability could not be checked right now."
     });
@@ -274,18 +378,12 @@ app.post(
           ? req.body.pageTitle.trim()
           : "";
 
-      /*
-       * Do NOT trust the browser's live-agent value.
-       * The server determines whether live support
-       * is actually available.
-       */
-
-      const currentSupportStatus =
-        getCustomerServiceStatus();
-
       const requestedLiveAgent =
         req.body.requestedLiveAgent === true ||
         req.body.requestedLiveAgent === "true";
+
+      const currentSupportStatus =
+        getCustomerServiceStatus();
 
       if (
         !name ||
@@ -295,6 +393,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           error:
             "Name, email, phone, and message are required."
         });
@@ -306,6 +405,7 @@ app.post(
       if (!emailPattern.test(email)) {
         return res.status(400).json({
           success: false,
+
           error:
             "Please enter a valid email address."
         });
@@ -337,6 +437,7 @@ app.post(
 
         return res.status(500).json({
           success: false,
+
           error:
             "Email delivery is not fully configured."
         });
@@ -344,11 +445,11 @@ app.post(
 
       /*
       |--------------------------------------------------------------------------
-      | SMTP Transport
+      | Temporary SMTP Transport
       |--------------------------------------------------------------------------
       |
-      | This is temporary while Microsoft Graph is being configured
-      | by NetStandard.
+      | This remains temporary until NetStandard completes
+      | the Microsoft Graph configuration.
       |
       */
 
@@ -366,13 +467,17 @@ app.post(
             process.env.SMTP_SECURE ===
             "true",
 
-          requireTLS: true,
+          requireTLS:
+            true,
 
-          connectionTimeout: 15000,
+          connectionTimeout:
+            15000,
 
-          greetingTimeout: 10000,
+          greetingTimeout:
+            10000,
 
-          socketTimeout: 20000,
+          socketTimeout:
+            20000,
 
           auth: {
             user:
@@ -383,49 +488,62 @@ app.post(
           },
 
           tls: {
-            minVersion: "TLSv1.2"
+            minVersion:
+              "TLSv1.2"
           }
         });
 
       const emailBody = [
         "New G-Floor chat message",
+
         "",
+
         `Name: ${name}`,
         `Email: ${email}`,
         `Phone: ${phone}`,
+
         "",
+
         "Message:",
         message,
+
         "",
+
         `Page title: ${
           pageTitle || "Not provided"
         }`,
+
         `Page URL: ${
           pageUrl || "Not provided"
         }`,
+
         "",
+
         `Customer requested live agent: ${
           requestedLiveAgent
             ? "Yes"
             : "No"
         }`,
+
         "",
+
         `Live agent available at submission: ${
-          currentSupportStatus
-            .liveAgentAvailable
+          currentSupportStatus.liveAgentAvailable
             ? "Yes"
             : "No"
         }`,
-        "",
+
+        `Queue status: ${
+          currentSupportStatus.queueStatus
+        }`,
+
         `Estimated wait time: ${
-          currentSupportStatus
-            .estimatedWaitMinutes
-            ? currentSupportStatus
-                .estimatedWaitMinutes +
+          currentSupportStatus.estimatedWaitMinutes
+            ? currentSupportStatus.estimatedWaitMinutes +
               " minutes"
             : "Not available"
         }`,
-        "",
+
         `Business hours: ${
           currentSupportStatus.businessHours
         }`
@@ -437,8 +555,7 @@ app.post(
             process.env.SMTP_FROM,
 
           to:
-            process.env
-              .CUSTOMER_SERVICE_EMAIL,
+            process.env.CUSTOMER_SERVICE_EMAIL,
 
           replyTo:
             email,
@@ -457,14 +574,18 @@ app.post(
 
       return res.status(200).json({
         success: true,
+
         message:
           "Your message was sent successfully.",
+
         liveAgentAvailable:
-          currentSupportStatus
-            .liveAgentAvailable,
+          currentSupportStatus.liveAgentAvailable,
+
+        queueStatus:
+          currentSupportStatus.queueStatus,
+
         estimatedWaitMinutes:
-          currentSupportStatus
-            .estimatedWaitMinutes
+          currentSupportStatus.estimatedWaitMinutes
       });
     } catch (error) {
       console.error(
@@ -472,14 +593,19 @@ app.post(
         {
           name:
             error.name,
+
           message:
             error.message,
+
           code:
             error.code,
+
           command:
             error.command,
+
           response:
             error.response,
+
           responseCode:
             error.responseCode
         }
@@ -487,6 +613,7 @@ app.post(
 
       return res.status(500).json({
         success: false,
+
         error:
           "Message could not be sent. Please contact Customer Service directly."
       });
