@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "brand": "G-Floor",
+  "purpose": "Customer Service training review queue for the G-Floor custom chat feature.",
+  "lastUpdated": "2026-07-27",
+  "rules": {
+    "autoPublish": false,
+    "requiresHumanApproval": true,
+    "allowCustomerPersonalInformation": false,
+    "allowOrderSpecificInformation": false,
+    "allowPrivatePricing": false
+  },
+  "items": [
+    {
+      "id": "training-2b3d574c563d",
+      "source": "manual-customer-service-training",
+      "sourceDate": "2026-07-27",
+      "customerQuestion": "Does G-Floor need to be glued down?",
+      "customerServiceResponse": "Garage flooring can be loose laid or adhered depending on the installation.",
+      "suggestedQuestion": "Does G-Floor need to be glued down?",
+      "suggestedAnswer": "G-Floor Garage & Universal Flooring can be installed as a floating mat or secured with approved adhesive depending on the installation.",
+      "suggestedCategory": "Installation",
+      "suggestedVariations": [
+        "do i have to glue g-floor down",
+        "does g-floor require adhesive",
+        "can g-floor be loose laid"
+      ],
+      "sourceUrl": "https://gfloor.com/pages/installation-guide",
+      "sensitiveInformationDetected": [],
+      "requiresSensitiveDataReview": false,
+      "status": "pending-review",
+      "approved": false,
+      "reviewedBy": "",
+      "reviewedDate": "",
+      "notes": "Temporary Step 15 training workflow test."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "source": "manual-customer-service-training",
+    "sourceDate": "2026-07-27",
+    "customerQuestion": "Does G-Floor need to be glued down?",
+    "customerServiceResponse": "Garage flooring can be loose laid or adhered depending on the installation.",
+    "suggestedQuestion": "Does G-Floor need to be glued down?",
+    "suggestedAnswer": "G-Floor Garage & Universal Flooring can be installed as a floating mat or secured with approved adhesive depending on the installation.",
+    "suggestedCategory": "Installation",
+    "suggestedVariations": [
+      "do i have to glue g-floor down",
+      "does g-floor require adhesive",
+      "can g-floor be loose laid"
+    ],
+    "sourceUrl": "https://gfloor.com/pages/installation-guide",
+    "notes": "Temporary Step 15 training workflow test."
+  }
+]
