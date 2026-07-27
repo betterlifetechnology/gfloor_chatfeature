@@ -57,7 +57,7 @@ app.use(
 
 app.use(
   express.json({
-    limit: "50kb"
+    limit: "75kb"
   })
 );
 
@@ -108,12 +108,6 @@ function getLiveAgentWaitEstimate() {
 /*
 |--------------------------------------------------------------------------
 | Customer Service Business Hours
-|--------------------------------------------------------------------------
-|
-| Monday-Friday
-| 8:00 AM-5:00 PM
-| Central Time
-|
 |--------------------------------------------------------------------------
 */
 
@@ -284,6 +278,12 @@ function isValidEmail(
   );
 }
 
+/*
+|--------------------------------------------------------------------------
+| Transcript Sanitizer
+|--------------------------------------------------------------------------
+*/
+
 function cleanTranscript(
   transcript
 ) {
@@ -296,28 +296,31 @@ function cleanTranscript(
   }
 
   return transcript
-    .slice(0, 100)
+    .slice(
+      0,
+      100
+    )
     .map(
       function (entry) {
         return {
           role:
             cleanText(
               entry &&
-                entry.role,
+              entry.role,
               30
             ),
 
           message:
             cleanText(
               entry &&
-                entry.message,
+              entry.message,
               5000
             ),
 
           timestamp:
             cleanText(
               entry &&
-                entry.timestamp,
+              entry.timestamp,
               100
             )
         };
@@ -338,9 +341,12 @@ function formatTranscript(
 ) {
   if (
     !transcript ||
-    transcript.length === 0
+    transcript.length ===
+      0
   ) {
-    return "No transcript available.";
+    return (
+      "No transcript available."
+    );
   }
 
   return transcript
@@ -364,6 +370,211 @@ function formatTranscript(
 
 /*
 |--------------------------------------------------------------------------
+| Shopify Page / Product Context Sanitizer
+|--------------------------------------------------------------------------
+*/
+
+function cleanPageContext(
+  pageContext
+) {
+  if (
+    !pageContext ||
+    typeof pageContext !==
+      "object"
+  ) {
+    return {
+      pageType: "",
+      pageTitle: "",
+      pageUrl: "",
+      referrer: "",
+      productTitle: "",
+      productHandle: "",
+      productId: "",
+      variantId: "",
+      variantTitle: "",
+      sku: "",
+      vendor: "",
+      productType: "",
+      collectionHandle: "",
+      collectionTitle: ""
+    };
+  }
+
+  return {
+    pageType:
+      cleanText(
+        pageContext.pageType,
+        100
+      ),
+
+    pageTitle:
+      cleanText(
+        pageContext.pageTitle,
+        500
+      ),
+
+    pageUrl:
+      cleanText(
+        pageContext.pageUrl,
+        2000
+      ),
+
+    referrer:
+      cleanText(
+        pageContext.referrer,
+        2000
+      ),
+
+    productTitle:
+      cleanText(
+        pageContext.productTitle,
+        500
+      ),
+
+    productHandle:
+      cleanText(
+        pageContext.productHandle,
+        300
+      ),
+
+    productId:
+      cleanText(
+        String(
+          pageContext.productId ||
+          ""
+        ),
+        100
+      ),
+
+    variantId:
+      cleanText(
+        String(
+          pageContext.variantId ||
+          ""
+        ),
+        100
+      ),
+
+    variantTitle:
+      cleanText(
+        pageContext.variantTitle,
+        500
+      ),
+
+    sku:
+      cleanText(
+        pageContext.sku,
+        200
+      ),
+
+    vendor:
+      cleanText(
+        pageContext.vendor,
+        300
+      ),
+
+    productType:
+      cleanText(
+        pageContext.productType,
+        300
+      ),
+
+    collectionHandle:
+      cleanText(
+        pageContext.collectionHandle,
+        300
+      ),
+
+    collectionTitle:
+      cleanText(
+        pageContext.collectionTitle,
+        500
+      )
+  };
+}
+
+function formatPageContext(
+  context
+) {
+  return [
+    `Page type: ${
+      context.pageType ||
+      "Not detected"
+    }`,
+
+    `Page title: ${
+      context.pageTitle ||
+      "Not provided"
+    }`,
+
+    `Page URL: ${
+      context.pageUrl ||
+      "Not provided"
+    }`,
+
+    `Referrer: ${
+      context.referrer ||
+      "Not provided"
+    }`,
+
+    "",
+
+    `Product title: ${
+      context.productTitle ||
+      "Not detected"
+    }`,
+
+    `Product handle: ${
+      context.productHandle ||
+      "Not detected"
+    }`,
+
+    `Product ID: ${
+      context.productId ||
+      "Not detected"
+    }`,
+
+    `Variant ID: ${
+      context.variantId ||
+      "Not detected"
+    }`,
+
+    `Variant title: ${
+      context.variantTitle ||
+      "Not detected"
+    }`,
+
+    `SKU: ${
+      context.sku ||
+      "Not detected"
+    }`,
+
+    `Vendor: ${
+      context.vendor ||
+      "Not detected"
+    }`,
+
+    `Product type: ${
+      context.productType ||
+      "Not detected"
+    }`,
+
+    `Collection handle: ${
+      context.collectionHandle ||
+      "Not detected"
+    }`,
+
+    `Collection title: ${
+      context.collectionTitle ||
+      "Not detected"
+    }`
+  ].join(
+    "\n"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
 | Home
 |--------------------------------------------------------------------------
 */
@@ -379,7 +590,7 @@ app.get(
 
 /*
 |--------------------------------------------------------------------------
-| Health Check
+| Health
 |--------------------------------------------------------------------------
 */
 
@@ -565,7 +776,7 @@ app.post(
       const pageTitle =
         cleanText(
           req.body.pageTitle,
-          300
+          500
         );
 
       const matchedIntent =
@@ -594,6 +805,12 @@ app.post(
         cleanTranscript(
           req.body
             .transcript
+        );
+
+      const pageContext =
+        cleanPageContext(
+          req.body
+            .pageContext
         );
 
       const requestedLiveAgent =
@@ -686,10 +903,6 @@ app.post(
       |--------------------------------------------------------------------------
       | Temporary SMTP Transport
       |--------------------------------------------------------------------------
-      |
-      | This will be replaced by Microsoft Graph when NetStandard
-      | completes the required permissions.
-      |
       */
 
       const transporter =
@@ -743,6 +956,11 @@ app.post(
           transcript
         );
 
+      const formattedPageContext =
+        formatPageContext(
+          pageContext
+        );
+
       const emailBody = [
         "New G-Floor chat message",
 
@@ -755,6 +973,9 @@ app.post(
 
         "",
 
+        "CUSTOMER",
+        "--------",
+
         `Name: ${name}`,
         `Email: ${email}`,
         `Phone: ${phone}`,
@@ -766,17 +987,14 @@ app.post(
 
         "",
 
-        `Page title: ${
-          pageTitle ||
-          "Not provided"
-        }`,
-
-        `Page URL: ${
-          pageUrl ||
-          "Not provided"
-        }`,
+        "SHOPIFY PAGE / PRODUCT CONTEXT",
+        "------------------------------",
+        formattedPageContext,
 
         "",
+
+        "KNOWLEDGE BASE MATCH",
+        "--------------------",
 
         `Matched intent ID: ${
           matchedIntent ||
@@ -796,6 +1014,9 @@ app.post(
         }`,
 
         "",
+
+        "CUSTOMER SERVICE STATUS",
+        "-----------------------",
 
         `Customer requested live agent: ${
           requestedLiveAgent
@@ -831,7 +1052,7 @@ app.post(
 
         "",
 
-        "Conversation Transcript",
+        "CONVERSATION TRANSCRIPT",
         "-----------------------",
         formattedTranscript
       ].join(
@@ -864,6 +1085,14 @@ app.post(
         {
           conversationId:
             conversationId,
+
+          productHandle:
+            pageContext
+              .productHandle,
+
+          variantId:
+            pageContext
+              .variantId,
 
           messageId:
             emailResult

@@ -42,10 +42,7 @@
       0.24,
 
     exactPhraseBonus:
-      0.3,
-
-    importantWordBonus:
-      0.08
+      0.3
   };
 
   const STOP_WORDS =
@@ -145,7 +142,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Conversation State
+  | Conversation
   |--------------------------------------------------------------------------
   */
 
@@ -154,13 +151,11 @@
       new Date();
 
     const year =
-      now
-        .getFullYear();
+      now.getFullYear();
 
     const month =
       String(
-        now.getMonth() +
-        1
+        now.getMonth() + 1
       ).padStart(
         2,
         "0"
@@ -220,6 +215,501 @@
       ""
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Shopify Page / Product Context
+  |--------------------------------------------------------------------------
+  */
+
+  function getUrlVariantId() {
+    try {
+      const parameters =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      return (
+        parameters.get(
+          "variant"
+        ) ||
+        ""
+      );
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function getProductHandleFromUrl() {
+    const match =
+      window.location.pathname.match(
+        /\/products\/([^/?#]+)/
+      );
+
+    return (
+      match &&
+      match[1]
+        ? decodeURIComponent(
+            match[1]
+          )
+        : ""
+    );
+  }
+
+  function getCollectionHandleFromUrl() {
+    const match =
+      window.location.pathname.match(
+        /\/collections\/([^/?#]+)/
+      );
+
+    return (
+      match &&
+      match[1]
+        ? decodeURIComponent(
+            match[1]
+          )
+        : ""
+    );
+  }
+
+  function getCollectionFromBreadcrumb() {
+    const links =
+      Array.from(
+        document.querySelectorAll(
+          'a[href*="/collections/"]'
+        )
+      );
+
+    for (
+      let i = 0;
+      i < links.length;
+      i += 1
+    ) {
+      const href =
+        links[i].getAttribute(
+          "href"
+        ) ||
+        "";
+
+      const match =
+        href.match(
+          /\/collections\/([^/?#]+)/
+        );
+
+      if (
+        match &&
+        match[1]
+      ) {
+        return {
+          handle:
+            decodeURIComponent(
+              match[1]
+            ),
+
+          title:
+            (
+              links[i].textContent ||
+              ""
+            ).trim()
+        };
+      }
+    }
+
+    return {
+      handle:
+        "",
+      title:
+        ""
+    };
+  }
+
+  function detectPageType() {
+    try {
+      if (
+        window.ShopifyAnalytics &&
+        window.ShopifyAnalytics.meta &&
+        window.ShopifyAnalytics.meta.page &&
+        window.ShopifyAnalytics.meta.page.pageType
+      ) {
+        return String(
+          window.ShopifyAnalytics
+            .meta
+            .page
+            .pageType
+        );
+      }
+    } catch (error) {
+      // Ignore and continue.
+    }
+
+    try {
+      if (
+        window.meta &&
+        window.meta.page &&
+        window.meta.page.pageType
+      ) {
+        return String(
+          window.meta.page.pageType
+        );
+      }
+    } catch (error) {
+      // Ignore and continue.
+    }
+
+    const path =
+      window.location.pathname;
+
+    if (
+      path.includes(
+        "/products/"
+      )
+    ) {
+      return "product";
+    }
+
+    if (
+      path.includes(
+        "/collections/"
+      )
+    ) {
+      return "collection";
+    }
+
+    if (
+      path.includes(
+        "/pages/"
+      )
+    ) {
+      return "page";
+    }
+
+    if (
+      path.includes(
+        "/blogs/"
+      )
+    ) {
+      return "article";
+    }
+
+    if (
+      path.includes(
+        "/cart"
+      )
+    ) {
+      return "cart";
+    }
+
+    if (
+      path === "/" ||
+      path === ""
+    ) {
+      return "home";
+    }
+
+    return "unknown";
+  }
+
+  function getShopifyProductData() {
+    let product =
+      null;
+
+    try {
+      if (
+        window.ShopifyAnalytics &&
+        window.ShopifyAnalytics.meta &&
+        window.ShopifyAnalytics.meta.product
+      ) {
+        product =
+          window.ShopifyAnalytics
+            .meta
+            .product;
+      }
+    } catch (error) {
+      product =
+        null;
+    }
+
+    if (
+      !product
+    ) {
+      try {
+        if (
+          window.meta &&
+          window.meta.product
+        ) {
+          product =
+            window.meta.product;
+        }
+      } catch (error) {
+        product =
+          null;
+      }
+    }
+
+    return product;
+  }
+
+  function getSelectedVariantId() {
+    const urlVariantId =
+      getUrlVariantId();
+
+    if (
+      urlVariantId
+    ) {
+      return urlVariantId;
+    }
+
+    const variantInput =
+      document.querySelector(
+        'form[action*="/cart/add"] [name="id"]'
+      );
+
+    if (
+      variantInput &&
+      variantInput.value
+    ) {
+      return String(
+        variantInput.value
+      );
+    }
+
+    return "";
+  }
+
+  function getVariantFromProduct(
+    product,
+    selectedVariantId
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      selectedVariantId
+    ) {
+      const selected =
+        product.variants.find(
+          function (variant) {
+            return (
+              String(
+                variant.id
+              ) ===
+              String(
+                selectedVariantId
+              )
+            );
+          }
+        );
+
+      if (
+        selected
+      ) {
+        return selected;
+      }
+    }
+
+    return (
+      product.variants[0] ||
+      null
+    );
+  }
+
+  function getPageHeading() {
+    const heading =
+      document.querySelector(
+        "h1"
+      );
+
+    return (
+      heading
+        ? (
+            heading.textContent ||
+            ""
+          ).trim()
+        : ""
+    );
+  }
+
+  function captureShopifyContext() {
+    const product =
+      getShopifyProductData();
+
+    const selectedVariantId =
+      getSelectedVariantId();
+
+    const selectedVariant =
+      getVariantFromProduct(
+        product,
+        selectedVariantId
+      );
+
+    const breadcrumbCollection =
+      getCollectionFromBreadcrumb();
+
+    const productHandle =
+      getProductHandleFromUrl();
+
+    const collectionHandle =
+      getCollectionHandleFromUrl() ||
+      breadcrumbCollection.handle;
+
+    const productTitle =
+      (
+        product &&
+        (
+          product.title ||
+          product.name
+        )
+      ) ||
+      (
+        productHandle
+          ? getPageHeading()
+          : ""
+      );
+
+    const productId =
+      (
+        product &&
+        (
+          product.id ||
+          product.productId
+        )
+      ) ||
+      "";
+
+    const variantId =
+      selectedVariantId ||
+      (
+        selectedVariant &&
+        selectedVariant.id
+      ) ||
+      "";
+
+    const variantTitle =
+      (
+        selectedVariant &&
+        (
+          selectedVariant.public_title ||
+          selectedVariant.title ||
+          selectedVariant.name
+        )
+      ) ||
+      "";
+
+    const sku =
+      (
+        selectedVariant &&
+        selectedVariant.sku
+      ) ||
+      "";
+
+    const vendor =
+      (
+        product &&
+        product.vendor
+      ) ||
+      "";
+
+    const productType =
+      (
+        product &&
+        (
+          product.type ||
+          product.product_type
+        )
+      ) ||
+      "";
+
+    return {
+      pageType:
+        detectPageType(),
+
+      pageTitle:
+        document.title ||
+        "",
+
+      pageUrl:
+        window.location.href,
+
+      referrer:
+        document.referrer ||
+        "",
+
+      productTitle:
+        String(
+          productTitle ||
+          ""
+        ),
+
+      productHandle:
+        String(
+          productHandle ||
+          ""
+        ),
+
+      productId:
+        String(
+          productId ||
+          ""
+        ),
+
+      variantId:
+        String(
+          variantId ||
+          ""
+        ),
+
+      variantTitle:
+        String(
+          variantTitle ||
+          ""
+        ),
+
+      sku:
+        String(
+          sku ||
+          ""
+        ),
+
+      vendor:
+        String(
+          vendor ||
+          ""
+        ),
+
+      productType:
+        String(
+          productType ||
+          ""
+        ),
+
+      collectionHandle:
+        String(
+          collectionHandle ||
+          ""
+        ),
+
+      collectionTitle:
+        String(
+          breadcrumbCollection.title ||
+          ""
+        )
+    };
+  }
+
+  let pageContext =
+    captureShopifyContext();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Transcript
+  |--------------------------------------------------------------------------
+  */
+
   function addTranscriptEntry(
     role,
     message
@@ -264,12 +754,6 @@
           -100
         );
     }
-
-    console.log(
-      "G-Floor transcript:",
-      conversationId,
-      transcript
-    );
   }
 
   /*
@@ -331,7 +815,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex: 0 0 auto;
       padding: 16px;
       background: #333e48;
       color: #ffffff;
@@ -350,8 +833,6 @@
     .gfloor-conversation-id {
       color: #dfe4e8;
       font-size: 10px;
-      font-weight: 400;
-      letter-spacing: .2px;
     }
 
     #gfloor-chat-close {
@@ -359,7 +840,6 @@
       background: transparent;
       color: #ffffff;
       font-size: 26px;
-      line-height: 1;
       cursor: pointer;
     }
 
@@ -399,13 +879,6 @@
       text-align: center;
     }
 
-    .gfloor-topic-button:hover,
-    .gfloor-topic-button:focus {
-      border-color: #d2232a;
-      background: #fff7f7;
-      outline: none;
-    }
-
     .gfloor-primary-button {
       border: 0;
       background: #d2232a;
@@ -413,29 +886,11 @@
       text-align: center;
     }
 
-    .gfloor-primary-button:hover,
-    .gfloor-primary-button:focus {
-      background: #b91f25;
-      outline: none;
-    }
-
-    .gfloor-primary-button:disabled {
-      opacity: .65;
-      cursor: wait;
-    }
-
     .gfloor-secondary-button {
       border: 1px solid #333e48;
       background: #ffffff;
       color: #333e48;
       text-align: center;
-    }
-
-    .gfloor-secondary-button:hover,
-    .gfloor-secondary-button:focus {
-      border-color: #d2232a;
-      color: #d2232a;
-      outline: none;
     }
 
     .gfloor-question-row {
@@ -458,41 +913,13 @@
       border: 1px solid #b7b7b7;
       border-radius: 6px;
       padding: 10px;
-      color: #222222;
-      background: #ffffff;
       font: 14px Arial, sans-serif;
-    }
-
-    .gfloor-question-row textarea:focus,
-    .gfloor-chat-field input:focus,
-    .gfloor-chat-field textarea:focus {
-      border-color: #d2232a;
-      outline: 2px solid rgba(210,35,42,.12);
-      outline-offset: 1px;
     }
 
     .gfloor-question-row textarea,
     .gfloor-chat-field textarea {
       min-height: 92px;
       resize: vertical;
-    }
-
-    .gfloor-divider {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 16px 0;
-      color: #777777;
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-
-    .gfloor-divider::before,
-    .gfloor-divider::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: #dddddd;
     }
 
     .gfloor-response-box {
@@ -527,10 +954,6 @@
       font-weight: 700;
     }
 
-    .gfloor-response-answer {
-      margin-top: 2px;
-    }
-
     .gfloor-response-source {
       margin-top: 12px;
     }
@@ -538,7 +961,6 @@
     .gfloor-response-source a {
       color: #b91f25;
       font-weight: 700;
-      text-decoration: underline;
     }
 
     .gfloor-escalation-note {
@@ -547,14 +969,6 @@
       border-left: 4px solid #d2232a;
       background: #fff7f7;
       font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .gfloor-match-note {
-      margin-top: 10px;
-      color: #666666;
-      font-size: 12px;
-      line-height: 1.4;
     }
 
     .gfloor-helpful-question {
@@ -583,6 +997,24 @@
       cursor: pointer;
     }
 
+    .gfloor-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0;
+      color: #777777;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .gfloor-divider::before,
+    .gfloor-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #dddddd;
+    }
+
     .gfloor-back {
       margin-bottom: 12px;
       border: 0;
@@ -593,21 +1025,14 @@
       padding: 0;
     }
 
-    .gfloor-chat-field {
-      margin-bottom: 12px;
-    }
-
-    .gfloor-status-box {
+    .gfloor-status-box,
+    .gfloor-page-context-box {
       padding: 12px;
       margin-bottom: 14px;
       border-radius: 6px;
       background: #f2f3f4;
       font-size: 13px;
       line-height: 1.5;
-    }
-
-    .gfloor-status-box.loading {
-      color: #666666;
     }
 
     .gfloor-status-box.available {
@@ -618,11 +1043,30 @@
       border-left: 4px solid #d2232a;
     }
 
+    .gfloor-page-context-label {
+      display: block;
+      margin-bottom: 4px;
+      color: #555555;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .gfloor-page-context-product {
+      display: block;
+      font-weight: 700;
+    }
+
+    .gfloor-page-context-variant {
+      display: block;
+      margin-top: 3px;
+      color: #555555;
+      font-size: 12px;
+    }
+
     .gfloor-human-title {
       margin: 0 0 10px;
-      color: #222222;
       font-size: 18px;
-      line-height: 1.35;
     }
 
     .gfloor-human-actions {
@@ -636,18 +1080,14 @@
       font-weight: 700;
     }
 
+    .gfloor-chat-field {
+      margin-bottom: 12px;
+    }
+
     .gfloor-form-note {
       margin: 0 0 14px;
       font-size: 14px;
       line-height: 1.5;
-    }
-
-    .gfloor-kb-status {
-      margin-top: 8px;
-      color: #777777;
-      font-size: 11px;
-      line-height: 1.4;
-      text-align: center;
     }
 
     #gfloor-chat-result {
@@ -676,7 +1116,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Chat HTML
+  | HTML
   |--------------------------------------------------------------------------
   */
 
@@ -688,23 +1128,13 @@
   panel.id =
     "gfloor-chat-panel";
 
-  panel.setAttribute(
-    "aria-label",
-    "G-Floor customer support chat"
-  );
-
   panel.innerHTML = `
     <div class="gfloor-chat-header">
 
       <div class="gfloor-chat-title-wrap">
-        <strong>
-          Chat with G-Floor
-        </strong>
+        <strong>Chat with G-Floor</strong>
 
-        <span
-          id="gfloor-conversation-id"
-          class="gfloor-conversation-id"
-        >
+        <span class="gfloor-conversation-id">
           ${conversationId}
         </span>
       </div>
@@ -728,39 +1158,16 @@
         </p>
 
         <div class="gfloor-topic-list">
-
-          <button class="gfloor-topic-button" type="button" data-topic="flooring">
-            Find the Right Flooring
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="installation">
-            Installation Questions
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="shipping">
-            Shipping & Delivery
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="order">
-            Order Help
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
-            Cleaning & Maintenance
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="warranty">
-            Warranty & Returns
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="other">
-            Something Else
-          </button>
-
+          <button class="gfloor-topic-button" type="button" data-topic="flooring">Find the Right Flooring</button>
+          <button class="gfloor-topic-button" type="button" data-topic="installation">Installation Questions</button>
+          <button class="gfloor-topic-button" type="button" data-topic="shipping">Shipping & Delivery</button>
+          <button class="gfloor-topic-button" type="button" data-topic="order">Order Help</button>
+          <button class="gfloor-topic-button" type="button" data-topic="cleaning">Cleaning & Maintenance</button>
+          <button class="gfloor-topic-button" type="button" data-topic="warranty">Warranty & Returns</button>
+          <button class="gfloor-topic-button" type="button" data-topic="other">Something Else</button>
         </div>
 
         <div class="gfloor-question-row">
-
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -769,7 +1176,6 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
-
         </div>
 
         <button
@@ -784,29 +1190,14 @@
         <div
           id="gfloor-response-box"
           class="gfloor-response-box"
-          role="status"
-          aria-live="polite"
         ></div>
 
         <div
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
-          <button
-            id="gfloor-helpful-yes"
-            class="gfloor-small-button"
-            type="button"
-          >
-            Yes
-          </button>
-
-          <button
-            id="gfloor-helpful-no"
-            class="gfloor-small-button"
-            type="button"
-          >
-            No
-          </button>
+          <button id="gfloor-helpful-yes" class="gfloor-small-button" type="button">Yes</button>
+          <button id="gfloor-helpful-no" class="gfloor-small-button" type="button">No</button>
         </div>
 
         <div class="gfloor-divider">
@@ -821,24 +1212,11 @@
           Talk to a Customer Service Representative
         </button>
 
-        <div
-          id="gfloor-kb-status"
-          class="gfloor-kb-status"
-          aria-live="polite"
-        ></div>
-
       </div>
 
-      <div
-        id="gfloor-human-view"
-        hidden
-      >
+      <div id="gfloor-human-view" hidden>
 
-        <button
-          id="gfloor-human-back-button"
-          class="gfloor-back"
-          type="button"
-        >
+        <button id="gfloor-human-back-button" class="gfloor-back" type="button">
           &larr; Back
         </button>
 
@@ -848,9 +1226,7 @@
 
         <div
           id="gfloor-human-status"
-          class="gfloor-status-box loading"
-          role="status"
-          aria-live="polite"
+          class="gfloor-status-box"
         >
           Checking Customer Service availability...
         </div>
@@ -860,37 +1236,20 @@
           class="gfloor-human-actions"
           hidden
         >
-
-          <button
-            id="gfloor-connect-button"
-            class="gfloor-primary-button"
-            type="button"
-          >
+          <button id="gfloor-connect-button" class="gfloor-primary-button" type="button">
             Yes, connect me
           </button>
 
-          <button
-            id="gfloor-stay-chat-button"
-            class="gfloor-secondary-button"
-            type="button"
-          >
+          <button id="gfloor-stay-chat-button" class="gfloor-secondary-button" type="button">
             No, keep using chat
           </button>
-
         </div>
 
       </div>
 
-      <div
-        id="gfloor-contact-view"
-        hidden
-      >
+      <div id="gfloor-contact-view" hidden>
 
-        <button
-          id="gfloor-contact-back-button"
-          class="gfloor-back"
-          type="button"
-        >
+        <button id="gfloor-contact-back-button" class="gfloor-back" type="button">
           &larr; Back
         </button>
 
@@ -899,89 +1258,43 @@
         </p>
 
         <div
+          id="gfloor-page-context-box"
+          class="gfloor-page-context-box"
+          hidden
+        ></div>
+
+        <div
           id="gfloor-agent-status"
           class="gfloor-status-box"
-          role="status"
-          aria-live="polite"
         ></div>
 
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-name">
-              Name
-            </label>
-
-            <input
-              id="gfloor-chat-name"
-              name="name"
-              type="text"
-              autocomplete="name"
-              required
-            >
-
+            <label for="gfloor-chat-name">Name</label>
+            <input id="gfloor-chat-name" name="name" type="text" autocomplete="name" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-email">
-              Email
-            </label>
-
-            <input
-              id="gfloor-chat-email"
-              name="email"
-              type="email"
-              autocomplete="email"
-              required
-            >
-
+            <label for="gfloor-chat-email">Email</label>
+            <input id="gfloor-chat-email" name="email" type="email" autocomplete="email" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-phone">
-              Phone
-            </label>
-
-            <input
-              id="gfloor-chat-phone"
-              name="phone"
-              type="tel"
-              autocomplete="tel"
-              required
-            >
-
+            <label for="gfloor-chat-phone">Phone</label>
+            <input id="gfloor-chat-phone" name="phone" type="tel" autocomplete="tel" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-message">
-              How can we help?
-            </label>
-
-            <textarea
-              id="gfloor-chat-message"
-              name="message"
-              required
-            ></textarea>
-
+            <label for="gfloor-chat-message">How can we help?</label>
+            <textarea id="gfloor-chat-message" name="message" required></textarea>
           </div>
 
-          <button
-            id="gfloor-chat-submit"
-            class="gfloor-primary-button"
-            type="submit"
-          >
+          <button id="gfloor-chat-submit" class="gfloor-primary-button" type="submit">
             Send Message
           </button>
 
-          <div
-            id="gfloor-chat-result"
-            role="status"
-            aria-live="polite"
-          ></div>
+          <div id="gfloor-chat-result"></div>
 
         </form>
 
@@ -989,12 +1302,6 @@
 
     </div>
   `;
-
-  /*
-  |--------------------------------------------------------------------------
-  | Launcher
-  |--------------------------------------------------------------------------
-  */
 
   const button =
     document.createElement(
@@ -1010,16 +1317,6 @@
   button.textContent =
     "Chat with us";
 
-  button.setAttribute(
-    "aria-expanded",
-    "false"
-  );
-
-  button.setAttribute(
-    "aria-controls",
-    "gfloor-chat-panel"
-  );
-
   document.body.appendChild(
     panel
   );
@@ -1030,14 +1327,9 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Element References
+  | Elements
   |--------------------------------------------------------------------------
   */
-
-  const chatBody =
-    panel.querySelector(
-      ".gfloor-chat-body"
-    );
 
   const closeButton =
     panel.querySelector(
@@ -1129,6 +1421,11 @@
       "#gfloor-contact-back-button"
     );
 
+  const pageContextBox =
+    panel.querySelector(
+      "#gfloor-page-context-box"
+    );
+
   const agentStatus =
     panel.querySelector(
       "#gfloor-agent-status"
@@ -1154,14 +1451,9 @@
       "#gfloor-chat-result"
     );
 
-  const kbStatus =
-    panel.querySelector(
-      "#gfloor-kb-status"
-    );
-
   /*
   |--------------------------------------------------------------------------
-  | Utility Functions
+  | Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -1172,34 +1464,11 @@
       value ||
       ""
     )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
-      );
-  }
-
-  function escapeAttribute(
-    value
-  ) {
-    return escapeHtml(
-      value
-    );
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   function normalizeText(
@@ -1210,72 +1479,31 @@
       ""
     )
       .toLowerCase()
-      .replace(
-        /g-floor/g,
-        "gfloor"
-      )
-      .replace(
-        /g floor/g,
-        "gfloor"
-      )
-      .replace(
-        /®/g,
-        ""
-      )
-      .replace(
-        /&/g,
-        " and "
-      )
-      .replace(
-        /[^a-z0-9\s]/g,
-        " "
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
+      .replace(/g-floor/g, "gfloor")
+      .replace(/g floor/g, "gfloor")
+      .replace(/®/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
   function getWords(
     value
   ) {
-    const normalized =
-      normalizeText(
-        value
-      );
-
-    if (
-      !normalized
-    ) {
-      return [];
-    }
-
-    return normalized
+    return normalizeText(
+      value
+    )
       .split(" ")
       .filter(
-        function (
-          word
-        ) {
+        function (word) {
           return (
-            word.length >
-              1 &&
+            word.length > 1 &&
             !STOP_WORDS.has(
               word
             )
           );
         }
       );
-  }
-
-  function uniqueWords(
-    words
-  ) {
-    return Array.from(
-      new Set(
-        words
-      )
-    );
   }
 
   function hasAnyPhrase(
@@ -1288,9 +1516,7 @@
       );
 
     return phrases.some(
-      function (
-        phrase
-      ) {
+      function (phrase) {
         return normalized.includes(
           normalizeText(
             phrase
@@ -1302,7 +1528,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Intent Detection
+  | Intent
   |--------------------------------------------------------------------------
   */
 
@@ -1333,137 +1559,16 @@
       );
 
     const rules = [
-      {
-        intent:
-          "cleaning",
-
-        phrases: [
-          "clean",
-          "cleaning",
-          "wash",
-          "stain",
-          "tar",
-          "scrub",
-          "cleaner",
-          "bleach",
-          "chalk"
-        ]
-      },
-
-      {
-        intent:
-          "installation",
-
-        phrases: [
-          "adhesive",
-          "install",
-          "installation",
-          "seam",
-          "floating floor",
-          "threshold",
-          "trim",
-          "subfloor"
-        ]
-      },
-
-      {
-        intent:
-          "shipping",
-
-        phrases: [
-          "shipping",
-          "ship",
-          "delivery",
-          "freight",
-          "tracking"
-        ]
-      },
-
-      {
-        intent:
-          "ordering",
-
-        phrases: [
-          "order",
-          "buy",
-          "purchase",
-          "price",
-          "pricing",
-          "cost"
-        ]
-      },
-
-      {
-        intent:
-          "warranty",
-
-        phrases: [
-          "warranty",
-          "return",
-          "claim",
-          "defect"
-        ]
-      },
-
-      {
-        intent:
-          "pet",
-
-        phrases: [
-          "dog",
-          "cat",
-          "pet",
-          "crate",
-          "kennel",
-          "litter"
-        ]
-      },
-
-      {
-        intent:
-          "marine",
-
-        phrases: [
-          "boat",
-          "pontoon",
-          "marine",
-          "dock",
-          "outdoor"
-        ]
-      },
-
-      {
-        intent:
-          "shed",
-
-        phrases: [
-          "shed"
-        ]
-      },
-
-      {
-        intent:
-          "garage",
-
-        phrases: [
-          "garage",
-          "epoxy"
-        ]
-      },
-
-      {
-        intent:
-          "sport",
-
-        phrases: [
-          "gym",
-          "gymnastics",
-          "cheer",
-          "tumbling",
-          "sport",
-          "exercise"
-        ]
-      }
+      ["cleaning", ["clean","wash","stain","tar","scrub","cleaner"]],
+      ["installation", ["adhesive","install","installation","seam","subfloor","threshold"]],
+      ["shipping", ["shipping","ship","delivery","freight","tracking"]],
+      ["ordering", ["order","buy","purchase","price","pricing","cost"]],
+      ["warranty", ["warranty","return","claim","defect"]],
+      ["pet", ["dog","cat","pet","crate","kennel","litter"]],
+      ["marine", ["boat","pontoon","marine","dock","outdoor"]],
+      ["shed", ["shed"]],
+      ["garage", ["garage","epoxy"]],
+      ["sport", ["gym","gymnastics","cheer","tumbling","sport","exercise"]]
     ];
 
     for (
@@ -1472,23 +1577,16 @@
       rules.length;
       i += 1
     ) {
-      const rule =
-        rules[i];
-
       if (
-        rule.phrases.some(
-          function (
-            phrase
-          ) {
+        rules[i][1].some(
+          function (phrase) {
             return normalized.includes(
-              normalizeText(
-                phrase
-              )
+              phrase
             );
           }
         )
       ) {
-        return rule.intent;
+        return rules[i][0];
       }
     }
 
@@ -1501,11 +1599,6 @@
     const category =
       normalizeText(
         entry.category
-      );
-
-    const question =
-      normalizeText(
-        entry.question
       );
 
     if (
@@ -1543,9 +1636,6 @@
     if (
       category.includes(
         "warranty"
-      ) ||
-      question.includes(
-        "return"
       )
     ) {
       return "warranty";
@@ -1599,187 +1689,213 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Scoring
+  | Knowledge Base Search
   |--------------------------------------------------------------------------
   */
 
-  function calculateWeightedTokenScore(
-    customerQuestion,
-    knowledgePhrase
+  function scorePhrase(
+    question,
+    phrase
   ) {
+    const normalizedQuestion =
+      normalizeText(
+        question
+      );
+
+    const normalizedPhrase =
+      normalizeText(
+        phrase
+      );
+
+    if (
+      normalizedQuestion ===
+      normalizedPhrase
+    ) {
+      return 1;
+    }
+
     const questionWords =
-      uniqueWords(
-        getWords(
-          customerQuestion
+      Array.from(
+        new Set(
+          getWords(
+            question
+          )
         )
       );
 
     const phraseWords =
-      uniqueWords(
-        getWords(
-          knowledgePhrase
+      Array.from(
+        new Set(
+          getWords(
+            phrase
+          )
         )
       );
 
     if (
-      questionWords.length ===
-        0 ||
-      phraseWords.length ===
-        0
+      !questionWords.length ||
+      !phraseWords.length
     ) {
       return 0;
     }
 
-    let totalQuestionWeight =
+    let matched =
       0;
 
-    let totalPhraseWeight =
-      0;
-
-    let matchedWeight =
-      0;
-
-    const questionWeights =
-      {};
-
-    questionWords.forEach(
-      function (
-        word
-      ) {
-        const weight =
-          GENERIC_WORDS.has(
+    phraseWords.forEach(
+      function (word) {
+        if (
+          questionWords.includes(
             word
           )
-            ? 0.35
-            : 1;
-
-        questionWeights[
-          word
-        ] =
-          weight;
-
-        totalQuestionWeight +=
-          weight;
+        ) {
+          matched +=
+            GENERIC_WORDS.has(
+              word
+            )
+              ? 0.3
+              : 1;
+        }
       }
     );
 
-    phraseWords.forEach(
-      function (
-        word
-      ) {
-        const weight =
-          GENERIC_WORDS.has(
-            word
-          )
-            ? 0.35
-            : 1;
+    return matched /
+      Math.max(
+        questionWords.length,
+        phraseWords.length
+      );
+  }
 
-        totalPhraseWeight +=
-          weight;
+  function searchKnowledgeBase(
+    question
+  ) {
+    const detectedIntent =
+      detectQuestionIntent(
+        question
+      );
+
+    const isGlueRemoval =
+      hasAnyPhrase(
+        question,
+        GLUE_REMOVAL_PHRASES
+      );
+
+    const isGlueInstallation =
+      hasAnyPhrase(
+        question,
+        GLUE_INSTALLATION_PHRASES
+      );
+
+    let bestResult =
+      null;
+
+    knowledgeBase.forEach(
+      function (entry) {
+        const phrases = [
+          entry.question
+        ].concat(
+          Array.isArray(
+            entry.variations
+          )
+            ? entry.variations
+            : []
+        );
+
+        let score =
+          0;
+
+        phrases.forEach(
+          function (phrase) {
+            score =
+              Math.max(
+                score,
+                scorePhrase(
+                  question,
+                  phrase
+                )
+              );
+          }
+        );
+
+        const entryIntent =
+          getEntryIntent(
+            entry
+          );
 
         if (
-          Object.prototype
-            .hasOwnProperty.call(
-              questionWeights,
-              word
-            )
+          detectedIntent &&
+          entryIntent ===
+          detectedIntent
         ) {
-          matchedWeight +=
+          score +=
+            MATCH_CONFIG
+              .intentMatchBonus;
+        }
+
+        if (
+          detectedIntent &&
+          entryIntent &&
+          entryIntent !==
+          detectedIntent
+        ) {
+          score -=
+            MATCH_CONFIG
+              .intentMismatchPenalty;
+        }
+
+        if (
+          isGlueInstallation &&
+          entry.id ===
+          "kb-013-installation-adhesive-tape-and-seams"
+        ) {
+          score +=
+            0.5;
+        }
+
+        if (
+          isGlueRemoval &&
+          entry.id ===
+          "kb-019-how-to-remove-stains-or-tar-from-vinyl"
+        ) {
+          score +=
+            0.55;
+        }
+
+        score =
+          Math.max(
+            0,
             Math.min(
-              weight,
-              questionWeights[
-                word
-              ]
-            );
+              score,
+              1
+            )
+          );
+
+        if (
+          !bestResult ||
+          score >
+          bestResult.score
+        ) {
+          bestResult = {
+            entry:
+              entry,
+
+            score:
+              score
+          };
         }
       }
     );
 
     if (
-      matchedWeight ===
-      0
+      !bestResult ||
+      bestResult.score <
+      MATCH_CONFIG
+        .minimumMatchScore
     ) {
-      return 0;
+      return null;
     }
 
-    const precision =
-      matchedWeight /
-      totalQuestionWeight;
-
-    const recall =
-      matchedWeight /
-      totalPhraseWeight;
-
-    return (
-      2 *
-      precision *
-      recall
-    ) /
-      (
-        precision +
-        recall
-      );
-  }
-
-  function calculatePhraseScore(
-    customerQuestion,
-    knowledgePhrase
-  ) {
-    const question =
-      normalizeText(
-        customerQuestion
-      );
-
-    const phrase =
-      normalizeText(
-        knowledgePhrase
-      );
-
-    if (
-      !question ||
-      !phrase
-    ) {
-      return 0;
-    }
-
-    if (
-      question ===
-      phrase
-    ) {
-      return 1;
-    }
-
-    if (
-      question.includes(
-        phrase
-      ) ||
-      phrase.includes(
-        question
-      )
-    ) {
-      const shorter =
-        Math.min(
-          question.length,
-          phrase.length
-        );
-
-      const longer =
-        Math.max(
-          question.length,
-          phrase.length
-        );
-
-      return Math.max(
-        0.82,
-        shorter /
-          longer
-      );
-    }
-
-    return calculateWeightedTokenScore(
-      customerQuestion,
-      knowledgePhrase
-    );
+    return bestResult;
   }
 
   /*
@@ -1806,9 +1922,6 @@
     knowledgeBaseLoading =
       true;
 
-    kbStatus.textContent =
-      "Loading support answers...";
-
     knowledgeBaseLoadPromise =
       new Promise(
         function (
@@ -1831,9 +1944,6 @@
             knowledgeBaseLoading =
               false;
 
-            kbStatus.textContent =
-              "";
-
             resolve(
               knowledgeBase
             );
@@ -1851,44 +1961,21 @@
             "?v=" +
             Date.now();
 
-          script.async =
-            true;
-
           script.onload =
             function () {
-              if (
-                Array.isArray(
-                  window
-                    .GFloorKnowledgeBase
-                )
-              ) {
-                knowledgeBase =
-                  window
-                    .GFloorKnowledgeBase;
+              knowledgeBase =
+                window
+                  .GFloorKnowledgeBase ||
+                [];
 
-                knowledgeBaseLoaded =
-                  true;
-
-                knowledgeBaseLoading =
-                  false;
-
-                kbStatus.textContent =
-                  "";
-
-                resolve(
-                  knowledgeBase
-                );
-
-                return;
-              }
+              knowledgeBaseLoaded =
+                true;
 
               knowledgeBaseLoading =
                 false;
 
-              reject(
-                new Error(
-                  "Knowledge base did not initialize."
-                )
+              resolve(
+                knowledgeBase
               );
             };
 
@@ -1899,7 +1986,7 @@
 
               reject(
                 new Error(
-                  "Knowledge base could not be loaded."
+                  "Knowledge base failed to load."
                 )
               );
             };
@@ -1915,240 +2002,9 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Search Knowledge Base
+  | Views
   |--------------------------------------------------------------------------
   */
-
-  function searchKnowledgeBase(
-    customerQuestion
-  ) {
-    if (
-      !Array.isArray(
-        knowledgeBase
-      ) ||
-      knowledgeBase.length ===
-        0
-    ) {
-      return null;
-    }
-
-    const detectedIntent =
-      detectQuestionIntent(
-        customerQuestion
-      );
-
-    const normalizedQuestion =
-      normalizeText(
-        customerQuestion
-      );
-
-    const isGlueRemoval =
-      hasAnyPhrase(
-        customerQuestion,
-        GLUE_REMOVAL_PHRASES
-      );
-
-    const isGlueInstallation =
-      hasAnyPhrase(
-        customerQuestion,
-        GLUE_INSTALLATION_PHRASES
-      );
-
-    let bestResult =
-      null;
-
-    knowledgeBase.forEach(
-      function (
-        entry
-      ) {
-        const phrases = [
-          entry.question
-        ];
-
-        if (
-          Array.isArray(
-            entry.variations
-          )
-        ) {
-          phrases.push.apply(
-            phrases,
-            entry.variations
-          );
-        }
-
-        let entryBestScore =
-          0;
-
-        phrases.forEach(
-          function (
-            phrase
-          ) {
-            let score =
-              calculatePhraseScore(
-                customerQuestion,
-                phrase
-              );
-
-            if (
-              normalizedQuestion ===
-              normalizeText(
-                phrase
-              )
-            ) {
-              score +=
-                MATCH_CONFIG
-                  .exactPhraseBonus;
-            }
-
-            if (
-              score >
-              entryBestScore
-            ) {
-              entryBestScore =
-                score;
-            }
-          }
-        );
-
-        const entryIntent =
-          getEntryIntent(
-            entry
-          );
-
-        if (
-          detectedIntent &&
-          entryIntent
-        ) {
-          if (
-            detectedIntent ===
-            entryIntent
-          ) {
-            entryBestScore +=
-              MATCH_CONFIG
-                .intentMatchBonus;
-          } else {
-            entryBestScore -=
-              MATCH_CONFIG
-                .intentMismatchPenalty;
-          }
-        }
-
-        if (
-          isGlueInstallation
-        ) {
-          if (
-            entry.id ===
-            "kb-013-installation-adhesive-tape-and-seams"
-          ) {
-            entryBestScore +=
-              0.5;
-          }
-
-          if (
-            entry.id ===
-            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
-          ) {
-            entryBestScore -=
-              0.5;
-          }
-        }
-
-        if (
-          isGlueRemoval
-        ) {
-          if (
-            entry.id ===
-            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
-          ) {
-            entryBestScore +=
-              0.55;
-          }
-
-          if (
-            entry.id ===
-              "kb-013-installation-adhesive-tape-and-seams" ||
-            entry.id ===
-              "kb-039-glue-vinyl-to-wood"
-          ) {
-            entryBestScore -=
-              0.55;
-          }
-        }
-
-        entryBestScore =
-          Math.max(
-            0,
-            Math.min(
-              entryBestScore,
-              1
-            )
-          );
-
-        if (
-          !bestResult ||
-          entryBestScore >
-            bestResult.score
-        ) {
-          bestResult = {
-            entry:
-              entry,
-
-            score:
-              entryBestScore
-          };
-        }
-      }
-    );
-
-    if (
-      !bestResult ||
-      bestResult.score <
-        MATCH_CONFIG
-          .minimumMatchScore
-    ) {
-      return null;
-    }
-
-    return bestResult;
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | View Controls
-  |--------------------------------------------------------------------------
-  */
-
-  function togglePanel(
-    open
-  ) {
-    panel.classList.toggle(
-      "open",
-      open
-    );
-
-    button.setAttribute(
-      "aria-expanded",
-      String(
-        open
-      )
-    );
-
-    if (
-      open
-    ) {
-      loadKnowledgeBase()
-        .catch(
-          function (
-            error
-          ) {
-            console.error(
-              "Knowledge base load error:",
-              error
-            );
-          }
-        );
-    }
-  }
 
   function hideAllViews() {
     homeView.hidden =
@@ -2168,9 +2024,30 @@
       false;
   }
 
+  function togglePanel(
+    open
+  ) {
+    panel.classList.toggle(
+      "open",
+      open
+    );
+
+    if (
+      open
+    ) {
+      pageContext =
+        captureShopifyContext();
+
+      loadKnowledgeBase()
+        .catch(
+          function () {}
+        );
+    }
+  }
+
   /*
   |--------------------------------------------------------------------------
-  | Customer Service Status
+  | Agent Status
   |--------------------------------------------------------------------------
   */
 
@@ -2184,54 +2061,11 @@
       const data =
         await response.json();
 
-      if (
-        !response.ok
-      ) {
-        throw new Error(
-          data.message
-        );
-      }
+      currentSupportStatus =
+        data;
 
-      currentSupportStatus = {
-        liveAgentAvailable:
-          data.liveAgentAvailable ===
-          true,
-
-        estimatedWaitMinutes:
-          data
-            .estimatedWaitMinutes,
-
-        businessHours:
-          data.businessHours,
-
-        queueStatus:
-          data.queueStatus,
-
-        message:
-          data.message
-      };
-
-      return currentSupportStatus;
-    } catch (
-      error
-    ) {
-      currentSupportStatus = {
-        liveAgentAvailable:
-          false,
-
-        estimatedWaitMinutes:
-          null,
-
-        businessHours:
-          "Monday-Friday, 8 AM-5 PM Central Time",
-
-        queueStatus:
-          "unavailable",
-
-        message:
-          "Customer Service availability could not be checked."
-      };
-
+      return data;
+    } catch (error) {
       return currentSupportStatus;
     }
   }
@@ -2244,9 +2078,6 @@
 
     humanActions.hidden =
       true;
-
-    humanStatus.className =
-      "gfloor-status-box loading";
 
     humanStatus.textContent =
       "Checking Customer Service availability...";
@@ -2267,24 +2098,13 @@
           Estimated wait time: approximately
           ${escapeHtml(
             status.estimatedWaitMinutes ||
-              "2-5"
+            "2-5"
           )} minutes.
         </div>
       `;
 
       connectButton.textContent =
         "Yes, connect me";
-
-      addTranscriptEntry(
-        "System",
-        "Live Customer Service is available. Estimated wait time: " +
-        (
-          status
-            .estimatedWaitMinutes ||
-          "2-5"
-        ) +
-        " minutes."
-      );
     } else {
       humanStatus.className =
         "gfloor-status-box offline";
@@ -2293,8 +2113,7 @@
         Our Customer Service team is currently offline.
 
         <div style="margin-top:8px;">
-          Live support hours are Monday-Friday,
-          8 AM-5 PM Central Time.
+          Live support hours are Monday-Friday, 8 AM-5 PM Central Time.
         </div>
 
         <div style="margin-top:8px;">
@@ -2304,14 +2123,74 @@
 
       connectButton.textContent =
         "Leave a Message";
-
-      addTranscriptEntry(
-        "System",
-        "Customer Service is currently offline."
-      );
     }
 
     humanActions.hidden =
+      false;
+  }
+
+  function renderPageContext() {
+    pageContext =
+      captureShopifyContext();
+
+    if (
+      pageContext.productTitle
+    ) {
+      pageContextBox.innerHTML = `
+        <span class="gfloor-page-context-label">
+          You're viewing
+        </span>
+
+        <span class="gfloor-page-context-product">
+          ${escapeHtml(
+            pageContext.productTitle
+          )}
+        </span>
+
+        ${
+          pageContext.variantTitle
+            ? `
+              <span class="gfloor-page-context-variant">
+                Variant: ${escapeHtml(
+                  pageContext.variantTitle
+                )}
+              </span>
+            `
+            : ""
+        }
+
+        ${
+          pageContext.sku
+            ? `
+              <span class="gfloor-page-context-variant">
+                SKU: ${escapeHtml(
+                  pageContext.sku
+                )}
+              </span>
+            `
+            : ""
+        }
+      `;
+
+      pageContextBox.hidden =
+        false;
+
+      return;
+    }
+
+    pageContextBox.innerHTML = `
+      <span class="gfloor-page-context-label">
+        You're viewing
+      </span>
+
+      <span class="gfloor-page-context-product">
+        ${escapeHtml(
+          pageContext.pageTitle
+        )}
+      </span>
+    `;
+
+    pageContextBox.hidden =
       false;
   }
 
@@ -2320,6 +2199,8 @@
 
     contactView.hidden =
       false;
+
+    renderPageContext();
 
     if (
       lastQuestion
@@ -2354,7 +2235,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Response Rendering
+  | Answer Rendering
   |--------------------------------------------------------------------------
   */
 
@@ -2378,11 +2259,9 @@
         G-Floor Support
       </span>
 
-      <div class="gfloor-response-answer">
-        ${escapeHtml(
-          answer
-        )}
-      </div>
+      ${escapeHtml(
+        answer
+      )}
 
       <div class="gfloor-escalation-note">
         A Customer Service representative can help with this question.
@@ -2422,19 +2301,15 @@
       entry.answer
     );
 
-    const responseType =
+    const needsReview =
       String(
         entry.responseType ||
         ""
       )
-        .trim()
-        .toUpperCase();
-
-    const needsReview =
-      responseType ===
-        "HUMAN REVIEW" ||
-      responseType ===
-        "ALWAYS ESCALATE";
+        .toUpperCase()
+        .includes(
+          "HUMAN"
+        );
 
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
@@ -2447,7 +2322,7 @@
         )}
       </span>
 
-      <div class="gfloor-response-answer">
+      <div>
         ${escapeHtml(
           entry.answer
         )}
@@ -2458,7 +2333,7 @@
           ? `
             <div class="gfloor-response-source">
               <a
-                href="${escapeAttribute(
+                href="${escapeHtml(
                   entry.sourceUrl
                 )}"
                 target="_blank"
@@ -2498,12 +2373,6 @@
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Process Question
-  |--------------------------------------------------------------------------
-  */
-
   async function processQuestion(
     question
   ) {
@@ -2542,20 +2411,14 @@
         );
 
       if (
-        !match
-      ) {
-        showNoMatchResponse();
-
-        return;
-      }
-
-      showKnowledgeResponse(
         match
-      );
-    } catch (
-      error
-    ) {
-      showNoMatchResponse();
+      ) {
+        showKnowledgeResponse(
+          match
+        );
+      } else {
+        showNoMatchResponse();
+      }
     } finally {
       questionSubmit.disabled =
         false;
@@ -2598,10 +2461,6 @@
       topicButton.addEventListener(
         "click",
         function () {
-          const topic =
-            topicButton.dataset
-              .topic;
-
           const prompts = {
             flooring:
               "What is the best flooring for a garage?",
@@ -2622,6 +2481,10 @@
               "I have a warranty or return question."
           };
 
+          const topic =
+            topicButton.dataset
+              .topic;
+
           if (
             topic ===
             "other"
@@ -2631,16 +2494,15 @@
             return;
           }
 
-          const prompt =
+          questionInput.value =
             prompts[
               topic
             ];
 
-          questionInput.value =
-            prompt;
-
           processQuestion(
-            prompt
+            prompts[
+              topic
+            ]
           );
         }
       );
@@ -2663,7 +2525,7 @@
     ) {
       if (
         event.key ===
-          "Enter" &&
+        "Enter" &&
         !event.shiftKey
       ) {
         event.preventDefault();
@@ -2680,14 +2542,10 @@
     function () {
       if (
         helpfulActions
-          .dataset.mode ===
+          .dataset
+          .mode ===
         "escalation"
       ) {
-        addTranscriptEntry(
-          "Customer",
-          "Yes, I would like help from Customer Service."
-        );
-
         showHumanConfirmation();
 
         return;
@@ -2698,11 +2556,8 @@
         "Yes, this answered my question."
       );
 
-      responseBox.innerHTML = `
-        <span class="gfloor-response-title">
-          Glad we could help!
-        </span>
-      `;
+      responseBox.innerHTML =
+        "<strong>Glad we could help!</strong>";
 
       helpfulActions.classList.remove(
         "show"
@@ -2713,23 +2568,6 @@
   helpfulNo.addEventListener(
     "click",
     function () {
-      if (
-        helpfulActions
-          .dataset.mode ===
-        "escalation"
-      ) {
-        addTranscriptEntry(
-          "Customer",
-          "No, I do not want Customer Service assistance."
-        );
-
-        helpfulActions.classList.remove(
-          "show"
-        );
-
-        return;
-      }
-
       addTranscriptEntry(
         "Customer",
         "No, this did not answer my question."
@@ -2758,27 +2596,12 @@
 
   stayChatButton.addEventListener(
     "click",
-    function () {
-      addTranscriptEntry(
-        "Customer",
-        "Chose to keep using automated chat."
-      );
-
-      showHome();
-    }
+    showHome
   );
 
   connectButton.addEventListener(
     "click",
     function () {
-      addTranscriptEntry(
-        "Customer",
-        currentSupportStatus
-          .liveAgentAvailable
-          ? "Requested connection to a live Customer Service representative."
-          : "Requested to leave a message for Customer Service."
-      );
-
       showContactForm();
     }
   );
@@ -2790,7 +2613,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Form Submission
+  | Submit Customer Service Message
   |--------------------------------------------------------------------------
   */
 
@@ -2808,6 +2631,9 @@
         "Sending...";
 
       await getAgentAvailability();
+
+      pageContext =
+        captureShopifyContext();
 
       const contactMessage =
         form.message.value.trim();
@@ -2839,6 +2665,9 @@
 
         pageTitle:
           document.title,
+
+        pageContext:
+          pageContext,
 
         requestedLiveAgent:
           currentSupportStatus
@@ -2892,11 +2721,6 @@
           );
         }
 
-        addTranscriptEntry(
-          "System",
-          "Message successfully sent to Customer Service."
-        );
-
         result.style.color =
           "#16733c";
 
@@ -2905,14 +2729,7 @@
           conversationId;
 
         form.reset();
-      } catch (
-        error
-      ) {
-        addTranscriptEntry(
-          "System",
-          "Customer Service email delivery is not active yet."
-        );
-
+      } catch (error) {
         result.style.color =
           "#b42318";
 
@@ -2932,32 +2749,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Escape
-  |--------------------------------------------------------------------------
-  */
-
-  document.addEventListener(
-    "keydown",
-    function (
-      event
-    ) {
-      if (
-        event.key ===
-          "Escape" &&
-        panel.classList.contains(
-          "open"
-        )
-      ) {
-        togglePanel(
-          false
-        );
-      }
-    }
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Preload Knowledge Base
+  | Preload
   |--------------------------------------------------------------------------
   */
 
@@ -2965,13 +2757,7 @@
     function () {
       loadKnowledgeBase()
         .catch(
-          function (
-            error
-          ) {
-            console.error(
-              error
-            );
-          }
+          function () {}
         );
     },
     1000
