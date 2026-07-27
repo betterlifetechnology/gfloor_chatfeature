@@ -30,7 +30,7 @@
     minimumMatchScore: 0.43,
     intentMatchBonus: 0.32,
     intentMismatchPenalty: 0.24,
-    exactPhraseBonus: 0.3
+    productContextBonus: 0.18
   };
 
   const STOP_WORDS =
@@ -116,6 +116,47 @@
     "loose lay"
   ];
 
+  /*
+  |--------------------------------------------------------------------------
+  | Product-Context Question Phrases
+  |--------------------------------------------------------------------------
+  |
+  | These are questions where words such as "this" or "it" usually mean
+  | the product currently being viewed.
+  |
+  */
+
+  const CONTEXTUAL_QUESTION_PHRASES = [
+    "this",
+    "this product",
+    "this flooring",
+    "this floor",
+    "it",
+    "this one",
+    "how thick",
+    "what size",
+    "what sizes",
+    "is it waterproof",
+    "is this waterproof",
+    "can it go outside",
+    "can this go outside",
+    "can i use this outside",
+    "can this be used outside",
+    "do i need adhesive",
+    "do i need glue",
+    "do i have to glue",
+    "does this need adhesive",
+    "does this need glue",
+    "how do i clean this",
+    "how do i clean it",
+    "how do i install this",
+    "how do i install it",
+    "is this slip resistant",
+    "is it slip resistant",
+    "what is this made of",
+    "what is it made of"
+  ];
+
   let knowledgeBase = [];
   let knowledgeBaseLoaded = false;
   let knowledgeBaseLoading = false;
@@ -168,17 +209,33 @@
     generateConversationId();
 
   let transcript = [];
+
   let lastQuestion = "";
-  let lastMatchedIntent = null;
-  let lastMatchScore = 0;
+
+  let lastMatchedIntent =
+    null;
+
+  let lastMatchScore =
+    0;
+
+  let lastSearchQuestion =
+    "";
 
   let currentSupportStatus = {
-    liveAgentAvailable: false,
-    estimatedWaitMinutes: null,
+    liveAgentAvailable:
+      false,
+
+    estimatedWaitMinutes:
+      null,
+
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
-    queueStatus: "unknown",
-    message: ""
+
+    queueStatus:
+      "unknown",
+
+    message:
+      ""
   };
 
   /*
@@ -235,6 +292,14 @@
         ""
       )
       .replace(
+        /™/g,
+        ""
+      )
+      .replace(
+        /&/g,
+        " and "
+      )
+      .replace(
         /[^a-z0-9\s]/g,
         " "
       )
@@ -253,15 +318,28 @@
     )
       .split(" ")
       .filter(
-        function (word) {
+        function (
+          word
+        ) {
           return (
-            word.length > 1 &&
+            word.length >
+              1 &&
             !STOP_WORDS.has(
               word
             )
           );
         }
       );
+  }
+
+  function uniqueWords(
+    words
+  ) {
+    return Array.from(
+      new Set(
+        words
+      )
+    );
   }
 
   function hasAnyPhrase(
@@ -274,7 +352,9 @@
       );
 
     return phrases.some(
-      function (phrase) {
+      function (
+        phrase
+      ) {
         return normalized.includes(
           normalizeText(
             phrase
@@ -363,8 +443,10 @@
             .pageType
         );
       }
-    } catch (error) {
-      // Ignore.
+    } catch (
+      error
+    ) {
+      // Continue.
     }
 
     return "unknown";
@@ -437,21 +519,14 @@
         ) ||
         ""
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       return "";
     }
   }
 
   function getShopifyProductData() {
-    /*
-     * Important:
-     * Only try to read Shopify product metadata
-     * when we are actually on a product page.
-     *
-     * This prevents unrelated/stale product metadata
-     * from appearing on the homepage.
-     */
-
     if (
       detectPageType() !==
       "product"
@@ -471,7 +546,9 @@
             .product
         );
       }
-    } catch (error) {
+    } catch (
+      error
+    ) {
       // Continue.
     }
 
@@ -484,7 +561,9 @@
           window.meta.product
         );
       }
-    } catch (error) {
+    } catch (
+      error
+    ) {
       // Continue.
     }
 
@@ -492,13 +571,13 @@
   }
 
   function getSelectedVariantId() {
-    const urlVariant =
+    const urlVariantId =
       getUrlVariantId();
 
     if (
-      urlVariant
+      urlVariantId
     ) {
-      return urlVariant;
+      return urlVariantId;
     }
 
     const variantInput =
@@ -536,7 +615,9 @@
     ) {
       const selected =
         product.variants.find(
-          function (variant) {
+          function (
+            variant
+          ) {
             return (
               String(
                 variant.id
@@ -605,8 +686,10 @@
     }
 
     return {
-      handle: "",
-      title: ""
+      handle:
+        "",
+      title:
+        ""
     };
   }
 
@@ -649,10 +732,6 @@
       return heading;
     }
 
-    /*
-     * document.title is only the final fallback.
-     */
-
     return (
       document.title ||
       "G-Floor"
@@ -662,11 +741,6 @@
   function captureShopifyContext() {
     const pageType =
       detectPageType();
-
-    /*
-     * Product metadata should only exist on
-     * actual /products/ pages.
-     */
 
     const product =
       pageType ===
@@ -718,7 +792,7 @@
 
     const productId =
       pageType ===
-      "product" &&
+        "product" &&
       product
         ? (
             product.id ||
@@ -742,7 +816,7 @@
 
     const variantTitle =
       pageType ===
-      "product" &&
+        "product" &&
       selectedVariant
         ? (
             selectedVariant.public_title ||
@@ -754,7 +828,7 @@
 
     const sku =
       pageType ===
-      "product" &&
+        "product" &&
       selectedVariant
         ? (
             selectedVariant.sku ||
@@ -764,7 +838,7 @@
 
     const vendor =
       pageType ===
-      "product" &&
+        "product" &&
       product
         ? (
             product.vendor ||
@@ -774,7 +848,7 @@
 
     const productType =
       pageType ===
-      "product" &&
+        "product" &&
       product
         ? (
             product.type ||
@@ -909,6 +983,168 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Product-Aware Search
+  |--------------------------------------------------------------------------
+  */
+
+  function isContextDependentQuestion(
+    question
+  ) {
+    if (
+      !question
+    ) {
+      return false;
+    }
+
+    /*
+     * Explicit "this / it" questions.
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        CONTEXTUAL_QUESTION_PHRASES
+      )
+    ) {
+      return true;
+    }
+
+    /*
+     * Very short generic questions on a product page are also likely
+     * referring to the current product.
+     */
+
+    const words =
+      getWords(
+        question
+      );
+
+    if (
+      words.length <= 5
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function buildContextualSearchQuestion(
+    customerQuestion
+  ) {
+    pageContext =
+      captureShopifyContext();
+
+    /*
+     * Do not inject product context when we're not on a product page.
+     */
+
+    if (
+      pageContext.pageType !==
+        "product" ||
+      !pageContext.productTitle
+    ) {
+      return customerQuestion;
+    }
+
+    /*
+     * If the customer already named the product,
+     * don't unnecessarily duplicate the title.
+     */
+
+    const normalizedQuestion =
+      normalizeText(
+        customerQuestion
+      );
+
+    const normalizedProduct =
+      normalizeText(
+        pageContext.productTitle
+      );
+
+    if (
+      normalizedProduct &&
+      normalizedQuestion.includes(
+        normalizedProduct
+      )
+    ) {
+      return customerQuestion;
+    }
+
+    if (
+      !isContextDependentQuestion(
+        customerQuestion
+      )
+    ) {
+      return customerQuestion;
+    }
+
+    const contextParts = [
+      customerQuestion,
+
+      `Product ${pageContext.productTitle}`
+    ];
+
+    if (
+      pageContext.productType
+    ) {
+      contextParts.push(
+        `Product type ${pageContext.productType}`
+      );
+    }
+
+    if (
+      pageContext.collectionTitle
+    ) {
+      contextParts.push(
+        `Collection ${pageContext.collectionTitle}`
+      );
+    }
+
+    if (
+      pageContext.productHandle
+    ) {
+      contextParts.push(
+        pageContext.productHandle
+          .replace(
+            /-/g,
+            " "
+          )
+      );
+    }
+
+    return contextParts.join(
+      " "
+    );
+  }
+
+  function getProductContextWords() {
+    if (
+      pageContext.pageType !==
+      "product"
+    ) {
+      return [];
+    }
+
+    return uniqueWords(
+      getWords(
+        [
+          pageContext.productTitle,
+          pageContext.productType,
+          pageContext.collectionTitle,
+          pageContext.productHandle
+            .replace(
+              /-/g,
+              " "
+            )
+        ].join(
+          " "
+        )
+      )
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Transcript
   |--------------------------------------------------------------------------
   */
@@ -919,12 +1155,14 @@
   ) {
     const cleanRole =
       String(
-        role || ""
+        role ||
+        ""
       ).trim();
 
     const cleanMessage =
       String(
-        message || ""
+        message ||
+        ""
       ).trim();
 
     if (
@@ -959,7 +1197,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Intent Matching
+  | Intent Detection
   |--------------------------------------------------------------------------
   */
 
@@ -994,11 +1232,14 @@
         "cleaning",
         [
           "clean",
+          "cleaning",
           "wash",
           "stain",
           "tar",
           "scrub",
-          "cleaner"
+          "cleaner",
+          "bleach",
+          "remove"
         ]
       ],
 
@@ -1006,11 +1247,13 @@
         "installation",
         [
           "adhesive",
+          "glue",
           "install",
           "installation",
           "seam",
           "subfloor",
-          "threshold"
+          "threshold",
+          "floating"
         ]
       ],
 
@@ -1066,7 +1309,8 @@
           "pontoon",
           "marine",
           "dock",
-          "outdoor"
+          "outdoor",
+          "outside"
         ]
       ],
 
@@ -1100,12 +1344,15 @@
 
     for (
       let i = 0;
-      i < rules.length;
+      i <
+      rules.length;
       i += 1
     ) {
       if (
         rules[i][1].some(
-          function (phrase) {
+          function (
+            phrase
+          ) {
             return normalized.includes(
               phrase
             );
@@ -1125,6 +1372,11 @@
     const category =
       normalizeText(
         entry.category
+      );
+
+    const question =
+      normalizeText(
+        entry.question
       );
 
     if (
@@ -1162,6 +1414,9 @@
     if (
       category.includes(
         "warranty"
+      ) ||
+      question.includes(
+        "return"
       )
     ) {
       return "warranty";
@@ -1215,7 +1470,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Search
+  | Matching
   |--------------------------------------------------------------------------
   */
 
@@ -1240,21 +1495,44 @@
       return 1;
     }
 
+    if (
+      normalizedQuestion.includes(
+        normalizedPhrase
+      ) ||
+      normalizedPhrase.includes(
+        normalizedQuestion
+      )
+    ) {
+      const shorter =
+        Math.min(
+          normalizedQuestion.length,
+          normalizedPhrase.length
+        );
+
+      const longer =
+        Math.max(
+          normalizedQuestion.length,
+          normalizedPhrase.length
+        );
+
+      return Math.max(
+        0.78,
+        shorter /
+          longer
+      );
+    }
+
     const questionWords =
-      Array.from(
-        new Set(
-          getWords(
-            question
-          )
+      uniqueWords(
+        getWords(
+          question
         )
       );
 
     const phraseWords =
-      Array.from(
-        new Set(
-          getWords(
-            phrase
-          )
+      uniqueWords(
+        getWords(
+          phrase
         )
       );
 
@@ -1269,7 +1547,9 @@
       0;
 
     phraseWords.forEach(
-      function (word) {
+      function (
+        word
+      ) {
         if (
           questionWords.includes(
             word
@@ -1294,23 +1574,105 @@
     );
   }
 
-  function searchKnowledgeBase(
-    question
+  function calculateProductContextBonus(
+    entry
   ) {
+    if (
+      pageContext.pageType !==
+      "product"
+    ) {
+      return 0;
+    }
+
+    const productWords =
+      getProductContextWords();
+
+    if (
+      productWords.length ===
+      0
+    ) {
+      return 0;
+    }
+
+    const entryWords =
+      new Set(
+        getWords(
+          [
+            entry.category,
+            entry.question,
+            entry.product,
+            ...(Array.isArray(
+              entry.variations
+            )
+              ? entry.variations
+              : [])
+          ].join(
+            " "
+          )
+        )
+      );
+
+    let matchedWords =
+      0;
+
+    productWords.forEach(
+      function (
+        word
+      ) {
+        if (
+          entryWords.has(
+            word
+          ) &&
+          !GENERIC_WORDS.has(
+            word
+          )
+        ) {
+          matchedWords +=
+            1;
+        }
+      }
+    );
+
+    if (
+      matchedWords ===
+      0
+    ) {
+      return 0;
+    }
+
+    return Math.min(
+      MATCH_CONFIG
+        .productContextBonus,
+      matchedWords *
+        0.06
+    );
+  }
+
+  function searchKnowledgeBase(
+    customerQuestion
+  ) {
+    const searchQuestion =
+      buildContextualSearchQuestion(
+        customerQuestion
+      );
+
+    lastSearchQuestion =
+      searchQuestion;
+
     const detectedIntent =
       detectQuestionIntent(
-        question
+        customerQuestion
       );
 
     const isGlueRemoval =
       hasAnyPhrase(
-        question,
+        customerQuestion,
         GLUE_REMOVAL_PHRASES
       );
 
     const isGlueInstallation =
       hasAnyPhrase(
-        question,
+        customerQuestion,
         GLUE_INSTALLATION_PHRASES
       );
 
@@ -1318,7 +1680,9 @@
       null;
 
     knowledgeBase.forEach(
-      function (entry) {
+      function (
+        entry
+      ) {
         const phrases = [
           entry.question
         ].concat(
@@ -1333,12 +1697,14 @@
           0;
 
         phrases.forEach(
-          function (phrase) {
+          function (
+            phrase
+          ) {
             score =
               Math.max(
                 score,
                 scorePhrase(
-                  question,
+                  searchQuestion,
                   phrase
                 )
               );
@@ -1371,23 +1737,60 @@
               .intentMismatchPenalty;
         }
 
+        /*
+         * Existing glue disambiguation.
+         */
+
         if (
-          isGlueInstallation &&
-          entry.id ===
-          "kb-013-installation-adhesive-tape-and-seams"
+          isGlueInstallation
         ) {
-          score +=
-            0.5;
+          if (
+            entry.id ===
+            "kb-013-installation-adhesive-tape-and-seams"
+          ) {
+            score +=
+              0.5;
+          }
+
+          if (
+            entry.id ===
+            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
+          ) {
+            score -=
+              0.5;
+          }
         }
 
         if (
-          isGlueRemoval &&
-          entry.id ===
-          "kb-019-how-to-remove-stains-or-tar-from-vinyl"
+          isGlueRemoval
         ) {
-          score +=
-            0.55;
+          if (
+            entry.id ===
+            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
+          ) {
+            score +=
+              0.55;
+          }
+
+          if (
+            entry.id ===
+              "kb-013-installation-adhesive-tape-and-seams" ||
+            entry.id ===
+              "kb-039-glue-vinyl-to-wood"
+          ) {
+            score -=
+              0.55;
+          }
         }
+
+        /*
+         * Product-aware context bonus.
+         */
+
+        score +=
+          calculateProductContextBonus(
+            entry
+          );
 
         score =
           Math.max(
@@ -1401,14 +1804,17 @@
         if (
           !bestResult ||
           score >
-          bestResult.score
+            bestResult.score
         ) {
           bestResult = {
             entry:
               entry,
 
             score:
-              score
+              score,
+
+            searchQuestion:
+              searchQuestion
           };
         }
       }
@@ -1417,8 +1823,8 @@
     if (
       !bestResult ||
       bestResult.score <
-      MATCH_CONFIG
-        .minimumMatchScore
+        MATCH_CONFIG
+          .minimumMatchScore
     ) {
       return null;
     }
@@ -1458,11 +1864,13 @@
         ) {
           if (
             Array.isArray(
-              window.GFloorKnowledgeBase
+              window
+                .GFloorKnowledgeBase
             )
           ) {
             knowledgeBase =
-              window.GFloorKnowledgeBase;
+              window
+                .GFloorKnowledgeBase;
 
             knowledgeBaseLoaded =
               true;
@@ -1487,20 +1895,41 @@
             "?v=" +
             Date.now();
 
+          script.async =
+            true;
+
           script.onload =
             function () {
-              knowledgeBase =
-                window.GFloorKnowledgeBase ||
-                [];
+              if (
+                Array.isArray(
+                  window
+                    .GFloorKnowledgeBase
+                )
+              ) {
+                knowledgeBase =
+                  window
+                    .GFloorKnowledgeBase;
 
-              knowledgeBaseLoaded =
-                true;
+                knowledgeBaseLoaded =
+                  true;
+
+                knowledgeBaseLoading =
+                  false;
+
+                resolve(
+                  knowledgeBase
+                );
+
+                return;
+              }
 
               knowledgeBaseLoading =
                 false;
 
-              resolve(
-                knowledgeBase
+              reject(
+                new Error(
+                  "Knowledge base did not initialize."
+                )
               );
             };
 
@@ -1511,7 +1940,7 @@
 
               reject(
                 new Error(
-                  "Knowledge base failed to load."
+                  "Knowledge base could not be loaded."
                 )
               );
             };
@@ -1639,14 +2068,12 @@
       border: 1px solid #c9c9c9;
       background: #ffffff;
       color: #222222;
-      text-align: center;
     }
 
     .gfloor-primary-button {
       border: 0;
       background: #d2232a;
       color: #ffffff;
-      text-align: center;
     }
 
     .gfloor-primary-button:disabled {
@@ -1658,7 +2085,6 @@
       border: 1px solid #333e48;
       background: #ffffff;
       color: #333e48;
-      text-align: center;
     }
 
     .gfloor-question-row {
@@ -1720,6 +2146,16 @@
       color: #4c5156;
       font-size: 11px;
       font-weight: 700;
+    }
+
+    .gfloor-context-note {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #eef2f4;
+      color: #555555;
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     .gfloor-response-source {
@@ -1908,11 +2344,18 @@
   panel.id =
     "gfloor-chat-panel";
 
+  panel.setAttribute(
+    "aria-label",
+    "G-Floor customer support chat"
+  );
+
   panel.innerHTML = `
     <div class="gfloor-chat-header">
 
       <div class="gfloor-chat-title-wrap">
-        <strong>Chat with G-Floor</strong>
+        <strong>
+          Chat with G-Floor
+        </strong>
 
         <span class="gfloor-conversation-id">
           ${conversationId}
@@ -1948,6 +2391,7 @@
         </div>
 
         <div class="gfloor-question-row">
+
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -1956,6 +2400,7 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
+
         </div>
 
         <button
@@ -1970,17 +2415,27 @@
         <div
           id="gfloor-response-box"
           class="gfloor-response-box"
+          role="status"
+          aria-live="polite"
         ></div>
 
         <div
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
-          <button id="gfloor-helpful-yes" class="gfloor-small-button" type="button">
+          <button
+            id="gfloor-helpful-yes"
+            class="gfloor-small-button"
+            type="button"
+          >
             Yes
           </button>
 
-          <button id="gfloor-helpful-no" class="gfloor-small-button" type="button">
+          <button
+            id="gfloor-helpful-no"
+            class="gfloor-small-button"
+            type="button"
+          >
             No
           </button>
         </div>
@@ -2141,7 +2596,11 @@
             Send Message
           </button>
 
-          <div id="gfloor-chat-result"></div>
+          <div
+            id="gfloor-chat-result"
+            role="status"
+            aria-live="polite"
+          ></div>
 
         </form>
 
@@ -2170,6 +2629,11 @@
   button.textContent =
     "Chat with us";
 
+  button.setAttribute(
+    "aria-expanded",
+    "false"
+  );
+
   document.body.appendChild(
     panel
   );
@@ -2180,7 +2644,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Element References
+  | Elements
   |--------------------------------------------------------------------------
   */
 
@@ -2306,7 +2770,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | View Controls
+  | Views
   |--------------------------------------------------------------------------
   */
 
@@ -2336,6 +2800,13 @@
       open
     );
 
+    button.setAttribute(
+      "aria-expanded",
+      String(
+        open
+      )
+    );
+
     if (
       open
     ) {
@@ -2344,8 +2815,13 @@
 
       loadKnowledgeBase()
         .catch(
-          function () {
-            // Do not prevent chat from opening.
+          function (
+            error
+          ) {
+            console.error(
+              "G-Floor knowledge base error:",
+              error
+            );
           }
         );
     }
@@ -2353,7 +2829,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Customer Service Availability
+  | Customer Service Status
   |--------------------------------------------------------------------------
   */
 
@@ -2367,11 +2843,22 @@
       const data =
         await response.json();
 
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          data.message ||
+          "Availability check failed."
+        );
+      }
+
       currentSupportStatus =
         data;
 
       return data;
-    } catch (error) {
+    } catch (
+      error
+    ) {
       return (
         currentSupportStatus
       );
@@ -2484,11 +2971,6 @@
   }
 
   function renderPageContext() {
-    /*
-     * Re-capture immediately before showing the form.
-     * This catches variant changes made after page load.
-     */
-
     pageContext =
       captureShopifyContext();
 
@@ -2542,10 +3024,6 @@
 
       return;
     }
-
-    /*
-     * Homepage / collection / article / normal page.
-     */
 
     pageContextBox.innerHTML = `
       <span class="gfloor-page-context-label">
@@ -2665,7 +3143,8 @@
   }
 
   function showKnowledgeResponse(
-    match
+    match,
+    originalQuestion
   ) {
     const entry =
       match.entry;
@@ -2685,7 +3164,9 @@
       String(
         entry.responseType ||
         ""
-      ).toUpperCase();
+      )
+        .trim()
+        .toUpperCase();
 
     const needsReview =
       responseType.includes(
@@ -2695,10 +3176,32 @@
         "ESCALATE"
       );
 
+    const contextWasUsed =
+      pageContext.pageType ===
+        "product" &&
+      pageContext.productTitle &&
+      lastSearchQuestion !==
+        originalQuestion;
+
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
         G-Floor Support
       </span>
+
+      ${
+        contextWasUsed
+          ? `
+            <div class="gfloor-context-note">
+              Answering based on the product you're currently viewing:
+              <strong>
+                ${escapeHtml(
+                  pageContext.productTitle
+                )}
+              </strong>
+            </div>
+          `
+          : ""
+      }
 
       <span class="gfloor-response-category">
         ${escapeHtml(
@@ -2757,12 +3260,19 @@
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Process Question
+  |--------------------------------------------------------------------------
+  */
+
   async function processQuestion(
     question
   ) {
     const cleanQuestion =
       String(
-        question || ""
+        question ||
+        ""
       ).trim();
 
     if (
@@ -2771,6 +3281,9 @@
       return;
     }
 
+    pageContext =
+      captureShopifyContext();
+
     lastQuestion =
       cleanQuestion;
 
@@ -2778,6 +3291,34 @@
       "Customer",
       cleanQuestion
     );
+
+    /*
+     * Record product context in the transcript when applicable.
+     */
+
+    if (
+      pageContext.pageType ===
+        "product" &&
+      pageContext.productTitle
+    ) {
+      addTranscriptEntry(
+        "System",
+        "Customer is viewing: " +
+        pageContext.productTitle +
+        (
+          pageContext.variantTitle
+            ? " | Variant: " +
+              pageContext.variantTitle
+            : ""
+        ) +
+        (
+          pageContext.sku
+            ? " | SKU: " +
+              pageContext.sku
+            : ""
+        )
+      );
+    }
 
     questionSubmit.disabled =
       true;
@@ -2793,15 +3334,55 @@
           cleanQuestion
         );
 
+      console.log(
+        "G-Floor product-aware match:",
+        {
+          customerQuestion:
+            cleanQuestion,
+
+          searchQuestion:
+            lastSearchQuestion,
+
+          product:
+            pageContext.productTitle,
+
+          variant:
+            pageContext.variantTitle,
+
+          sku:
+            pageContext.sku,
+
+          matchedQuestion:
+            match
+              ? match.entry.question
+              : null,
+
+          score:
+            match
+              ? match.score
+              : null
+        }
+      );
+
       if (
         match
       ) {
         showKnowledgeResponse(
-          match
+          match,
+          cleanQuestion
         );
       } else {
         showNoMatchResponse();
       }
+    } catch (
+      error
+    ) {
+      console.error(
+        "G-Floor chat search error:",
+        error
+      );
+
+      showNoMatchResponse();
     } finally {
       questionSubmit.disabled =
         false;
@@ -2849,7 +3430,7 @@
               "What is the best flooring for a garage?",
 
             installation:
-              "Do I have to glue G-Floor down?",
+              "Do I have to glue this down?",
 
             shipping:
               "What are your shipping and delivery details?",
@@ -2858,7 +3439,7 @@
               "Where can I buy G-Floor?",
 
             cleaning:
-              "How do I clean G-Floor?",
+              "How do I clean this?",
 
             warranty:
               "I have a warranty or return question."
@@ -3041,10 +3622,6 @@
 
       await getAgentAvailability();
 
-      /*
-       * Refresh context immediately before submission.
-       */
-
       pageContext =
         captureShopifyContext();
 
@@ -3123,8 +3700,16 @@
             }
           );
 
-        const data =
-          await response.json();
+        let data = {};
+
+        try {
+          data =
+            await response.json();
+        } catch (
+          jsonError
+        ) {
+          data = {};
+        }
 
         if (
           !response.ok
@@ -3148,7 +3733,9 @@
           conversationId;
 
         form.reset();
-      } catch (error) {
+      } catch (
+        error
+      ) {
         addTranscriptEntry(
           "System",
           "Customer Service email delivery is not active yet."
@@ -3173,7 +3760,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Escape
+  | Escape Key
   |--------------------------------------------------------------------------
   */
 
@@ -3206,8 +3793,13 @@
     function () {
       loadKnowledgeBase()
         .catch(
-          function () {
-            // Chat can continue without blocking the storefront.
+          function (
+            error
+          ) {
+            console.error(
+              "G-Floor knowledge base preload error:",
+              error
+            );
           }
         );
     },
