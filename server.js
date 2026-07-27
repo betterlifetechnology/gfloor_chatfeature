@@ -1,3 +1,5 @@
+"use strict";
+
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
@@ -5,7 +7,15 @@ require("dotenv").config();
 
 const app = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+  process.env.PORT ||
+  3000;
+
+/*
+|--------------------------------------------------------------------------
+| Allowed Shopify Origins
+|--------------------------------------------------------------------------
+*/
 
 const allowedOrigins = [
   "https://gfloor.com",
@@ -14,9 +24,13 @@ const allowedOrigins = [
 
 if (
   process.env.SHOPIFY_ALLOWED_ORIGIN &&
-  !allowedOrigins.includes(process.env.SHOPIFY_ALLOWED_ORIGIN)
+  !allowedOrigins.includes(
+    process.env.SHOPIFY_ALLOWED_ORIGIN
+  )
 ) {
-  allowedOrigins.push(process.env.SHOPIFY_ALLOWED_ORIGIN);
+  allowedOrigins.push(
+    process.env.SHOPIFY_ALLOWED_ORIGIN
+  );
 }
 
 /*
@@ -27,19 +41,37 @@ if (
 
 app.use(
   cors({
-    origin: function (origin, callback) {
+    origin: function (
+      origin,
+      callback
+    ) {
       if (!origin) {
-        return callback(null, true);
+        return callback(
+          null,
+          true
+        );
       }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      if (
+        allowedOrigins.includes(
+          origin
+        )
+      ) {
+        return callback(
+          null,
+          true
+        );
       }
 
-      console.error("Blocked CORS origin:", origin);
+      console.error(
+        "Blocked CORS origin:",
+        origin
+      );
 
       return callback(
-        new Error("Origin is not allowed by CORS.")
+        new Error(
+          "Origin is not allowed by CORS."
+        )
       );
     },
 
@@ -57,13 +89,277 @@ app.use(
 
 app.use(
   express.json({
-    limit: "75kb"
+    limit: "100kb"
   })
 );
 
 app.use(
-  express.static("public")
+  express.static(
+    "public"
+  )
 );
+
+/*
+|--------------------------------------------------------------------------
+| Email Delivery Configuration
+|--------------------------------------------------------------------------
+|
+| Supported modes:
+|
+| graph
+| smtp
+| auto
+|
+| "auto" uses Microsoft Graph when Graph credentials are available and
+| falls back to SMTP when Graph has not been configured.
+|--------------------------------------------------------------------------
+*/
+
+function getEmailDeliveryMode() {
+  const mode =
+    String(
+      process.env.EMAIL_DELIVERY_MODE ||
+      "auto"
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    [
+      "graph",
+      "smtp",
+      "auto"
+    ].includes(mode)
+  ) {
+    return mode;
+  }
+
+  return "auto";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Microsoft Graph Configuration
+|--------------------------------------------------------------------------
+*/
+
+function getGraphConfiguration() {
+  return {
+    tenantId:
+      String(
+        process.env.MICROSOFT_TENANT_ID ||
+        ""
+      ).trim(),
+
+    clientId:
+      String(
+        process.env.MICROSOFT_CLIENT_ID ||
+        ""
+      ).trim(),
+
+    clientSecret:
+      String(
+        process.env.MICROSOFT_CLIENT_SECRET ||
+        ""
+      ).trim(),
+
+    senderEmail:
+      String(
+        process.env.GRAPH_SENDER_EMAIL ||
+        process.env.CUSTOMER_SERVICE_EMAIL ||
+        ""
+      ).trim(),
+
+    customerServiceEmail:
+      String(
+        process.env.CUSTOMER_SERVICE_EMAIL ||
+        ""
+      ).trim()
+  };
+}
+
+function getMissingGraphEnvironmentVariables() {
+  const config =
+    getGraphConfiguration();
+
+  const missing = [];
+
+  if (
+    !config.tenantId
+  ) {
+    missing.push(
+      "MICROSOFT_TENANT_ID"
+    );
+  }
+
+  if (
+    !config.clientId
+  ) {
+    missing.push(
+      "MICROSOFT_CLIENT_ID"
+    );
+  }
+
+  if (
+    !config.clientSecret
+  ) {
+    missing.push(
+      "MICROSOFT_CLIENT_SECRET"
+    );
+  }
+
+  if (
+    !config.senderEmail
+  ) {
+    missing.push(
+      "GRAPH_SENDER_EMAIL"
+    );
+  }
+
+  if (
+    !config.customerServiceEmail
+  ) {
+    missing.push(
+      "CUSTOMER_SERVICE_EMAIL"
+    );
+  }
+
+  return missing;
+}
+
+function isGraphConfigured() {
+  return (
+    getMissingGraphEnvironmentVariables()
+      .length === 0
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| SMTP Configuration
+|--------------------------------------------------------------------------
+*/
+
+function getMissingSmtpEnvironmentVariables() {
+  const required = [
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
+    "CUSTOMER_SERVICE_EMAIL"
+  ];
+
+  return required.filter(
+    function (
+      variableName
+    ) {
+      return !process.env[
+        variableName
+      ];
+    }
+  );
+}
+
+function isSmtpConfigured() {
+  return (
+    getMissingSmtpEnvironmentVariables()
+      .length === 0
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Determine Active Email Transport
+|--------------------------------------------------------------------------
+*/
+
+function getActiveEmailTransport() {
+  const requestedMode =
+    getEmailDeliveryMode();
+
+  if (
+    requestedMode ===
+    "graph"
+  ) {
+    return {
+      requestedMode:
+        requestedMode,
+
+      transport:
+        isGraphConfigured()
+          ? "graph"
+          : "unavailable",
+
+      configured:
+        isGraphConfigured()
+    };
+  }
+
+  if (
+    requestedMode ===
+    "smtp"
+  ) {
+    return {
+      requestedMode:
+        requestedMode,
+
+      transport:
+        isSmtpConfigured()
+          ? "smtp"
+          : "unavailable",
+
+      configured:
+        isSmtpConfigured()
+    };
+  }
+
+  /*
+   * AUTO:
+   * Prefer Graph.
+   */
+
+  if (
+    isGraphConfigured()
+  ) {
+    return {
+      requestedMode:
+        "auto",
+
+      transport:
+        "graph",
+
+      configured:
+        true
+    };
+  }
+
+  if (
+    isSmtpConfigured()
+  ) {
+    return {
+      requestedMode:
+        "auto",
+
+      transport:
+        "smtp",
+
+      configured:
+        true
+    };
+  }
+
+  return {
+    requestedMode:
+      "auto",
+
+    transport:
+      "unavailable",
+
+    configured:
+      false
+  };
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -73,7 +369,7 @@ app.use(
 
 function getLiveAgentWaitEstimate() {
   const queueStatus =
-    (
+    String(
       process.env.LIVE_AGENT_QUEUE_STATUS ||
       "normal"
     )
@@ -81,27 +377,36 @@ function getLiveAgentWaitEstimate() {
       .toLowerCase();
 
   const normalWait =
-    (
+    String(
       process.env.LIVE_AGENT_NORMAL_WAIT ||
       "2-5"
     ).trim();
 
   const busyWait =
-    (
+    String(
       process.env.LIVE_AGENT_BUSY_WAIT ||
       "5-10"
     ).trim();
 
-  if (queueStatus === "busy") {
+  if (
+    queueStatus ===
+    "busy"
+  ) {
     return {
-      queueStatus: "busy",
-      estimatedWaitMinutes: busyWait
+      queueStatus:
+        "busy",
+
+      estimatedWaitMinutes:
+        busyWait
     };
   }
 
   return {
-    queueStatus: "normal",
-    estimatedWaitMinutes: normalWait
+    queueStatus:
+      "normal",
+
+    estimatedWaitMinutes:
+      normalWait
   };
 }
 
@@ -134,13 +439,17 @@ function getCustomerServiceStatus() {
         hour12:
           false
       }
-    ).formatToParts(now);
+    ).formatToParts(
+      now
+    );
 
   const centralTime =
     {};
 
   formattedParts.forEach(
-    function (part) {
+    function (
+      part
+    ) {
       if (
         part.type !==
         "literal"
@@ -180,7 +489,9 @@ function getCustomerServiceStatus() {
     );
 
   const minutesSinceMidnight =
-    hour * 60 +
+    (
+      hour * 60
+    ) +
     minute;
 
   const openingMinutes =
@@ -210,8 +521,7 @@ function getCustomerServiceStatus() {
         "Monday-Friday, 8 AM-5 PM Central Time",
 
       queueStatus:
-        waitEstimate
-          .queueStatus,
+        waitEstimate.queueStatus,
 
       estimatedWaitMinutes:
         waitEstimate
@@ -220,7 +530,8 @@ function getCustomerServiceStatus() {
       message:
         "A Customer Service representative is currently available. " +
         "Estimated wait time: approximately " +
-        waitEstimate.estimatedWaitMinutes +
+        waitEstimate
+          .estimatedWaitMinutes +
         " minutes."
     };
   }
@@ -278,6 +589,31 @@ function isValidEmail(
   );
 }
 
+function cleanBoolean(
+  value
+) {
+  return (
+    value === true ||
+    value === "true"
+  );
+}
+
+function cleanNumber(
+  value
+) {
+  if (
+    typeof value ===
+    "number" &&
+    Number.isFinite(
+      value
+    )
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Transcript Sanitizer
@@ -301,7 +637,9 @@ function cleanTranscript(
       100
     )
     .map(
-      function (entry) {
+      function (
+        entry
+      ) {
         return {
           role:
             cleanText(
@@ -327,7 +665,9 @@ function cleanTranscript(
       }
     )
     .filter(
-      function (entry) {
+      function (
+        entry
+      ) {
         return (
           entry.role &&
           entry.message
@@ -351,7 +691,9 @@ function formatTranscript(
 
   return transcript
     .map(
-      function (entry) {
+      function (
+        entry
+      ) {
         const timestamp =
           entry.timestamp
             ? ` [${entry.timestamp}]`
@@ -387,14 +729,25 @@ function cleanPageContext(
       pageTitle: "",
       pageUrl: "",
       referrer: "",
+
       productTitle: "",
       productHandle: "",
       productId: "",
+
+      selectedColor: "",
+      selectedSize: "",
+      exactVariantMatch: false,
+
       variantId: "",
       variantTitle: "",
       sku: "",
+
+      available: false,
+      price: null,
+
       vendor: "",
       productType: "",
+
       collectionHandle: "",
       collectionTitle: ""
     };
@@ -446,6 +799,24 @@ function cleanPageContext(
         100
       ),
 
+    selectedColor:
+      cleanText(
+        pageContext.selectedColor,
+        200
+      ),
+
+    selectedSize:
+      cleanText(
+        pageContext.selectedSize,
+        200
+      ),
+
+    exactVariantMatch:
+      cleanBoolean(
+        pageContext
+          .exactVariantMatch
+      ),
+
     variantId:
       cleanText(
         String(
@@ -465,6 +836,16 @@ function cleanPageContext(
       cleanText(
         pageContext.sku,
         200
+      ),
+
+    available:
+      cleanBoolean(
+        pageContext.available
+      ),
+
+    price:
+      cleanNumber(
+        pageContext.price
       ),
 
     vendor:
@@ -491,6 +872,35 @@ function cleanPageContext(
         500
       )
   };
+}
+
+function formatPriceFromCents(
+  cents
+) {
+  if (
+    typeof cents !==
+      "number" ||
+    !Number.isFinite(
+      cents
+    )
+  ) {
+    return (
+      "Not detected"
+    );
+  }
+
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style:
+        "currency",
+
+      currency:
+        "USD"
+    }
+  ).format(
+    cents / 100
+  );
 }
 
 function formatPageContext(
@@ -534,6 +944,22 @@ function formatPageContext(
       "Not detected"
     }`,
 
+    `Selected color: ${
+      context.selectedColor ||
+      "Not detected"
+    }`,
+
+    `Selected size: ${
+      context.selectedSize ||
+      "Not detected"
+    }`,
+
+    `Exact purchasable variant match: ${
+      context.exactVariantMatch
+        ? "Yes"
+        : "No"
+    }`,
+
     `Variant ID: ${
       context.variantId ||
       "Not detected"
@@ -547,6 +973,18 @@ function formatPageContext(
     `SKU: ${
       context.sku ||
       "Not detected"
+    }`,
+
+    `Available: ${
+      context.available
+        ? "Yes"
+        : "No"
+    }`,
+
+    `Price: ${
+      formatPriceFromCents(
+        context.price
+      )
     }`,
 
     `Vendor: ${
@@ -575,13 +1013,463 @@ function formatPageContext(
 
 /*
 |--------------------------------------------------------------------------
+| Microsoft Graph OAuth Token
+|--------------------------------------------------------------------------
+*/
+
+async function getMicrosoftGraphAccessToken() {
+  const config =
+    getGraphConfiguration();
+
+  const missing =
+    getMissingGraphEnvironmentVariables();
+
+  if (
+    missing.length >
+    0
+  ) {
+    throw new Error(
+      "Microsoft Graph is missing configuration: " +
+      missing.join(
+        ", "
+      )
+    );
+  }
+
+  const tokenUrl =
+    "https://login.microsoftonline.com/" +
+    encodeURIComponent(
+      config.tenantId
+    ) +
+    "/oauth2/v2.0/token";
+
+  const body =
+    new URLSearchParams();
+
+  body.set(
+    "client_id",
+    config.clientId
+  );
+
+  body.set(
+    "client_secret",
+    config.clientSecret
+  );
+
+  body.set(
+    "scope",
+    "https://graph.microsoft.com/.default"
+  );
+
+  body.set(
+    "grant_type",
+    "client_credentials"
+  );
+
+  const controller =
+    new AbortController();
+
+  const timeout =
+    setTimeout(
+      function () {
+        controller.abort();
+      },
+      15000
+    );
+
+  try {
+    const response =
+      await fetch(
+        tokenUrl,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded"
+          },
+
+          body:
+            body.toString(),
+
+          signal:
+            controller.signal
+        }
+      );
+
+    const result =
+      await response.json();
+
+    if (
+      !response.ok
+    ) {
+      const description =
+        result &&
+        result.error_description
+          ? result
+              .error_description
+          : (
+              result &&
+              result.error
+                ? result.error
+                : "Unknown Microsoft authentication error."
+            );
+
+      throw new Error(
+        "Microsoft Graph authentication failed: " +
+        description
+      );
+    }
+
+    if (
+      !result.access_token
+    ) {
+      throw new Error(
+        "Microsoft Graph authentication did not return an access token."
+      );
+    }
+
+    return (
+      result.access_token
+    );
+  } finally {
+    clearTimeout(
+      timeout
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Microsoft Graph Mail Sender
+|--------------------------------------------------------------------------
+*/
+
+async function sendWithMicrosoftGraph({
+  subject,
+  body,
+  replyTo
+}) {
+  const config =
+    getGraphConfiguration();
+
+  const accessToken =
+    await getMicrosoftGraphAccessToken();
+
+  const endpoint =
+    "https://graph.microsoft.com/v1.0/users/" +
+    encodeURIComponent(
+      config.senderEmail
+    ) +
+    "/sendMail";
+
+  const graphMessage = {
+    message: {
+      subject:
+        subject,
+
+      body: {
+        contentType:
+          "Text",
+
+        content:
+          body
+      },
+
+      toRecipients: [
+        {
+          emailAddress: {
+            address:
+              config
+                .customerServiceEmail
+          }
+        }
+      ]
+    },
+
+    saveToSentItems:
+      true
+  };
+
+  if (
+    replyTo &&
+    isValidEmail(
+      replyTo
+    )
+  ) {
+    graphMessage
+      .message
+      .replyTo = [
+        {
+          emailAddress: {
+            address:
+              replyTo
+          }
+        }
+      ];
+  }
+
+  const controller =
+    new AbortController();
+
+  const timeout =
+    setTimeout(
+      function () {
+        controller.abort();
+      },
+      20000
+    );
+
+  try {
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method:
+            "POST",
+
+          headers: {
+            Authorization:
+              "Bearer " +
+              accessToken,
+
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify(
+              graphMessage
+            ),
+
+          signal:
+            controller.signal
+        }
+      );
+
+    if (
+      response.status !==
+      202
+    ) {
+      let errorBody =
+        "";
+
+      try {
+        errorBody =
+          await response.text();
+      } catch (
+        readError
+      ) {
+        errorBody =
+          "";
+      }
+
+      throw new Error(
+        "Microsoft Graph sendMail failed with HTTP " +
+        response.status +
+        (
+          errorBody
+            ? ": " +
+              errorBody
+            : ""
+        )
+      );
+    }
+
+    return {
+      transport:
+        "graph",
+
+      status:
+        response.status,
+
+      messageId:
+        null
+    };
+  } finally {
+    clearTimeout(
+      timeout
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| SMTP Fallback Sender
+|--------------------------------------------------------------------------
+*/
+
+async function sendWithSmtp({
+  subject,
+  body,
+  replyTo
+}) {
+  const missing =
+    getMissingSmtpEnvironmentVariables();
+
+  if (
+    missing.length >
+    0
+  ) {
+    throw new Error(
+      "SMTP is missing configuration: " +
+      missing.join(
+        ", "
+      )
+    );
+  }
+
+  const transporter =
+    nodemailer.createTransport({
+      host:
+        process.env
+          .SMTP_HOST,
+
+      port:
+        Number(
+          process.env
+            .SMTP_PORT ||
+          587
+        ),
+
+      secure:
+        process.env
+          .SMTP_SECURE ===
+        "true",
+
+      requireTLS:
+        true,
+
+      connectionTimeout:
+        15000,
+
+      greetingTimeout:
+        10000,
+
+      socketTimeout:
+        20000,
+
+      auth: {
+        user:
+          process.env
+            .SMTP_USER,
+
+        pass:
+          process.env
+            .SMTP_PASS
+      },
+
+      tls: {
+        minVersion:
+          "TLSv1.2"
+      }
+    });
+
+  const result =
+    await transporter.sendMail({
+      from:
+        process.env
+          .SMTP_FROM,
+
+      to:
+        process.env
+          .CUSTOMER_SERVICE_EMAIL,
+
+      replyTo:
+        replyTo,
+
+      subject:
+        subject,
+
+      text:
+        body
+    });
+
+  return {
+    transport:
+      "smtp",
+
+    status:
+      200,
+
+    messageId:
+      result.messageId ||
+      null
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Unified Email Sender
+|--------------------------------------------------------------------------
+*/
+
+async function sendCustomerServiceEmail({
+  subject,
+  body,
+  replyTo
+}) {
+  const transport =
+    getActiveEmailTransport();
+
+  if (
+    !transport.configured
+  ) {
+    throw new Error(
+      "No configured email delivery transport is available."
+    );
+  }
+
+  if (
+    transport.transport ===
+    "graph"
+  ) {
+    return sendWithMicrosoftGraph({
+      subject:
+        subject,
+
+      body:
+        body,
+
+      replyTo:
+        replyTo
+    });
+  }
+
+  if (
+    transport.transport ===
+    "smtp"
+  ) {
+    return sendWithSmtp({
+      subject:
+        subject,
+
+      body:
+        body,
+
+      replyTo:
+        replyTo
+    });
+  }
+
+  throw new Error(
+    "Email transport could not be determined."
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
 | Home
 |--------------------------------------------------------------------------
 */
 
 app.get(
   "/",
-  function (req, res) {
+  function (
+    req,
+    res
+  ) {
     res.send(
       "G-Floor chat backend is running."
     );
@@ -596,31 +1484,17 @@ app.get(
 
 app.get(
   "/health",
-  function (req, res) {
-    const requiredEnvironmentVariables = [
-      "SMTP_HOST",
-      "SMTP_PORT",
-      "SMTP_USER",
-      "SMTP_PASS",
-      "SMTP_FROM",
-      "CUSTOMER_SERVICE_EMAIL"
-    ];
-
-    const missingEnvironmentVariables =
-      requiredEnvironmentVariables.filter(
-        function (
-          variableName
-        ) {
-          return !process.env[
-            variableName
-          ];
-        }
-      );
-
+  function (
+    req,
+    res
+  ) {
     const supportStatus =
       getCustomerServiceStatus();
 
-    res.json({
+    const emailTransport =
+      getActiveEmailTransport();
+
+    return res.json({
       status:
         "ok",
 
@@ -631,12 +1505,26 @@ app.get(
         new Date()
           .toISOString(),
 
-      emailConfigured:
-        missingEnvironmentVariables
-          .length === 0,
+      emailDeliveryMode:
+        getEmailDeliveryMode(),
 
-      missingEnvironmentVariables:
-        missingEnvironmentVariables,
+      activeEmailTransport:
+        emailTransport.transport,
+
+      emailConfigured:
+        emailTransport.configured,
+
+      graphConfigured:
+        isGraphConfigured(),
+
+      graphMissingEnvironmentVariables:
+        getMissingGraphEnvironmentVariables(),
+
+      smtpConfigured:
+        isSmtpConfigured(),
+
+      smtpMissingEnvironmentVariables:
+        getMissingSmtpEnvironmentVariables(),
 
       liveAgentAvailable:
         supportStatus
@@ -655,13 +1543,67 @@ app.get(
 
 /*
 |--------------------------------------------------------------------------
+| Graph Health
+|--------------------------------------------------------------------------
+|
+| This endpoint checks configuration only.
+| It does NOT send an email.
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  "/health/graph",
+  function (
+    req,
+    res
+  ) {
+    const missing =
+      getMissingGraphEnvironmentVariables();
+
+    return res
+      .status(
+        missing.length ===
+          0
+          ? 200
+          : 503
+      )
+      .json({
+        success:
+          missing.length ===
+          0,
+
+        configured:
+          missing.length ===
+          0,
+
+        senderEmail:
+          process.env
+            .GRAPH_SENDER_EMAIL ||
+          "",
+
+        customerServiceEmail:
+          process.env
+            .CUSTOMER_SERVICE_EMAIL ||
+          "",
+
+        missingEnvironmentVariables:
+          missing
+      });
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
 | Chat Status
 |--------------------------------------------------------------------------
 */
 
 app.get(
   "/chat/status",
-  function (req, res) {
+  function (
+    req,
+    res
+  ) {
     try {
       const status =
         getCustomerServiceStatus();
@@ -692,7 +1634,9 @@ app.get(
             status
               .message
         });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Chat status error:",
         error
@@ -725,7 +1669,7 @@ app.get(
 
 /*
 |--------------------------------------------------------------------------
-| Chat Message
+| Chat Message / Customer Service Handoff
 |--------------------------------------------------------------------------
 */
 
@@ -794,12 +1738,42 @@ app.post(
         );
 
       const matchScore =
-        typeof req.body
-          .matchScore ===
-        "number"
-          ? req.body
-              .matchScore
-          : null;
+        cleanNumber(
+          req.body
+            .matchScore
+        );
+
+      const confidenceScore =
+        cleanNumber(
+          req.body
+            .confidenceScore
+        );
+
+      const confidenceLevel =
+        cleanText(
+          req.body
+            .confidenceLevel,
+          50
+        );
+
+      const escalationRequired =
+        cleanBoolean(
+          req.body
+            .escalationRequired
+        );
+
+      const escalationRecommended =
+        cleanBoolean(
+          req.body
+            .escalationRecommended
+        );
+
+      const escalationReason =
+        cleanText(
+          req.body
+            .escalationReason,
+          1000
+        );
 
       const transcript =
         cleanTranscript(
@@ -814,12 +1788,10 @@ app.post(
         );
 
       const requestedLiveAgent =
-        req.body
-          .requestedLiveAgent ===
-          true ||
-        req.body
-          .requestedLiveAgent ===
-          "true";
+        cleanBoolean(
+          req.body
+            .requestedLiveAgent
+        );
 
       const currentSupportStatus =
         getCustomerServiceStatus();
@@ -857,99 +1829,37 @@ app.post(
           });
       }
 
-      const requiredEnvironmentVariables = [
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USER",
-        "SMTP_PASS",
-        "SMTP_FROM",
-        "CUSTOMER_SERVICE_EMAIL"
-      ];
+      const emailTransport =
+        getActiveEmailTransport();
 
-      const missingEnvironmentVariables =
-        requiredEnvironmentVariables.filter(
-          function (
-            variableName
-          ) {
-            return !process.env[
-              variableName
-            ];
+      if (
+        !emailTransport
+          .configured
+      ) {
+        console.error(
+          "No email delivery transport is configured.",
+          {
+            mode:
+              getEmailDeliveryMode(),
+
+            graphMissing:
+              getMissingGraphEnvironmentVariables(),
+
+            smtpMissing:
+              getMissingSmtpEnvironmentVariables()
           }
         );
 
-      if (
-        missingEnvironmentVariables
-          .length > 0
-      ) {
-        console.error(
-          "Missing email environment variables:",
-          missingEnvironmentVariables.join(
-            ", "
-          )
-        );
-
         return res
-          .status(500)
+          .status(503)
           .json({
             success:
               false,
 
             error:
-              "Email delivery is not fully configured."
+              "Customer Service message delivery is not configured."
           });
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Temporary SMTP Transport
-      |--------------------------------------------------------------------------
-      */
-
-      const transporter =
-        nodemailer.createTransport({
-          host:
-            process.env
-              .SMTP_HOST,
-
-          port:
-            Number(
-              process.env
-                .SMTP_PORT ||
-              587
-            ),
-
-          secure:
-            process.env
-              .SMTP_SECURE ===
-            "true",
-
-          requireTLS:
-            true,
-
-          connectionTimeout:
-            15000,
-
-          greetingTimeout:
-            10000,
-
-          socketTimeout:
-            20000,
-
-          auth: {
-            user:
-              process.env
-                .SMTP_USER,
-
-            pass:
-              process.env
-                .SMTP_PASS
-          },
-
-          tls: {
-            minVersion:
-              "TLSv1.2"
-          }
-        });
 
       const formattedTranscript =
         formatTranscript(
@@ -989,7 +1899,42 @@ app.post(
 
         "SHOPIFY PAGE / PRODUCT CONTEXT",
         "------------------------------",
+
         formattedPageContext,
+
+        "",
+
+        "CHAT CONFIDENCE / ESCALATION",
+        "----------------------------",
+
+        `Confidence score: ${
+          confidenceScore !==
+          null
+            ? confidenceScore
+            : "Not provided"
+        }`,
+
+        `Confidence level: ${
+          confidenceLevel ||
+          "Not provided"
+        }`,
+
+        `Escalation required: ${
+          escalationRequired
+            ? "Yes"
+            : "No"
+        }`,
+
+        `Escalation recommended: ${
+          escalationRecommended
+            ? "Yes"
+            : "No"
+        }`,
+
+        `Escalation reason: ${
+          escalationReason ||
+          "None"
+        }`,
 
         "",
 
@@ -1052,39 +1997,66 @@ app.post(
 
         "",
 
+        "MESSAGE DELIVERY",
+        "----------------",
+
+        `Requested delivery mode: ${
+          emailTransport
+            .requestedMode
+        }`,
+
+        `Active transport: ${
+          emailTransport
+            .transport
+        }`,
+
+        "",
+
         "CONVERSATION TRANSCRIPT",
         "-----------------------",
-        formattedTranscript
+
+        formattedTranscript,
+
+        "",
+
+        "CUSTOMER REPLY",
+        "--------------",
+
+        "Reply directly to this email to respond to the customer."
       ].join(
         "\n"
       );
 
-      const emailResult =
-        await transporter
-          .sendMail({
-            from:
-              process.env
-                .SMTP_FROM,
+      const subject =
+        `[${conversationId || "G-Floor Chat"}] ` +
+        (
+          requestedLiveAgent
+            ? "LIVE AGENT REQUEST"
+            : "G-Floor Chat Message"
+        ) +
+        ` from ${name}`;
 
-            to:
-              process.env
-                .CUSTOMER_SERVICE_EMAIL,
+      const deliveryResult =
+        await sendCustomerServiceEmail({
+          subject:
+            subject,
 
-            replyTo:
-              email,
+          body:
+            emailBody,
 
-            subject:
-              `[${conversationId || "G-Floor Chat"}] New G-Floor Chat Message from ${name}`,
-
-            text:
-              emailBody
-          });
+          replyTo:
+            email
+        });
 
       console.log(
-        "Chat email sent successfully:",
+        "Chat handoff sent successfully:",
         {
           conversationId:
             conversationId,
+
+          transport:
+            deliveryResult
+              .transport,
 
           productHandle:
             pageContext
@@ -1094,8 +2066,12 @@ app.post(
             pageContext
               .variantId,
 
+          status:
+            deliveryResult
+              .status,
+
           messageId:
-            emailResult
+            deliveryResult
               .messageId
         }
       );
@@ -1112,6 +2088,10 @@ app.post(
           message:
             "Your message was sent successfully.",
 
+          deliveryTransport:
+            deliveryResult
+              .transport,
+
           liveAgentAvailable:
             currentSupportStatus
               .liveAgentAvailable,
@@ -1124,7 +2104,9 @@ app.post(
             currentSupportStatus
               .estimatedWaitMinutes
         });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Chat message error:",
         {
@@ -1144,7 +2126,14 @@ app.post(
             error.response,
 
           responseCode:
-            error.responseCode
+            error.responseCode,
+
+          stack:
+            process.env
+              .NODE_ENV ===
+            "development"
+              ? error.stack
+              : undefined
         }
       );
 
@@ -1170,8 +2159,30 @@ app.post(
 app.listen(
   PORT,
   function () {
+    const emailTransport =
+      getActiveEmailTransport();
+
     console.log(
       `G-Floor chat backend running on port ${PORT}`
+    );
+
+    console.log(
+      "Email delivery:",
+      {
+        requestedMode:
+          emailTransport
+            .requestedMode,
+
+        activeTransport:
+          emailTransport
+            .transport,
+
+        graphConfigured:
+          isGraphConfigured(),
+
+        smtpConfigured:
+          isSmtpConfigured()
+      }
     );
   }
 );
