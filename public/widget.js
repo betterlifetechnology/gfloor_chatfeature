@@ -21,15 +21,50 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Matching Configuration
+  | STEP 14: Confidence Configuration
   |--------------------------------------------------------------------------
   */
 
-  const MATCH_CONFIG = {
-    minimumMatchScore: 0.43,
+  const CONFIDENCE_CONFIG = {
+    highConfidenceMinimum: 0.85,
+    mediumConfidenceMinimum: 0.65,
+    lowConfidenceMaximum: 0.649999,
+
+    shopifyFactScore: 1.0,
+    contextualRuleScore: 0.98,
+
+    minimumKnowledgeBaseScore: 0.43,
+
     intentMatchBonus: 0.32,
     intentMismatchPenalty: 0.24
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Topics That Deserve Extra Review
+  |--------------------------------------------------------------------------
+  |
+  | These do NOT automatically block approved answers.
+  |
+  | They cause the system to be more conservative when the match is not
+  | extremely strong.
+  |--------------------------------------------------------------------------
+  */
+
+  const REVIEW_SENSITIVE_INTENTS = new Set([
+    "installation",
+    "outdoor",
+    "warranty",
+    "chemical",
+    "substrate",
+    "adhesive"
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Matching Helpers
+  |--------------------------------------------------------------------------
+  */
 
   const STOP_WORDS = new Set([
     "a",
@@ -148,6 +183,22 @@
     "how to clean this",
     "clean this",
     "clean it"
+  ];
+
+  const WARRANTY_PHRASES = [
+    "warranty",
+    "warranty claim",
+    "covered under warranty",
+    "is this covered",
+    "warranty coverage"
+  ];
+
+  const RETURN_PHRASES = [
+    "return",
+    "return this",
+    "return policy",
+    "send this back",
+    "refund"
   ];
 
   /*
@@ -299,7 +350,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 13: Conversation Memory
+  | Conversation Memory
   |--------------------------------------------------------------------------
   */
 
@@ -320,7 +371,27 @@
     lastPrice: null,
     lastAvailable: null,
     lastExactVariantMatch: null,
+    lastConfidenceScore: null,
+    lastConfidenceLevel: null,
+    lastEscalationReason: null,
     lastQuestionTimestamp: null
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: Confidence / Escalation State
+  |--------------------------------------------------------------------------
+  */
+
+  let lastDecision = {
+    confidenceScore: 0,
+    confidenceLevel: "unknown",
+    action: "none",
+    escalationRequired: false,
+    escalationRecommended: false,
+    reason: "",
+    source: "",
+    responseType: ""
   };
 
   /*
@@ -502,6 +573,27 @@
     );
   }
 
+  function clampScore(score) {
+    const numericScore =
+      Number(score);
+
+    if (
+      !Number.isFinite(
+        numericScore
+      )
+    ) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      Math.min(
+        1,
+        numericScore
+      )
+    );
+  }
+
   function formatMoneyFromCents(
     cents
   ) {
@@ -561,7 +653,8 @@
 
   function addTranscriptEntry(
     role,
-    message
+    message,
+    metadata
   ) {
     const cleanRole =
       String(
@@ -586,6 +679,10 @@
 
       message:
         cleanMessage,
+
+      metadata:
+        metadata ||
+        null,
 
       timestamp:
         new Date()
@@ -1019,8 +1116,7 @@
     );
 
     if (
-      optionIndex ===
-      -1
+      optionIndex === -1
     ) {
       return "";
     }
@@ -1763,7 +1859,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 13: Memory Helpers
+  | Conversation Memory Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -1849,6 +1945,24 @@
       "undefined"
         ? pageContext.exactVariantMatch
         : null;
+
+    conversationMemory.lastConfidenceScore =
+      typeof data.confidenceScore !==
+      "undefined"
+        ? data.confidenceScore
+        : conversationMemory.lastConfidenceScore;
+
+    conversationMemory.lastConfidenceLevel =
+      typeof data.confidenceLevel !==
+      "undefined"
+        ? data.confidenceLevel
+        : conversationMemory.lastConfidenceLevel;
+
+    conversationMemory.lastEscalationReason =
+      typeof data.escalationReason !==
+      "undefined"
+        ? data.escalationReason
+        : conversationMemory.lastEscalationReason;
 
     conversationMemory.lastQuestionTimestamp =
       new Date()
@@ -1972,7 +2086,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 13: Follow-Up Resolver
+  | Follow-Up Resolver
   |--------------------------------------------------------------------------
   */
 
@@ -1995,10 +2109,6 @@
       return cleanQuestion;
     }
 
-    /*
-     * "What about outside?"
-     */
-
     if (
       normalized ===
         "what about outside" ||
@@ -2013,10 +2123,6 @@
         "Can I use this outside?"
       );
     }
-
-    /*
-     * "What about waterproof?"
-     */
 
     if (
       normalized ===
@@ -2033,10 +2139,6 @@
       );
     }
 
-    /*
-     * "What about cleaning?"
-     */
-
     if (
       normalized ===
         "what about cleaning" ||
@@ -2049,10 +2151,6 @@
         "How do I clean this?"
       );
     }
-
-    /*
-     * "What about glue?"
-     */
 
     if (
       normalized ===
@@ -2068,12 +2166,6 @@
         "Do I have to glue this down?"
       );
     }
-
-    /*
-     * "Which one am I looking at?"
-     *
-     * Use the last subject.
-     */
 
     if (
       matchesEntirePhrase(
@@ -2106,17 +2198,6 @@
       );
     }
 
-    /*
-     * Generic:
-     *
-     * "What about now?"
-     * "And now?"
-     * "What about this one?"
-     *
-     * Repeat the previous factual question against
-     * the CURRENT Shopify state.
-     */
-
     if (
       matchesEntirePhrase(
         cleanQuestion,
@@ -2140,11 +2221,6 @@
         }
       }
 
-      /*
-       * If the previous question was a knowledge
-       * question, reuse it against current product context.
-       */
-
       if (
         conversationMemory
           .lastResolvedQuestion
@@ -2155,10 +2231,6 @@
         );
       }
     }
-
-    /*
-     * "What about the price?"
-     */
 
     if (
       normalized.includes(
@@ -2173,10 +2245,6 @@
       );
     }
 
-    /*
-     * "What about the sku?"
-     */
-
     if (
       normalized.includes(
         "what about the sku"
@@ -2189,10 +2257,6 @@
         "What's the SKU?"
       );
     }
-
-    /*
-     * "What about the size?"
-     */
 
     if (
       normalized.includes(
@@ -2207,10 +2271,6 @@
       );
     }
 
-    /*
-     * "What about the color?"
-     */
-
     if (
       normalized.includes(
         "what about the color"
@@ -2223,10 +2283,6 @@
         "What color am I looking at?"
       );
     }
-
-    /*
-     * "Is this one available?"
-     */
 
     if (
       normalized ===
@@ -2306,32 +2362,6 @@
       hasInitializedSelection =
         true;
 
-      console.log(
-        "G-Floor initial selection:",
-        {
-          source:
-            source,
-
-          color:
-            currentSelection.color,
-
-          size:
-            currentSelection.size,
-
-          variantId:
-            currentVariantId,
-
-          exactVariantMatch:
-            currentSelection
-              .exactVariantMatch,
-
-          sku:
-            currentVariant
-              ? currentVariant.sku
-              : null
-        }
-      );
-
       return;
     }
 
@@ -2410,42 +2440,6 @@
       "."
     );
 
-    console.log(
-      "G-Floor product selection changed:",
-      {
-        source:
-          source,
-
-        color:
-          currentSelection.color,
-
-        size:
-          currentSelection.size,
-
-        variantId:
-          currentVariantId,
-
-        exactVariantMatch:
-          currentSelection
-            .exactVariantMatch,
-
-        sku:
-          currentVariant
-            ? currentVariant.sku
-            : null,
-
-        available:
-          currentVariant
-            ? currentVariant.available
-            : false,
-
-        price:
-          currentVariant
-            ? currentVariant.price
-            : null
-      }
-    );
-
     if (
       !contactView.hidden
     ) {
@@ -2481,12 +2475,6 @@
         100
       );
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Variant Event Listeners
-  |--------------------------------------------------------------------------
-  */
 
   function setupVariantEventListeners() {
     if (
@@ -2606,12 +2594,6 @@
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Mutation Observer
-  |--------------------------------------------------------------------------
-  */
-
   function setupVariantMutationObserver() {
     if (
       detectPageType() !==
@@ -2656,12 +2638,6 @@
       }
     );
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Polling Fallback
-  |--------------------------------------------------------------------------
-  */
 
   function setupVariantPolling() {
     if (
@@ -2729,10 +2705,6 @@
     const variant =
       selection.matchedVariant;
 
-    /*
-     * Current Size
-     */
-
     if (
       hasAnyPhrase(
         question,
@@ -2763,14 +2735,14 @@
             ),
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
     }
-
-    /*
-     * Current Color
-     */
 
     if (
       hasAnyPhrase(
@@ -2802,14 +2774,14 @@
             ),
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
     }
-
-    /*
-     * SKU
-     */
 
     if (
       hasAnyPhrase(
@@ -2837,7 +2809,11 @@
             ".",
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
 
@@ -2855,13 +2831,13 @@
           "The currently selected color and size combination is unavailable, so there is not an active purchasable SKU for this selection.",
 
         contextUsed:
-          true
+          true,
+
+        confidenceScore:
+          CONFIDENCE_CONFIG
+            .shopifyFactScore
       };
     }
-
-    /*
-     * All Sizes
-     */
 
     if (
       hasAnyPhrase(
@@ -2896,14 +2872,14 @@
             ". Availability can vary by color.",
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
     }
-
-    /*
-     * All Colors
-     */
 
     if (
       hasAnyPhrase(
@@ -2938,14 +2914,14 @@
             ". Availability can vary by size.",
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
     }
-
-    /*
-     * Current Variant
-     */
 
     if (
       hasAnyPhrase(
@@ -2984,14 +2960,14 @@
             ),
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
     }
-
-    /*
-     * Availability
-     */
 
     if (
       hasAnyPhrase(
@@ -3016,7 +2992,11 @@
             "No. The currently selected color and size combination is shown as unavailable.",
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
 
@@ -3037,13 +3017,13 @@
             : "No. The selected variant is currently shown as unavailable for purchase.",
 
         contextUsed:
-          true
+          true,
+
+        confidenceScore:
+          CONFIDENCE_CONFIG
+            .shopifyFactScore
       };
     }
-
-    /*
-     * Price
-     */
 
     if (
       hasAnyPhrase(
@@ -3068,7 +3048,11 @@
             "The currently selected color and size combination is unavailable, so there is not a current purchasable price for this selection.",
 
           contextUsed:
-            true
+            true,
+
+          confidenceScore:
+            CONFIDENCE_CONFIG
+              .shopifyFactScore
         };
       }
 
@@ -3102,7 +3086,11 @@
               ".",
 
             contextUsed:
-              true
+              true,
+
+            confidenceScore:
+              CONFIDENCE_CONFIG
+                .shopifyFactScore
           };
         }
       }
@@ -3113,7 +3101,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Intent Detection
+  | Intent Detection
   |--------------------------------------------------------------------------
   */
 
@@ -3163,6 +3151,24 @@
       )
     ) {
       return "cleaning";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        WARRANTY_PHRASES
+      )
+    ) {
+      return "warranty";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        RETURN_PHRASES
+      )
+    ) {
+      return "warranty";
     }
 
     const normalized =
@@ -3292,9 +3298,23 @@
     if (
       category.includes(
         "warranty"
+      ) ||
+      category.includes(
+        "return"
       )
     ) {
       return "warranty";
+    }
+
+    if (
+      category.includes(
+        "outdoor"
+      ) ||
+      category.includes(
+        "product use"
+      )
+    ) {
+      return "outdoor";
     }
 
     return null;
@@ -3302,7 +3322,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Product Context
+  | Knowledge Base Context
   |--------------------------------------------------------------------------
   */
 
@@ -3583,7 +3603,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Fuzzy KB Matching
+  | Fuzzy Knowledge Base Matching
   |--------------------------------------------------------------------------
   */
 
@@ -3728,7 +3748,7 @@
             detectedIntent
         ) {
           score +=
-            MATCH_CONFIG
+            CONFIDENCE_CONFIG
               .intentMatchBonus;
         }
 
@@ -3739,17 +3759,13 @@
             detectedIntent
         ) {
           score -=
-            MATCH_CONFIG
+            CONFIDENCE_CONFIG
               .intentMismatchPenalty;
         }
 
         score =
-          Math.max(
-            0,
-            Math.min(
-              score,
-              1
-            )
+          clampScore(
+            score
           );
 
         if (
@@ -3780,14 +3796,284 @@
     if (
       !bestResult ||
       bestResult.score <
-        MATCH_CONFIG
-          .minimumMatchScore
+        CONFIDENCE_CONFIG
+          .minimumKnowledgeBaseScore
     ) {
       return null;
     }
 
-    return (
-      bestResult
+    return bestResult;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: Confidence Classification
+  |--------------------------------------------------------------------------
+  */
+
+  function getConfidenceLevel(
+    score
+  ) {
+    const cleanScore =
+      clampScore(
+        score
+      );
+
+    if (
+      cleanScore >=
+      CONFIDENCE_CONFIG
+        .highConfidenceMinimum
+    ) {
+      return "high";
+    }
+
+    if (
+      cleanScore >=
+      CONFIDENCE_CONFIG
+        .mediumConfidenceMinimum
+    ) {
+      return "medium";
+    }
+
+    return "low";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: Smart Escalation Decision Engine
+  |--------------------------------------------------------------------------
+  */
+
+  function buildDecision(
+    options
+  ) {
+    const source =
+      options.source ||
+      "unknown";
+
+    const score =
+      clampScore(
+        options.score
+      );
+
+    const intent =
+      options.intent ||
+      null;
+
+    const responseType =
+      String(
+        options.responseType ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const confidenceLevel =
+      getConfidenceLevel(
+        score
+      );
+
+    const decision = {
+      confidenceScore:
+        score,
+
+      confidenceLevel:
+        confidenceLevel,
+
+      action:
+        "answer",
+
+      escalationRequired:
+        false,
+
+      escalationRecommended:
+        false,
+
+      reason:
+        "High-confidence approved answer.",
+
+      source:
+        source,
+
+      responseType:
+        responseType
+    };
+
+    /*
+     * Shopify factual data is deterministic because we are reading the
+     * currently selected product / variant directly from Shopify.
+     */
+
+    if (
+      source ===
+      "shopify"
+    ) {
+      decision.confidenceScore =
+        1;
+
+      decision.confidenceLevel =
+        "high";
+
+      decision.action =
+        "answer";
+
+      decision.reason =
+        "Live Shopify product data.";
+
+      return decision;
+    }
+
+    /*
+     * ALWAYS ESCALATE overrides every score.
+     */
+
+    if (
+      responseType ===
+      "ALWAYS ESCALATE"
+    ) {
+      decision.action =
+        "escalate";
+
+      decision.escalationRequired =
+        true;
+
+      decision.reason =
+        "Knowledge base entry requires Customer Service.";
+
+      return decision;
+    }
+
+    /*
+     * HUMAN REVIEW means we may show approved information but must
+     * recommend Customer Service review.
+     */
+
+    if (
+      responseType ===
+      "HUMAN REVIEW"
+    ) {
+      decision.action =
+        "answer-and-review";
+
+      decision.escalationRecommended =
+        true;
+
+      decision.reason =
+        "Approved information requires Customer Service review.";
+
+      return decision;
+    }
+
+    /*
+     * Low confidence = don't guess.
+     */
+
+    if (
+      confidenceLevel ===
+      "low"
+    ) {
+      decision.action =
+        "escalate";
+
+      decision.escalationRequired =
+        true;
+
+      decision.reason =
+        "Knowledge base match confidence is too low.";
+
+      return decision;
+    }
+
+    /*
+     * Medium confidence = show candidate answer but clearly recommend
+     * human verification.
+     */
+
+    if (
+      confidenceLevel ===
+      "medium"
+    ) {
+      decision.action =
+        "answer-and-review";
+
+      decision.escalationRecommended =
+        true;
+
+      decision.reason =
+        "Knowledge base match requires additional verification.";
+
+      return decision;
+    }
+
+    /*
+     * Sensitive topics get extra protection.
+     *
+     * A high score under 0.92 still gets a review recommendation.
+     */
+
+    if (
+      intent &&
+      REVIEW_SENSITIVE_INTENTS.has(
+        intent
+      ) &&
+      score < 0.92
+    ) {
+      decision.action =
+        "answer-and-review";
+
+      decision.escalationRecommended =
+        true;
+
+      decision.reason =
+        "Question involves a topic that can depend on installation or product-specific conditions.";
+
+      return decision;
+    }
+
+    return decision;
+  }
+
+  function recordDecision(
+    decision
+  ) {
+    lastDecision =
+      decision;
+
+    addTranscriptEntry(
+      "System",
+      "Confidence decision: " +
+      decision.confidenceLevel +
+      " confidence; action: " +
+      decision.action +
+      "; reason: " +
+      decision.reason,
+      {
+        confidenceScore:
+          decision.confidenceScore,
+
+        confidenceLevel:
+          decision.confidenceLevel,
+
+        action:
+          decision.action,
+
+        escalationRequired:
+          decision.escalationRequired,
+
+        escalationRecommended:
+          decision.escalationRecommended,
+
+        reason:
+          decision.reason,
+
+        source:
+          decision.source
+      }
+    );
+
+    console.log(
+      "G-Floor confidence decision:",
+      decision
     );
   }
 
@@ -4121,13 +4407,13 @@
       line-height: 1.4;
     }
 
-    .gfloor-response-source {
+    .gfloor-review-note {
       margin-top: 12px;
-    }
-
-    .gfloor-response-source a {
-      color: #b91f25;
-      font-weight: 700;
+      padding: 10px;
+      border-left: 4px solid #d79b00;
+      background: #fffaf0;
+      font-size: 13px;
+      line-height: 1.45;
     }
 
     .gfloor-escalation-note {
@@ -4137,6 +4423,15 @@
       background: #fff7f7;
       font-size: 13px;
       line-height: 1.45;
+    }
+
+    .gfloor-response-source {
+      margin-top: 12px;
+    }
+
+    .gfloor-response-source a {
+      color: #b91f25;
+      font-weight: 700;
     }
 
     .gfloor-helpful-question {
@@ -4325,15 +4620,11 @@
     <div class="gfloor-chat-header">
 
       <div class="gfloor-chat-title-wrap">
-
-        <strong>
-          Chat with G-Floor
-        </strong>
+        <strong>Chat with G-Floor</strong>
 
         <span class="gfloor-conversation-id">
           ${conversationId}
         </span>
-
       </div>
 
       <button
@@ -4356,31 +4647,59 @@
 
         <div class="gfloor-topic-list">
 
-          <button class="gfloor-topic-button" type="button" data-topic="flooring">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="flooring"
+          >
             Find the Right Flooring
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="installation">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="installation"
+          >
             Installation Questions
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="shipping">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="shipping"
+          >
             Shipping & Delivery
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="order">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="order"
+          >
             Order Help
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="cleaning"
+          >
             Cleaning & Maintenance
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="warranty">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="warranty"
+          >
             Warranty & Returns
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="other">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="other"
+          >
             Something Else
           </button>
 
@@ -4533,7 +4852,10 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-name">Name</label>
+            <label for="gfloor-chat-name">
+              Name
+            </label>
+
             <input
               id="gfloor-chat-name"
               name="name"
@@ -4544,7 +4866,10 @@
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-email">Email</label>
+            <label for="gfloor-chat-email">
+              Email
+            </label>
+
             <input
               id="gfloor-chat-email"
               name="email"
@@ -4555,7 +4880,10 @@
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-phone">Phone</label>
+            <label for="gfloor-chat-phone">
+              Phone
+            </label>
+
             <input
               id="gfloor-chat-phone"
               name="phone"
@@ -4892,7 +5220,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Contact Context
+  | Contact Page Context
   |--------------------------------------------------------------------------
   */
 
@@ -5037,7 +5365,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Response Rendering
+  | STEP 14: Shopify Response
   |--------------------------------------------------------------------------
   */
 
@@ -5046,15 +5374,41 @@
     originalQuestion,
     resolvedQuestion
   ) {
+    const decision =
+      buildDecision({
+        source:
+          "shopify",
+
+        score:
+          fact.confidenceScore,
+
+        intent:
+          "shopify-fact"
+      });
+
+    recordDecision(
+      decision
+    );
+
     lastMatchedIntent =
       null;
 
     lastMatchScore =
-      1;
+      decision.confidenceScore;
 
     addTranscriptEntry(
       "G-Floor Support",
-      fact.answer
+      fact.answer,
+      {
+        confidenceScore:
+          decision.confidenceScore,
+
+        confidenceLevel:
+          decision.confidenceLevel,
+
+        source:
+          "shopify"
+      }
     );
 
     updateConversationMemory({
@@ -5080,7 +5434,16 @@
         fact.answer,
 
       category:
-        fact.category
+        fact.category,
+
+      confidenceScore:
+        decision.confidenceScore,
+
+      confidenceLevel:
+        decision.confidenceLevel,
+
+      escalationReason:
+        null
     });
 
     responseBox.innerHTML = `
@@ -5121,22 +5484,46 @@
     );
   }
 
-  function showNoMatchResponse(
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: Low-Confidence Escalation
+  |--------------------------------------------------------------------------
+  */
+
+  function showEscalationResponse(
     originalQuestion,
-    resolvedQuestion
+    resolvedQuestion,
+    decision
   ) {
+    recordDecision(
+      decision
+    );
+
     lastMatchedIntent =
       null;
 
     lastMatchScore =
-      0;
+      decision.confidenceScore;
 
     const answer =
-      "I couldn't find a confident answer to that question in our approved support information.";
+      "I don't have enough confidence in the approved information to give you a definitive answer.";
 
     addTranscriptEntry(
       "G-Floor Support",
-      answer
+      answer,
+      {
+        confidenceScore:
+          decision.confidenceScore,
+
+        confidenceLevel:
+          decision.confidenceLevel,
+
+        escalationRequired:
+          true,
+
+        escalationReason:
+          decision.reason
+      }
     );
 
     updateConversationMemory({
@@ -5159,7 +5546,16 @@
         answer,
 
       category:
-        "Escalation"
+        "Customer Service",
+
+      confidenceScore:
+        decision.confidenceScore,
+
+      confidenceLevel:
+        decision.confidenceLevel,
+
+      escalationReason:
+        decision.reason
     });
 
     responseBox.innerHTML = `
@@ -5174,7 +5570,7 @@
       </div>
 
       <div class="gfloor-escalation-note">
-        A Customer Service representative can help with this question.
+        A G-Floor Customer Service representative can review the details and help make sure you receive the correct information.
       </div>
 
       <div class="gfloor-helpful-question">
@@ -5194,6 +5590,52 @@
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: No-Match Response
+  |--------------------------------------------------------------------------
+  */
+
+  function showNoMatchResponse(
+    originalQuestion,
+    resolvedQuestion
+  ) {
+    const decision =
+      buildDecision({
+        source:
+          "no-match",
+
+        score:
+          0,
+
+        intent:
+          detectQuestionIntent(
+            resolvedQuestion
+          )
+      });
+
+    decision.action =
+      "escalate";
+
+    decision.escalationRequired =
+      true;
+
+    decision.reason =
+      "No approved support answer matched the customer's question.";
+
+    showEscalationResponse(
+      originalQuestion,
+      resolvedQuestion,
+      decision
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 14: Knowledge Response
+  |--------------------------------------------------------------------------
+  */
+
   function showKnowledgeResponse(
     match,
     originalQuestion,
@@ -5202,15 +5644,79 @@
     const entry =
       match.entry;
 
+    const responseType =
+      String(
+        entry.responseType ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const decision =
+      buildDecision({
+        source:
+          "knowledge-base",
+
+        score:
+          match.score,
+
+        intent:
+          match.intent ||
+          detectQuestionIntent(
+            resolvedQuestion
+          ),
+
+        responseType:
+          responseType
+      });
+
+    /*
+     * Don't show a possibly incorrect KB answer.
+     */
+
+    if (
+      decision.action ===
+      "escalate"
+    ) {
+      showEscalationResponse(
+        originalQuestion,
+        resolvedQuestion,
+        decision
+      );
+
+      return;
+    }
+
+    recordDecision(
+      decision
+    );
+
     lastMatchedIntent =
       entry;
 
     lastMatchScore =
-      match.score;
+      decision.confidenceScore;
 
     addTranscriptEntry(
       "G-Floor Support",
-      entry.answer
+      entry.answer,
+      {
+        knowledgeEntryId:
+          entry.id ||
+          null,
+
+        confidenceScore:
+          decision.confidenceScore,
+
+        confidenceLevel:
+          decision.confidenceLevel,
+
+        escalationRecommended:
+          decision.escalationRecommended,
+
+        escalationReason:
+          decision.reason
+      }
     );
 
     updateConversationMemory({
@@ -5237,22 +5743,32 @@
         entry.answer,
 
       category:
-        entry.category
+        entry.category,
+
+      confidenceScore:
+        decision.confidenceScore,
+
+      confidenceLevel:
+        decision.confidenceLevel,
+
+      escalationReason:
+        decision.escalationRecommended
+          ? decision.reason
+          : null
     });
 
-    const responseType =
-      String(
-        entry.responseType ||
-        ""
-      )
-        .trim()
-        .toUpperCase();
+    let reviewNotice =
+      "";
 
-    const needsReview =
-      responseType ===
-        "HUMAN REVIEW" ||
-      responseType ===
-        "ALWAYS ESCALATE";
+    if (
+      decision.escalationRecommended
+    ) {
+      reviewNotice = `
+        <div class="gfloor-review-note">
+          This answer may depend on your specific product, installation, or situation. Customer Service can review the details before you make a final decision.
+        </div>
+      `;
+    }
 
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
@@ -5305,15 +5821,7 @@
           : ""
       }
 
-      ${
-        needsReview
-          ? `
-            <div class="gfloor-escalation-note">
-              This question may depend on your specific situation. Customer Service can review the details with you before you make a final decision.
-            </div>
-          `
-          : ""
-      }
+      ${reviewNotice}
 
       <div class="gfloor-helpful-question">
         Did this answer your question?
@@ -5325,7 +5833,9 @@
     );
 
     helpfulActions.dataset.mode =
-      "helpful";
+      decision.escalationRecommended
+        ? "review"
+        : "helpful";
 
     helpfulActions.classList.add(
       "show"
@@ -5334,7 +5844,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 13: Process Question With Memory
+  | Process Customer Question
   |--------------------------------------------------------------------------
   */
 
@@ -5391,30 +5901,11 @@
         "Interpreted follow-up question as: " +
         resolvedQuestion
       );
-
-      console.log(
-        "G-Floor follow-up resolved:",
-        {
-          originalQuestion:
-            originalQuestion,
-
-          resolvedQuestion:
-            resolvedQuestion,
-
-          previousFactType:
-            conversationMemory
-              .lastFactType,
-
-          previousIntent:
-            conversationMemory
-              .lastIntent
-        }
-      );
     }
 
     try {
       /*
-       * 1. Shopify factual answer.
+       * 1. Current Shopify data
        */
 
       const shopifyFact =
@@ -5438,7 +5929,7 @@
       }
 
       /*
-       * 2. Approved support KB.
+       * 2. Approved Knowledge Base
        */
 
       await loadKnowledgeBase();
@@ -5459,12 +5950,18 @@
           originalQuestion,
           resolvedQuestion
         );
-      } else {
-        showNoMatchResponse(
-          originalQuestion,
-          resolvedQuestion
-        );
+
+        return;
       }
+
+      /*
+       * 3. No match
+       */
+
+      showNoMatchResponse(
+        originalQuestion,
+        resolvedQuestion
+      );
     } catch (error) {
       console.error(
         "Chat question error:",
@@ -5748,6 +6245,33 @@
 
         matchScore:
           lastMatchScore,
+
+        /*
+         * STEP 14 data
+         */
+
+        confidenceDecision:
+          lastDecision,
+
+        confidenceScore:
+          lastDecision
+            .confidenceScore,
+
+        confidenceLevel:
+          lastDecision
+            .confidenceLevel,
+
+        escalationRequired:
+          lastDecision
+            .escalationRequired,
+
+        escalationRecommended:
+          lastDecision
+            .escalationRecommended,
+
+        escalationReason:
+          lastDecision
+            .reason,
 
         conversationMemory:
           conversationMemory,
