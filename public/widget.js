@@ -248,12 +248,28 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Real-Time Variant State
+  |--------------------------------------------------------------------------
+  */
+
+  let currentVariantId = "";
+  let currentVariant = null;
+
+  let variantSyncTimer = null;
+  let variantSyncInterval = null;
+  let variantObserver = null;
+
+  let hasInitializedVariant = false;
+
+  /*
+  |--------------------------------------------------------------------------
   | Conversation State
   |--------------------------------------------------------------------------
   */
 
   function generateConversationId() {
-    const now = new Date();
+    const now =
+      new Date();
 
     const year =
       now.getFullYear();
@@ -277,7 +293,10 @@
     const randomPart =
       Math.random()
         .toString(36)
-        .substring(2, 8)
+        .substring(
+          2,
+          8
+        )
         .toUpperCase();
 
     return (
@@ -298,16 +317,20 @@
 
   let currentSupportStatus = {
     liveAgentAvailable: false,
+
     estimatedWaitMinutes: null,
+
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
+
     queueStatus: "unknown",
+
     message: ""
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Helpers
+  | Generic Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -345,7 +368,9 @@
       .filter(function (word) {
         return (
           word.length > 1 &&
-          !STOP_WORDS.has(word)
+          !STOP_WORDS.has(
+            word
+          )
         );
       });
   }
@@ -361,25 +386,75 @@
     phrases
   ) {
     const normalized =
-      normalizeText(text);
+      normalizeText(
+        text
+      );
 
     return phrases.some(
       function (phrase) {
         return normalized.includes(
-          normalizeText(phrase)
+          normalizeText(
+            phrase
+          )
         );
       }
     );
+  }
+
+  function uniqueValues(
+    values
+  ) {
+    const seen =
+      new Set();
+
+    const result =
+      [];
+
+    values.forEach(
+      function (value) {
+        const cleanValue =
+          String(
+            value || ""
+          ).trim();
+
+        const key =
+          cleanValue
+            .toLowerCase();
+
+        if (
+          !cleanValue ||
+          seen.has(
+            key
+          )
+        ) {
+          return;
+        }
+
+        seen.add(
+          key
+        );
+
+        result.push(
+          cleanValue
+        );
+      }
+    );
+
+    return result;
   }
 
   function formatMoneyFromCents(
     cents
   ) {
     const value =
-      Number(cents);
+      Number(
+        cents
+      );
 
     if (
-      !Number.isFinite(value)
+      !Number.isFinite(
+        value
+      )
     ) {
       return "";
     }
@@ -392,6 +467,38 @@
       }
     ).format(
       value / 100
+    );
+  }
+
+  function isElementVisible(
+    element
+  ) {
+    if (
+      !element
+    ) {
+      return false;
+    }
+
+    const style =
+      window.getComputedStyle(
+        element
+      );
+
+    if (
+      style.display ===
+        "none" ||
+      style.visibility ===
+        "hidden"
+    ) {
+      return false;
+    }
+
+    const rect =
+      element.getBoundingClientRect();
+
+    return (
+      rect.width > 0 ||
+      rect.height > 0
     );
   }
 
@@ -424,7 +531,9 @@
 
     transcript.push({
       role: cleanRole,
+
       message: cleanMessage,
+
       timestamp:
         new Date()
           .toISOString()
@@ -570,33 +679,6 @@
     }
   }
 
-  function getSelectedVariantId() {
-    const urlVariantId =
-      getUrlVariantId();
-
-    if (
-      urlVariantId
-    ) {
-      return urlVariantId;
-    }
-
-    const variantInput =
-      document.querySelector(
-        'form[action*="/cart/add"] [name="id"]'
-      );
-
-    if (
-      variantInput &&
-      variantInput.value
-    ) {
-      return String(
-        variantInput.value
-      );
-    }
-
-    return "";
-  }
-
   function getCollectionFromBreadcrumb() {
     const links =
       Array.from(
@@ -655,21 +737,27 @@
       pageType ===
       "home"
     ) {
-      return "G-Floor Homepage";
+      return (
+        "G-Floor Homepage"
+      );
     }
 
     if (
       pageType ===
       "cart"
     ) {
-      return "Shopping Cart";
+      return (
+        "Shopping Cart"
+      );
     }
 
     if (
       pageType ===
       "search"
     ) {
-      return "G-Floor Search Results";
+      return (
+        "G-Floor Search Results"
+      );
     }
 
     return (
@@ -731,7 +819,8 @@
     }
 
     if (
-      shopifyProductLoading
+      shopifyProductLoading &&
+      shopifyProductPromise
     ) {
       return (
         shopifyProductPromise
@@ -756,13 +845,15 @@
               ) +
               ".js",
               {
-                method:
-                  "GET",
+                method: "GET",
 
                 headers: {
                   Accept:
                     "application/json"
-                }
+                },
+
+                cache:
+                  "no-store"
               }
             );
 
@@ -801,11 +892,86 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Shopify Variant Helpers
+  | Variant Selection
   |--------------------------------------------------------------------------
   */
 
-  function getSelectedVariant(
+  function variantExists(
+    product,
+    variantId
+  ) {
+    if (
+      !product ||
+      !variantId ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return false;
+    }
+
+    return product.variants.some(
+      function (variant) {
+        return (
+          String(
+            variant.id
+          ) ===
+          String(
+            variantId
+          )
+        );
+      }
+    );
+  }
+
+  function findVariantById(
+    product,
+    variantId
+  ) {
+    if (
+      !product ||
+      !variantId ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return null;
+    }
+
+    return (
+      product.variants.find(
+        function (variant) {
+          return (
+            String(
+              variant.id
+            ) ===
+            String(
+              variantId
+            )
+          );
+        }
+      ) ||
+      null
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Find Current Variant ID
+  |--------------------------------------------------------------------------
+  |
+  | We check:
+  |
+  | 1. URL ?variant=
+  | 2. Visible product add-to-cart forms
+  | 3. Any matching product add-to-cart form
+  | 4. Previously synchronized variant
+  | 5. First product variant
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  function findCurrentVariantId(
     product
   ) {
     if (
@@ -814,41 +980,159 @@
         product.variants
       )
     ) {
-      return null;
+      return "";
     }
 
-    const selectedVariantId =
-      getSelectedVariantId();
+    /*
+     * 1. URL variant.
+     */
+
+    const urlVariantId =
+      getUrlVariantId();
 
     if (
-      selectedVariantId
+      urlVariantId &&
+      variantExists(
+        product,
+        urlVariantId
+      )
     ) {
-      const selected =
-        product.variants.find(
-          function (variant) {
-            return (
-              String(
-                variant.id
-              ) ===
-              String(
-                selectedVariantId
-              )
-            );
-          }
+      return String(
+        urlVariantId
+      );
+    }
+
+    /*
+     * 2. All Shopify add-to-cart variant inputs.
+     */
+
+    const variantInputs =
+      Array.from(
+        document.querySelectorAll(
+          'form[action*="/cart/add"] [name="id"]'
+        )
+      );
+
+    /*
+     * Prefer a visible form belonging to this product.
+     */
+
+    for (
+      let i = 0;
+      i <
+      variantInputs.length;
+      i += 1
+    ) {
+      const input =
+        variantInputs[i];
+
+      const form =
+        input.closest(
+          "form"
+        );
+
+      const value =
+        String(
+          input.value ||
+          ""
         );
 
       if (
-        selected
+        value &&
+        variantExists(
+          product,
+          value
+        ) &&
+        isElementVisible(
+          form
+        )
       ) {
-        return selected;
+        return value;
       }
     }
 
-    return (
-      product.variants[0] ||
-      null
+    /*
+     * Otherwise use any form containing a valid
+     * variant for this exact product.
+     */
+
+    for (
+      let i = 0;
+      i <
+      variantInputs.length;
+      i += 1
+    ) {
+      const value =
+        String(
+          variantInputs[i]
+            .value ||
+          ""
+        );
+
+      if (
+        value &&
+        variantExists(
+          product,
+          value
+        )
+      ) {
+        return value;
+      }
+    }
+
+    /*
+     * Preserve synchronized state when available.
+     */
+
+    if (
+      currentVariantId &&
+      variantExists(
+        product,
+        currentVariantId
+      )
+    ) {
+      return String(
+        currentVariantId
+      );
+    }
+
+    /*
+     * Final fallback.
+     */
+
+    if (
+      product.variants[0] &&
+      product.variants[0].id
+    ) {
+      return String(
+        product
+          .variants[0]
+          .id
+      );
+    }
+
+    return "";
+  }
+
+  function getSelectedVariant(
+    product
+  ) {
+    const variantId =
+      findCurrentVariantId(
+        product
+      );
+
+    return findVariantById(
+      product,
+      variantId
     );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Variant Option Helpers
+  |--------------------------------------------------------------------------
+  */
 
   function getOptionNames(
     product
@@ -928,7 +1212,8 @@
     );
 
     if (
-      optionIndex === -1
+      optionIndex ===
+      -1
     ) {
       return "";
     }
@@ -940,7 +1225,9 @@
       );
 
     return (
-      variant[propertyName] ||
+      variant[
+        propertyName
+      ] ||
       ""
     );
   }
@@ -958,7 +1245,7 @@
       return [];
     }
 
-    const values =
+    return uniqueValues(
       product.variants
         .map(
           function (variant) {
@@ -969,58 +1256,13 @@
             );
           }
         )
-        .filter(Boolean);
-
-    return uniqueWordsExact(
-      values
+        .filter(Boolean)
     );
-  }
-
-  function uniqueWordsExact(
-    values
-  ) {
-    const seen =
-      new Set();
-
-    const result =
-      [];
-
-    values.forEach(
-      function (value) {
-        const key =
-          String(
-            value
-          )
-            .trim()
-            .toLowerCase();
-
-        if (
-          !key ||
-          seen.has(
-            key
-          )
-        ) {
-          return;
-        }
-
-        seen.add(
-          key
-        );
-
-        result.push(
-          String(
-            value
-          ).trim()
-        );
-      }
-    );
-
-    return result;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Current Product Context
+  | Capture Shopify Context
   |--------------------------------------------------------------------------
   */
 
@@ -1094,14 +1336,18 @@
 
       productTitle:
         product
-          ? product.title ||
-            getPageHeading()
+          ? (
+              product.title ||
+              getPageHeading()
+            )
           : "",
 
       productHandle:
         product
-          ? product.handle ||
-            getProductHandleFromUrl()
+          ? (
+              product.handle ||
+              getProductHandleFromUrl()
+            )
           : "",
 
       productId:
@@ -1155,8 +1401,10 @@
 
       available:
         selectedVariant
-          ? selectedVariant.available ===
-            true
+          ? (
+              selectedVariant.available ===
+              true
+            )
           : null,
 
       price:
@@ -1183,6 +1431,573 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Real-Time Variant Synchronization
+  |--------------------------------------------------------------------------
+  */
+
+  async function syncVariantState(
+    source
+  ) {
+    if (
+      detectPageType() !==
+      "product"
+    ) {
+      return;
+    }
+
+    const product =
+      await loadShopifyProductData();
+
+    if (
+      !product
+    ) {
+      return;
+    }
+
+    const detectedVariantId =
+      findCurrentVariantId(
+        product
+      );
+
+    if (
+      !detectedVariantId
+    ) {
+      return;
+    }
+
+    const detectedVariant =
+      findVariantById(
+        product,
+        detectedVariantId
+      );
+
+    if (
+      !detectedVariant
+    ) {
+      return;
+    }
+
+    const previousVariantId =
+      currentVariantId;
+
+    currentVariantId =
+      String(
+        detectedVariant.id
+      );
+
+    currentVariant =
+      detectedVariant;
+
+    pageContext =
+      await captureShopifyContext();
+
+    /*
+     * Initial setup should not count as
+     * a customer changing the variant.
+     */
+
+    if (
+      !hasInitializedVariant
+    ) {
+      hasInitializedVariant =
+        true;
+
+      console.log(
+        "G-Floor initial variant:",
+        {
+          source:
+            source,
+
+          variantId:
+            currentVariantId,
+
+          title:
+            detectedVariant.title,
+
+          sku:
+            detectedVariant.sku
+        }
+      );
+
+      return;
+    }
+
+    /*
+     * Nothing changed.
+     */
+
+    if (
+      previousVariantId ===
+      currentVariantId
+    ) {
+      return;
+    }
+
+    /*
+     * A real variant change occurred.
+     */
+
+    const color =
+      getVariantOptionValue(
+        product,
+        detectedVariant,
+        "color"
+      );
+
+    const size =
+      getVariantOptionValue(
+        product,
+        detectedVariant,
+        "size"
+      );
+
+    const descriptionParts =
+      [];
+
+    if (
+      color
+    ) {
+      descriptionParts.push(
+        color
+      );
+    }
+
+    if (
+      size
+    ) {
+      descriptionParts.push(
+        size
+      );
+    }
+
+    if (
+      detectedVariant.sku
+    ) {
+      descriptionParts.push(
+        "SKU " +
+        detectedVariant.sku
+      );
+    }
+
+    addTranscriptEntry(
+      "System",
+      "Customer changed the selected product variant to " +
+      (
+        descriptionParts.length
+          ? descriptionParts.join(
+              " / "
+            )
+          : (
+              detectedVariant.title ||
+              currentVariantId
+            )
+      ) +
+      "."
+    );
+
+    console.log(
+      "G-Floor variant changed:",
+      {
+        source:
+          source,
+
+        previousVariantId:
+          previousVariantId,
+
+        variantId:
+          currentVariantId,
+
+        title:
+          detectedVariant.title,
+
+        color:
+          color,
+
+        size:
+          size,
+
+        sku:
+          detectedVariant.sku,
+
+        price:
+          detectedVariant.price,
+
+        available:
+          detectedVariant.available
+      }
+    );
+
+    /*
+     * If Customer Service form is already
+     * visible, update its context immediately.
+     */
+
+    if (
+      !contactView.hidden
+    ) {
+      await renderPageContext();
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Debounced Variant Sync
+  |--------------------------------------------------------------------------
+  */
+
+  function queueVariantSync(
+    source
+  ) {
+    if (
+      variantSyncTimer
+    ) {
+      window.clearTimeout(
+        variantSyncTimer
+      );
+    }
+
+    variantSyncTimer =
+      window.setTimeout(
+        function () {
+          syncVariantState(
+            source
+          ).catch(
+            function (error) {
+              console.error(
+                "Variant sync error:",
+                error
+              );
+            }
+          );
+        },
+        80
+      );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Listen for Product Selector Changes
+  |--------------------------------------------------------------------------
+  */
+
+  function setupVariantEventListeners() {
+    if (
+      detectPageType() !==
+      "product"
+    ) {
+      return;
+    }
+
+    /*
+     * Native change event.
+     */
+
+    document.addEventListener(
+      "change",
+      function (event) {
+        const target =
+          event.target;
+
+        if (
+          !target
+        ) {
+          return;
+        }
+
+        if (
+          target.matches(
+            'input[name="id"], select[name="id"], input[type="radio"], input[type="checkbox"], select'
+          ) ||
+          target.closest(
+            'form[action*="/cart/add"]'
+          )
+        ) {
+          queueVariantSync(
+            "change"
+          );
+        }
+      },
+      true
+    );
+
+    /*
+     * Input events.
+     */
+
+    document.addEventListener(
+      "input",
+      function (event) {
+        const target =
+          event.target;
+
+        if (
+          !target
+        ) {
+          return;
+        }
+
+        if (
+          target.matches(
+            'input, select'
+          ) &&
+          (
+            target.closest(
+              'form[action*="/cart/add"]'
+            ) ||
+            target.closest(
+              '[data-product]'
+            )
+          )
+        ) {
+          queueVariantSync(
+            "input"
+          );
+        }
+      },
+      true
+    );
+
+    /*
+     * Swatch / option buttons often update the
+     * hidden variant input AFTER the click.
+     */
+
+    document.addEventListener(
+      "click",
+      function (event) {
+        const target =
+          event.target;
+
+        if (
+          !target
+        ) {
+          return;
+        }
+
+        const possibleVariantControl =
+          target.closest(
+            [
+              "[data-variant-id]",
+              "[data-option-value]",
+              "[data-value]",
+              ".swatch",
+              ".product-form__input",
+              ".product-option",
+              ".variant-picker",
+              ".variant-selector",
+              "label",
+              "button"
+            ].join(",")
+          );
+
+        if (
+          possibleVariantControl
+        ) {
+          window.setTimeout(
+            function () {
+              queueVariantSync(
+                "click"
+              );
+            },
+            100
+          );
+
+          window.setTimeout(
+            function () {
+              queueVariantSync(
+                "click-delayed"
+              );
+            },
+            300
+          );
+        }
+      },
+      true
+    );
+
+    /*
+     * Common custom variant events used by themes.
+     */
+
+    [
+      "variant:change",
+      "variant:changed",
+      "variantChange",
+      "product:variant-change",
+      "product:variant:change",
+      "theme:variant:change"
+    ].forEach(
+      function (
+        eventName
+      ) {
+        document.addEventListener(
+          eventName,
+          function () {
+            queueVariantSync(
+              eventName
+            );
+          }
+        );
+      }
+    );
+
+    /*
+     * Back / forward navigation.
+     */
+
+    window.addEventListener(
+      "popstate",
+      function () {
+        queueVariantSync(
+          "popstate"
+        );
+      }
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Watch DOM for Hidden Variant ID Changes
+  |--------------------------------------------------------------------------
+  */
+
+  function setupVariantMutationObserver() {
+    if (
+      detectPageType() !==
+      "product" ||
+      typeof MutationObserver ===
+      "undefined"
+    ) {
+      return;
+    }
+
+    variantObserver =
+      new MutationObserver(
+        function (
+          mutations
+        ) {
+          let relevantChange =
+            false;
+
+          for (
+            let i = 0;
+            i <
+            mutations.length;
+            i += 1
+          ) {
+            const mutation =
+              mutations[i];
+
+            if (
+              mutation.type ===
+              "attributes"
+            ) {
+              const target =
+                mutation.target;
+
+              if (
+                target &&
+                (
+                  target.matches &&
+                  target.matches(
+                    'input[name="id"], select[name="id"], [data-variant-id], [data-option-value]'
+                  )
+                )
+              ) {
+                relevantChange =
+                  true;
+
+                break;
+              }
+            }
+
+            if (
+              mutation.type ===
+              "childList"
+            ) {
+              relevantChange =
+                true;
+            }
+          }
+
+          if (
+            relevantChange
+          ) {
+            queueVariantSync(
+              "mutation"
+            );
+          }
+        }
+      );
+
+    variantObserver.observe(
+      document.body,
+      {
+        subtree:
+          true,
+
+        childList:
+          true,
+
+        attributes:
+          true,
+
+        attributeFilter: [
+          "value",
+          "checked",
+          "selected",
+          "data-variant-id",
+          "data-option-value",
+          "class"
+        ]
+      }
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Variant Polling Fallback
+  |--------------------------------------------------------------------------
+  |
+  | Some themes update JavaScript state without firing
+  | useful DOM events. This lightweight check catches it.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  function setupVariantPolling() {
+    if (
+      detectPageType() !==
+      "product"
+    ) {
+      return;
+    }
+
+    if (
+      variantSyncInterval
+    ) {
+      window.clearInterval(
+        variantSyncInterval
+      );
+    }
+
+    variantSyncInterval =
+      window.setInterval(
+        function () {
+          syncVariantState(
+            "poll"
+          ).catch(
+            function () {
+              // Silent fallback.
+            }
+          );
+        },
+        750
+      );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Shopify Fact Resolver
   |--------------------------------------------------------------------------
   */
@@ -1196,6 +2011,14 @@
     ) {
       return null;
     }
+
+    /*
+     * Force a sync immediately before answering.
+     */
+
+    await syncVariantState(
+      "question"
+    );
 
     const product =
       await loadShopifyProductData();
@@ -1487,10 +2310,6 @@
         STOCK_PHRASES
       )
     ) {
-      const available =
-        variant.available ===
-        true;
-
       return {
         type:
           "shopify-fact",
@@ -1499,7 +2318,8 @@
           "Availability",
 
         answer:
-          available
+          variant.available ===
+          true
             ? "Yes. The selected variant is currently shown as available for purchase."
             : "The selected variant is currently shown as unavailable for purchase.",
 
@@ -1743,7 +2563,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Product Properties
+  | KB Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -1754,7 +2574,8 @@
       knowledgeBase.find(
         function (entry) {
           return (
-            entry.id === id
+            entry.id ===
+            id
           );
         }
       ) ||
@@ -1772,7 +2593,9 @@
           context.productHandle,
           context.productType,
           context.collectionTitle
-        ].join(" ")
+        ].join(
+          " "
+        )
       );
 
     if (
@@ -1789,7 +2612,9 @@
         "boat"
       )
     ) {
-      return "outdoor-marine";
+      return (
+        "outdoor-marine"
+      );
     }
 
     if (
@@ -1803,7 +2628,9 @@
         "diamond tread"
       )
     ) {
-      return "garage-universal";
+      return (
+        "garage-universal"
+      );
     }
 
     if (
@@ -1844,6 +2671,10 @@
         question
       );
 
+    /*
+     * Waterproof
+     */
+
     if (
       intent ===
       "waterproof"
@@ -1871,6 +2702,10 @@
         };
       }
     }
+
+    /*
+     * Outdoor
+     */
 
     if (
       intent ===
@@ -1938,6 +2773,10 @@
       };
     }
 
+    /*
+     * Installation
+     */
+
     if (
       intent ===
         "installation" &&
@@ -1969,6 +2808,10 @@
         };
       }
     }
+
+    /*
+     * Cleaning
+     */
 
     if (
       intent ===
@@ -2100,9 +2943,7 @@
     if (
       propertyMatch
     ) {
-      return (
-        propertyMatch
-      );
+      return propertyMatch;
     }
 
     const detectedIntent =
@@ -2207,9 +3048,7 @@
       return null;
     }
 
-    return (
-      bestResult
-    );
+    return bestResult;
   }
 
   /*
@@ -2717,7 +3556,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | HTML
+  | Chat HTML
   |--------------------------------------------------------------------------
   */
 
@@ -2946,23 +3785,65 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-name">Name</label>
-            <input id="gfloor-chat-name" name="name" type="text" autocomplete="name" required>
+
+            <label for="gfloor-chat-name">
+              Name
+            </label>
+
+            <input
+              id="gfloor-chat-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+            >
+
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-email">Email</label>
-            <input id="gfloor-chat-email" name="email" type="email" autocomplete="email" required>
+
+            <label for="gfloor-chat-email">
+              Email
+            </label>
+
+            <input
+              id="gfloor-chat-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            >
+
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-phone">Phone</label>
-            <input id="gfloor-chat-phone" name="phone" type="tel" autocomplete="tel" required>
+
+            <label for="gfloor-chat-phone">
+              Phone
+            </label>
+
+            <input
+              id="gfloor-chat-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              required
+            >
+
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-message">How can we help?</label>
-            <textarea id="gfloor-chat-message" name="message" required></textarea>
+
+            <label for="gfloor-chat-message">
+              How can we help?
+            </label>
+
+            <textarea
+              id="gfloor-chat-message"
+              name="message"
+              required
+            ></textarea>
+
           </div>
 
           <button
@@ -2973,7 +3854,11 @@
             Send Message
           </button>
 
-          <div id="gfloor-chat-result"></div>
+          <div
+            id="gfloor-chat-result"
+            role="status"
+            aria-live="polite"
+          ></div>
 
         </form>
 
@@ -3143,17 +4028,26 @@
   */
 
   function hideAllViews() {
-    homeView.hidden = true;
-    humanView.hidden = true;
-    contactView.hidden = true;
+    homeView.hidden =
+      true;
+
+    humanView.hidden =
+      true;
+
+    contactView.hidden =
+      true;
   }
 
   function showHome() {
     hideAllViews();
-    homeView.hidden = false;
+
+    homeView.hidden =
+      false;
   }
 
-  function togglePanel(open) {
+  function togglePanel(
+    open
+  ) {
     panel.classList.toggle(
       "open",
       open
@@ -3164,7 +4058,10 @@
     ) {
       Promise.all([
         loadKnowledgeBase(),
-        loadShopifyProductData()
+        loadShopifyProductData(),
+        syncVariantState(
+          "chat-open"
+        )
       ]).catch(
         function (error) {
           console.error(
@@ -3269,6 +4166,10 @@
   */
 
   async function renderPageContext() {
+    await syncVariantState(
+      "render-context"
+    );
+
     pageContext =
       await captureShopifyContext();
 
@@ -3431,8 +4332,11 @@
   }
 
   function showNoMatchResponse() {
-    lastMatchedIntent = null;
-    lastMatchScore = 0;
+    lastMatchedIntent =
+      null;
+
+    lastMatchScore =
+      0;
 
     const answer =
       "I couldn't find a confident answer to that question in our approved support information.";
@@ -3619,8 +4523,18 @@
 
     try {
       /*
+       * Very important:
+       * synchronize the current Shopify variant
+       * immediately before answering.
+       */
+
+      await syncVariantState(
+        "question-submit"
+      );
+
+      /*
        * Step 1:
-       * Shopify live product/variant facts.
+       * Live Shopify facts.
        */
 
       const shopifyFact =
@@ -3701,7 +4615,9 @@
   closeButton.addEventListener(
     "click",
     function () {
-      togglePanel(false);
+      togglePanel(
+        false
+      );
     }
   );
 
@@ -3733,7 +4649,8 @@
           };
 
           const topic =
-            topicButton.dataset
+            topicButton
+              .dataset
               .topic;
 
           if (
@@ -3746,10 +4663,14 @@
           }
 
           questionInput.value =
-            prompts[topic];
+            prompts[
+              topic
+            ];
 
           processQuestion(
-            prompts[topic]
+            prompts[
+              topic
+            ]
           );
         }
       );
@@ -3880,6 +4801,15 @@
 
       await getAgentAvailability();
 
+      /*
+       * Synchronize one last time before sending
+       * product context to Customer Service.
+       */
+
+      await syncVariantState(
+        "customer-service-submit"
+      );
+
       pageContext =
         await captureShopifyContext();
 
@@ -4006,7 +4936,19 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Preload
+  | Initialize Real-Time Variant Sync
+  |--------------------------------------------------------------------------
+  */
+
+  setupVariantEventListeners();
+
+  setupVariantMutationObserver();
+
+  setupVariantPolling();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initial Product / KB Load
   |--------------------------------------------------------------------------
   */
 
@@ -4015,15 +4957,23 @@
       Promise.all([
         loadKnowledgeBase(),
         loadShopifyProductData()
-      ]).catch(
-        function (error) {
-          console.error(
-            "Chat preload error:",
-            error
-          );
-        }
-      );
+      ])
+        .then(
+          function () {
+            return syncVariantState(
+              "initial-load"
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            console.error(
+              "Chat preload error:",
+              error
+            );
+          }
+        );
     },
-    1000
+    500
   );
 })();
