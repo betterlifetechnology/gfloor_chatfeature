@@ -248,18 +248,25 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Real-Time Variant State
+  | Real-Time Selection State
   |--------------------------------------------------------------------------
   */
 
   let currentVariantId = "";
   let currentVariant = null;
 
+  let currentSelection = {
+    color: "",
+    size: "",
+    matchedVariant: null,
+    exactVariantMatch: false
+  };
+
+  let hasInitializedSelection = false;
+
   let variantSyncTimer = null;
   let variantSyncInterval = null;
   let variantObserver = null;
-
-  let hasInitializedVariant = false;
 
   /*
   |--------------------------------------------------------------------------
@@ -293,10 +300,7 @@
     const randomPart =
       Math.random()
         .toString(36)
-        .substring(
-          2,
-          8
-        )
+        .substring(2, 8)
         .toUpperCase();
 
     return (
@@ -308,23 +312,16 @@
     generateConversationId();
 
   let transcript = [];
-
   let lastQuestion = "";
-
   let lastMatchedIntent = null;
-
   let lastMatchScore = 0;
 
   let currentSupportStatus = {
     liveAgentAvailable: false,
-
     estimatedWaitMinutes: null,
-
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
-
     queueStatus: "unknown",
-
     message: ""
   };
 
@@ -368,9 +365,7 @@
       .filter(function (word) {
         return (
           word.length > 1 &&
-          !STOP_WORDS.has(
-            word
-          )
+          !STOP_WORDS.has(word)
         );
       });
   }
@@ -381,29 +376,7 @@
     );
   }
 
-  function hasAnyPhrase(
-    text,
-    phrases
-  ) {
-    const normalized =
-      normalizeText(
-        text
-      );
-
-    return phrases.some(
-      function (phrase) {
-        return normalized.includes(
-          normalizeText(
-            phrase
-          )
-        );
-      }
-    );
-  }
-
-  function uniqueValues(
-    values
-  ) {
+  function uniqueValues(values) {
     const seen =
       new Set();
 
@@ -417,22 +390,20 @@
             value || ""
           ).trim();
 
+        if (!cleanValue) {
+          return;
+        }
+
         const key =
-          cleanValue
-            .toLowerCase();
+          cleanValue.toLowerCase();
 
         if (
-          !cleanValue ||
-          seen.has(
-            key
-          )
+          seen.has(key)
         ) {
           return;
         }
 
-        seen.add(
-          key
-        );
+        seen.add(key);
 
         result.push(
           cleanValue
@@ -443,18 +414,30 @@
     return result;
   }
 
+  function hasAnyPhrase(
+    text,
+    phrases
+  ) {
+    const normalized =
+      normalizeText(text);
+
+    return phrases.some(
+      function (phrase) {
+        return normalized.includes(
+          normalizeText(phrase)
+        );
+      }
+    );
+  }
+
   function formatMoneyFromCents(
     cents
   ) {
     const value =
-      Number(
-        cents
-      );
+      Number(cents);
 
     if (
-      !Number.isFinite(
-        value
-      )
+      !Number.isFinite(value)
     ) {
       return "";
     }
@@ -473,9 +456,7 @@
   function isElementVisible(
     element
   ) {
-    if (
-      !element
-    ) {
+    if (!element) {
       return false;
     }
 
@@ -485,10 +466,8 @@
       );
 
     if (
-      style.display ===
-        "none" ||
-      style.visibility ===
-        "hidden"
+      style.display === "none" ||
+      style.visibility === "hidden"
     ) {
       return false;
     }
@@ -530,9 +509,11 @@
     }
 
     transcript.push({
-      role: cleanRole,
+      role:
+        cleanRole,
 
-      message: cleanMessage,
+      message:
+        cleanMessage,
 
       timestamp:
         new Date()
@@ -689,8 +670,7 @@
 
     for (
       let i = 0;
-      i <
-      links.length;
+      i < links.length;
       i += 1
     ) {
       const href =
@@ -716,8 +696,7 @@
 
           title:
             (
-              links[i]
-                .textContent ||
+              links[i].textContent ||
               ""
             ).trim()
         };
@@ -734,30 +713,21 @@
     pageType
   ) {
     if (
-      pageType ===
-      "home"
+      pageType === "home"
     ) {
-      return (
-        "G-Floor Homepage"
-      );
+      return "G-Floor Homepage";
     }
 
     if (
-      pageType ===
-      "cart"
+      pageType === "cart"
     ) {
-      return (
-        "Shopping Cart"
-      );
+      return "Shopping Cart";
     }
 
     if (
-      pageType ===
-      "search"
+      pageType === "search"
     ) {
-      return (
-        "G-Floor Search Results"
-      );
+      return "G-Floor Search Results";
     }
 
     return (
@@ -802,9 +772,7 @@
     const handle =
       getProductHandleFromUrl();
 
-    if (
-      !handle
-    ) {
+    if (!handle) {
       return null;
     }
 
@@ -845,7 +813,8 @@
               ) +
               ".js",
               {
-                method: "GET",
+                method:
+                  "GET",
 
                 headers: {
                   Accept:
@@ -892,245 +861,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Variant Selection
-  |--------------------------------------------------------------------------
-  */
-
-  function variantExists(
-    product,
-    variantId
-  ) {
-    if (
-      !product ||
-      !variantId ||
-      !Array.isArray(
-        product.variants
-      )
-    ) {
-      return false;
-    }
-
-    return product.variants.some(
-      function (variant) {
-        return (
-          String(
-            variant.id
-          ) ===
-          String(
-            variantId
-          )
-        );
-      }
-    );
-  }
-
-  function findVariantById(
-    product,
-    variantId
-  ) {
-    if (
-      !product ||
-      !variantId ||
-      !Array.isArray(
-        product.variants
-      )
-    ) {
-      return null;
-    }
-
-    return (
-      product.variants.find(
-        function (variant) {
-          return (
-            String(
-              variant.id
-            ) ===
-            String(
-              variantId
-            )
-          );
-        }
-      ) ||
-      null
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Find Current Variant ID
-  |--------------------------------------------------------------------------
-  |
-  | We check:
-  |
-  | 1. URL ?variant=
-  | 2. Visible product add-to-cart forms
-  | 3. Any matching product add-to-cart form
-  | 4. Previously synchronized variant
-  | 5. First product variant
-  |
-  |--------------------------------------------------------------------------
-  */
-
-  function findCurrentVariantId(
-    product
-  ) {
-    if (
-      !product ||
-      !Array.isArray(
-        product.variants
-      )
-    ) {
-      return "";
-    }
-
-    /*
-     * 1. URL variant.
-     */
-
-    const urlVariantId =
-      getUrlVariantId();
-
-    if (
-      urlVariantId &&
-      variantExists(
-        product,
-        urlVariantId
-      )
-    ) {
-      return String(
-        urlVariantId
-      );
-    }
-
-    /*
-     * 2. All Shopify add-to-cart variant inputs.
-     */
-
-    const variantInputs =
-      Array.from(
-        document.querySelectorAll(
-          'form[action*="/cart/add"] [name="id"]'
-        )
-      );
-
-    /*
-     * Prefer a visible form belonging to this product.
-     */
-
-    for (
-      let i = 0;
-      i <
-      variantInputs.length;
-      i += 1
-    ) {
-      const input =
-        variantInputs[i];
-
-      const form =
-        input.closest(
-          "form"
-        );
-
-      const value =
-        String(
-          input.value ||
-          ""
-        );
-
-      if (
-        value &&
-        variantExists(
-          product,
-          value
-        ) &&
-        isElementVisible(
-          form
-        )
-      ) {
-        return value;
-      }
-    }
-
-    /*
-     * Otherwise use any form containing a valid
-     * variant for this exact product.
-     */
-
-    for (
-      let i = 0;
-      i <
-      variantInputs.length;
-      i += 1
-    ) {
-      const value =
-        String(
-          variantInputs[i]
-            .value ||
-          ""
-        );
-
-      if (
-        value &&
-        variantExists(
-          product,
-          value
-        )
-      ) {
-        return value;
-      }
-    }
-
-    /*
-     * Preserve synchronized state when available.
-     */
-
-    if (
-      currentVariantId &&
-      variantExists(
-        product,
-        currentVariantId
-      )
-    ) {
-      return String(
-        currentVariantId
-      );
-    }
-
-    /*
-     * Final fallback.
-     */
-
-    if (
-      product.variants[0] &&
-      product.variants[0].id
-    ) {
-      return String(
-        product
-          .variants[0]
-          .id
-      );
-    }
-
-    return "";
-  }
-
-  function getSelectedVariant(
-    product
-  ) {
-    const variantId =
-      findCurrentVariantId(
-        product
-      );
-
-    return findVariantById(
-      product,
-      variantId
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Variant Option Helpers
+  | Product Option Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -1212,8 +943,7 @@
     );
 
     if (
-      optionIndex ===
-      -1
+      optionIndex === -1
     ) {
       return "";
     }
@@ -1262,6 +992,564 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Visible Storefront Option Detection
+  |--------------------------------------------------------------------------
+  |
+  | This is critical.
+  |
+  | Shopify can keep the last valid variant ID in the URL while the shopper
+  | has clicked an unavailable color/size combination.
+  |
+  | Therefore:
+  |
+  | Visible Color / Size != Always the same thing as current variant ID.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  function getDisplayedOptionValue(
+    optionName
+  ) {
+    const requested =
+      String(
+        optionName || ""
+      ).trim();
+
+    if (!requested) {
+      return "";
+    }
+
+    /*
+     * First try checked radio controls.
+     */
+
+    const checkedInputs =
+      Array.from(
+        document.querySelectorAll(
+          'input[type="radio"]:checked'
+        )
+      );
+
+    for (
+      let i = 0;
+      i < checkedInputs.length;
+      i += 1
+    ) {
+      const input =
+        checkedInputs[i];
+
+      const name =
+        normalizeText(
+          input.name ||
+          ""
+        );
+
+      const id =
+        normalizeText(
+          input.id ||
+          ""
+        );
+
+      const requestedNormalized =
+        normalizeText(
+          requested
+        );
+
+      const fieldset =
+        input.closest(
+          "fieldset"
+        );
+
+      const legend =
+        fieldset
+          ? fieldset.querySelector(
+              "legend"
+            )
+          : null;
+
+      const legendText =
+        normalizeText(
+          legend
+            ? legend.textContent
+            : ""
+        );
+
+      if (
+        name.includes(
+          requestedNormalized
+        ) ||
+        id.includes(
+          requestedNormalized
+        ) ||
+        legendText.includes(
+          requestedNormalized
+        )
+      ) {
+        if (
+          input.value
+        ) {
+          return String(
+            input.value
+          ).trim();
+        }
+      }
+    }
+
+    /*
+     * Try selects.
+     */
+
+    const selects =
+      Array.from(
+        document.querySelectorAll(
+          "select"
+        )
+      );
+
+    for (
+      let i = 0;
+      i < selects.length;
+      i += 1
+    ) {
+      const select =
+        selects[i];
+
+      const metadata =
+        normalizeText(
+          [
+            select.name,
+            select.id,
+            select.getAttribute(
+              "aria-label"
+            )
+          ].join(
+            " "
+          )
+        );
+
+      if (
+        metadata.includes(
+          normalizeText(
+            requested
+          )
+        )
+      ) {
+        if (
+          select.value
+        ) {
+          return String(
+            select.value
+          ).trim();
+        }
+      }
+    }
+
+    /*
+     * Wonder/theme fallback:
+     *
+     * Look for visible storefront text such as:
+     *
+     * Color: Sandstone
+     * Size: 8'6" x 24'
+     */
+
+    const candidates =
+      Array.from(
+        document.querySelectorAll(
+          [
+            "label",
+            "legend",
+            "span",
+            "p",
+            "div",
+            "strong"
+          ].join(",")
+        )
+      );
+
+    const escapedName =
+      requested.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+    const pattern =
+      new RegExp(
+        "^\\s*" +
+        escapedName +
+        "\\s*:\\s*(.+?)\\s*$",
+        "i"
+      );
+
+    for (
+      let i = 0;
+      i < candidates.length;
+      i += 1
+    ) {
+      const element =
+        candidates[i];
+
+      if (
+        !isElementVisible(
+          element
+        )
+      ) {
+        continue;
+      }
+
+      const text =
+        String(
+          element.textContent ||
+          ""
+        )
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim();
+
+      /*
+       * Avoid matching giant container elements.
+       */
+
+      if (
+        !text ||
+        text.length > 100
+      ) {
+        continue;
+      }
+
+      const match =
+        text.match(
+          pattern
+        );
+
+      if (
+        match &&
+        match[1]
+      ) {
+        return String(
+          match[1]
+        ).trim();
+      }
+    }
+
+    return "";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Variant Matching
+  |--------------------------------------------------------------------------
+  */
+
+  function findVariantById(
+    product,
+    variantId
+  ) {
+    if (
+      !product ||
+      !variantId ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return null;
+    }
+
+    return (
+      product.variants.find(
+        function (variant) {
+          return (
+            String(
+              variant.id
+            ) ===
+            String(
+              variantId
+            )
+          );
+        }
+      ) ||
+      null
+    );
+  }
+
+  function findVariantBySelectedOptions(
+    product,
+    color,
+    size
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return null;
+    }
+
+    const normalizedColor =
+      normalizeText(
+        color
+      );
+
+    const normalizedSize =
+      normalizeText(
+        size
+      );
+
+    return (
+      product.variants.find(
+        function (variant) {
+          const variantColor =
+            normalizeText(
+              getVariantOptionValue(
+                product,
+                variant,
+                "color"
+              )
+            );
+
+          const variantSize =
+            normalizeText(
+              getVariantOptionValue(
+                product,
+                variant,
+                "size"
+              )
+            );
+
+          const colorMatches =
+            !normalizedColor ||
+            variantColor ===
+              normalizedColor;
+
+          const sizeMatches =
+            !normalizedSize ||
+            variantSize ===
+              normalizedSize;
+
+          return (
+            colorMatches &&
+            sizeMatches
+          );
+        }
+      ) ||
+      null
+    );
+  }
+
+  function findCurrentVariantIdFallback(
+    product
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return "";
+    }
+
+    /*
+     * URL
+     */
+
+    const urlVariantId =
+      getUrlVariantId();
+
+    if (
+      urlVariantId &&
+      findVariantById(
+        product,
+        urlVariantId
+      )
+    ) {
+      return String(
+        urlVariantId
+      );
+    }
+
+    /*
+     * Add-to-cart hidden variant inputs.
+     */
+
+    const variantInputs =
+      Array.from(
+        document.querySelectorAll(
+          'form[action*="/cart/add"] [name="id"]'
+        )
+      );
+
+    for (
+      let i = 0;
+      i < variantInputs.length;
+      i += 1
+    ) {
+      const input =
+        variantInputs[i];
+
+      const value =
+        String(
+          input.value ||
+          ""
+        );
+
+      if (
+        value &&
+        findVariantById(
+          product,
+          value
+        ) &&
+        isElementVisible(
+          input.closest(
+            "form"
+          )
+        )
+      ) {
+        return value;
+      }
+    }
+
+    if (
+      currentVariantId &&
+      findVariantById(
+        product,
+        currentVariantId
+      )
+    ) {
+      return (
+        currentVariantId
+      );
+    }
+
+    if (
+      product.variants[0]
+    ) {
+      return String(
+        product
+          .variants[0]
+          .id
+      );
+    }
+
+    return "";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current Storefront Selection
+  |--------------------------------------------------------------------------
+  */
+
+  function getCurrentSelection(
+    product
+  ) {
+    let color =
+      getDisplayedOptionValue(
+        "Color"
+      );
+
+    let size =
+      getDisplayedOptionValue(
+        "Size"
+      );
+
+    /*
+     * Try exact visible color/size combination first.
+     */
+
+    let matchedVariant =
+      findVariantBySelectedOptions(
+        product,
+        color,
+        size
+      );
+
+    /*
+     * If storefront option extraction was not available,
+     * fall back to the active Shopify variant ID.
+     */
+
+    if (
+      !matchedVariant
+    ) {
+      const fallbackVariantId =
+        findCurrentVariantIdFallback(
+          product
+        );
+
+      const fallbackVariant =
+        findVariantById(
+          product,
+          fallbackVariantId
+        );
+
+      /*
+       * Only use fallback option values when the page didn't
+       * provide a visible selection.
+       *
+       * Do NOT overwrite visible unavailable selections.
+       */
+
+      if (
+        fallbackVariant
+      ) {
+        if (
+          !color
+        ) {
+          color =
+            getVariantOptionValue(
+              product,
+              fallbackVariant,
+              "color"
+            );
+        }
+
+        if (
+          !size
+        ) {
+          size =
+            getVariantOptionValue(
+              product,
+              fallbackVariant,
+              "size"
+            );
+        }
+
+        if (
+          !getDisplayedOptionValue(
+            "Color"
+          ) &&
+          !getDisplayedOptionValue(
+            "Size"
+          )
+        ) {
+          matchedVariant =
+            fallbackVariant;
+        }
+      }
+    }
+
+    return {
+      color:
+        color || "",
+
+      size:
+        size || "",
+
+      matchedVariant:
+        matchedVariant,
+
+      exactVariantMatch:
+        Boolean(
+          matchedVariant
+        )
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Capture Shopify Context
   |--------------------------------------------------------------------------
   */
@@ -1276,21 +1564,26 @@
         ? await loadShopifyProductData()
         : null;
 
-    const selectedVariant =
+    const selection =
       product
-        ? getSelectedVariant(
+        ? getCurrentSelection(
             product
           )
-        : null;
+        : {
+            color: "",
+            size: "",
+            matchedVariant: null,
+            exactVariantMatch: false
+          };
+
+    const selectedVariant =
+      selection.matchedVariant;
 
     const breadcrumbCollection =
       getCollectionFromBreadcrumb();
 
-    let collectionHandle =
-      "";
-
-    let collectionTitle =
-      "";
+    let collectionHandle = "";
+    let collectionTitle = "";
 
     if (
       pageType ===
@@ -1358,6 +1651,15 @@
             )
           : "",
 
+      selectedColor:
+        selection.color,
+
+      selectedSize:
+        selection.size,
+
+      exactVariantMatch:
+        selection.exactVariantMatch,
+
       variantId:
         selectedVariant &&
         selectedVariant.id
@@ -1373,13 +1675,37 @@
               selectedVariant.title ||
               ""
             )
-          : "",
+          : (
+              [
+                selection.color,
+                selection.size
+              ]
+                .filter(Boolean)
+                .join(
+                  " / "
+                )
+            ),
 
       sku:
         selectedVariant &&
         selectedVariant.sku
           ? selectedVariant.sku
           : "",
+
+      available:
+        selectedVariant
+          ? (
+              selectedVariant.available ===
+              true
+            )
+          : false,
+
+      price:
+        selectedVariant &&
+        typeof selectedVariant.price !==
+          "undefined"
+          ? selectedVariant.price
+          : null,
 
       vendor:
         product &&
@@ -1397,22 +1723,7 @@
         collectionHandle,
 
       collectionTitle:
-        collectionTitle,
-
-      available:
-        selectedVariant
-          ? (
-              selectedVariant.available ===
-              true
-            )
-          : null,
-
-      price:
-        selectedVariant &&
-        typeof selectedVariant.price !==
-          "undefined"
-          ? selectedVariant.price
-          : null
+        collectionTitle
     };
   }
 
@@ -1431,7 +1742,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Real-Time Variant Synchronization
+  | Real-Time Selection Synchronization
   |--------------------------------------------------------------------------
   */
 
@@ -1448,189 +1759,189 @@
     const product =
       await loadShopifyProductData();
 
-    if (
-      !product
-    ) {
+    if (!product) {
       return;
     }
 
-    const detectedVariantId =
-      findCurrentVariantId(
+    const previousSelection =
+      {
+        color:
+          currentSelection.color,
+
+        size:
+          currentSelection.size,
+
+        variantId:
+          currentVariantId
+      };
+
+    const newSelection =
+      getCurrentSelection(
         product
       );
 
-    if (
-      !detectedVariantId
-    ) {
-      return;
-    }
-
-    const detectedVariant =
-      findVariantById(
-        product,
-        detectedVariantId
-      );
-
-    if (
-      !detectedVariant
-    ) {
-      return;
-    }
-
-    const previousVariantId =
-      currentVariantId;
-
-    currentVariantId =
-      String(
-        detectedVariant.id
-      );
+    currentSelection =
+      newSelection;
 
     currentVariant =
-      detectedVariant;
+      newSelection.matchedVariant;
+
+    currentVariantId =
+      currentVariant &&
+      currentVariant.id
+        ? String(
+            currentVariant.id
+          )
+        : "";
 
     pageContext =
       await captureShopifyContext();
 
-    /*
-     * Initial setup should not count as
-     * a customer changing the variant.
-     */
-
     if (
-      !hasInitializedVariant
+      !hasInitializedSelection
     ) {
-      hasInitializedVariant =
+      hasInitializedSelection =
         true;
 
       console.log(
-        "G-Floor initial variant:",
+        "G-Floor initial selection:",
         {
           source:
             source,
 
+          color:
+            currentSelection.color,
+
+          size:
+            currentSelection.size,
+
           variantId:
             currentVariantId,
 
-          title:
-            detectedVariant.title,
+          exactVariantMatch:
+            currentSelection
+              .exactVariantMatch,
 
           sku:
-            detectedVariant.sku
+            currentVariant
+              ? currentVariant.sku
+              : null
         }
       );
 
       return;
     }
 
-    /*
-     * Nothing changed.
-     */
+    const selectionChanged =
+      normalizeText(
+        previousSelection.color
+      ) !==
+        normalizeText(
+          currentSelection.color
+        ) ||
+      normalizeText(
+        previousSelection.size
+      ) !==
+        normalizeText(
+          currentSelection.size
+        ) ||
+      String(
+        previousSelection.variantId ||
+        ""
+      ) !==
+        String(
+          currentVariantId ||
+          ""
+        );
 
     if (
-      previousVariantId ===
-      currentVariantId
+      !selectionChanged
     ) {
       return;
     }
-
-    /*
-     * A real variant change occurred.
-     */
-
-    const color =
-      getVariantOptionValue(
-        product,
-        detectedVariant,
-        "color"
-      );
-
-    const size =
-      getVariantOptionValue(
-        product,
-        detectedVariant,
-        "size"
-      );
 
     const descriptionParts =
       [];
 
     if (
-      color
+      currentSelection.color
     ) {
       descriptionParts.push(
-        color
+        currentSelection.color
       );
     }
 
     if (
-      size
+      currentSelection.size
     ) {
       descriptionParts.push(
-        size
+        currentSelection.size
       );
     }
 
     if (
-      detectedVariant.sku
+      currentVariant &&
+      currentVariant.sku
     ) {
       descriptionParts.push(
         "SKU " +
-        detectedVariant.sku
+        currentVariant.sku
+      );
+    }
+
+    if (
+      !currentSelection
+        .exactVariantMatch
+    ) {
+      descriptionParts.push(
+        "Unavailable selection"
       );
     }
 
     addTranscriptEntry(
       "System",
-      "Customer changed the selected product variant to " +
-      (
-        descriptionParts.length
-          ? descriptionParts.join(
-              " / "
-            )
-          : (
-              detectedVariant.title ||
-              currentVariantId
-            )
+      "Customer changed the selected product options to " +
+      descriptionParts.join(
+        " / "
       ) +
       "."
     );
 
     console.log(
-      "G-Floor variant changed:",
+      "G-Floor product selection changed:",
       {
         source:
           source,
 
-        previousVariantId:
-          previousVariantId,
+        color:
+          currentSelection.color,
+
+        size:
+          currentSelection.size,
 
         variantId:
           currentVariantId,
 
-        title:
-          detectedVariant.title,
-
-        color:
-          color,
-
-        size:
-          size,
+        exactVariantMatch:
+          currentSelection
+            .exactVariantMatch,
 
         sku:
-          detectedVariant.sku,
-
-        price:
-          detectedVariant.price,
+          currentVariant
+            ? currentVariant.sku
+            : null,
 
         available:
-          detectedVariant.available
+          currentVariant
+            ? currentVariant.available
+            : false,
+
+        price:
+          currentVariant
+            ? currentVariant.price
+            : null
       }
     );
-
-    /*
-     * If Customer Service form is already
-     * visible, update its context immediately.
-     */
 
     if (
       !contactView.hidden
@@ -1638,12 +1949,6 @@
       await renderPageContext();
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Debounced Variant Sync
-  |--------------------------------------------------------------------------
-  */
 
   function queueVariantSync(
     source
@@ -1670,13 +1975,13 @@
             }
           );
         },
-        80
+        100
       );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Listen for Product Selector Changes
+  | Variant Event Listeners
   |--------------------------------------------------------------------------
   */
 
@@ -1688,41 +1993,22 @@
       return;
     }
 
-    /*
-     * Native change event.
-     */
-
     document.addEventListener(
       "change",
       function (event) {
         const target =
           event.target;
 
-        if (
-          !target
-        ) {
+        if (!target) {
           return;
         }
 
-        if (
-          target.matches(
-            'input[name="id"], select[name="id"], input[type="radio"], input[type="checkbox"], select'
-          ) ||
-          target.closest(
-            'form[action*="/cart/add"]'
-          )
-        ) {
-          queueVariantSync(
-            "change"
-          );
-        }
+        queueVariantSync(
+          "change"
+        );
       },
       true
     );
-
-    /*
-     * Input events.
-     */
 
     document.addEventListener(
       "input",
@@ -1730,37 +2016,16 @@
         const target =
           event.target;
 
-        if (
-          !target
-        ) {
+        if (!target) {
           return;
         }
 
-        if (
-          target.matches(
-            'input, select'
-          ) &&
-          (
-            target.closest(
-              'form[action*="/cart/add"]'
-            ) ||
-            target.closest(
-              '[data-product]'
-            )
-          )
-        ) {
-          queueVariantSync(
-            "input"
-          );
-        }
+        queueVariantSync(
+          "input"
+        );
       },
       true
     );
-
-    /*
-     * Swatch / option buttons often update the
-     * hidden variant input AFTER the click.
-     */
 
     document.addEventListener(
       "click",
@@ -1768,13 +2033,11 @@
         const target =
           event.target;
 
-        if (
-          !target
-        ) {
+        if (!target) {
           return;
         }
 
-        const possibleVariantControl =
+        const relevant =
           target.closest(
             [
               "[data-variant-id]",
@@ -1790,34 +2053,39 @@
             ].join(",")
           );
 
-        if (
-          possibleVariantControl
-        ) {
-          window.setTimeout(
-            function () {
-              queueVariantSync(
-                "click"
-              );
-            },
-            100
-          );
-
-          window.setTimeout(
-            function () {
-              queueVariantSync(
-                "click-delayed"
-              );
-            },
-            300
-          );
+        if (!relevant) {
+          return;
         }
+
+        window.setTimeout(
+          function () {
+            queueVariantSync(
+              "click-100"
+            );
+          },
+          100
+        );
+
+        window.setTimeout(
+          function () {
+            queueVariantSync(
+              "click-300"
+            );
+          },
+          300
+        );
+
+        window.setTimeout(
+          function () {
+            queueVariantSync(
+              "click-600"
+            );
+          },
+          600
+        );
       },
       true
     );
-
-    /*
-     * Common custom variant events used by themes.
-     */
 
     [
       "variant:change",
@@ -1827,9 +2095,7 @@
       "product:variant:change",
       "theme:variant:change"
     ].forEach(
-      function (
-        eventName
-      ) {
+      function (eventName) {
         document.addEventListener(
           eventName,
           function () {
@@ -1840,10 +2106,6 @@
         );
       }
     );
-
-    /*
-     * Back / forward navigation.
-     */
 
     window.addEventListener(
       "popstate",
@@ -1857,76 +2119,26 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Watch DOM for Hidden Variant ID Changes
+  | Mutation Observer
   |--------------------------------------------------------------------------
   */
 
   function setupVariantMutationObserver() {
     if (
       detectPageType() !==
-      "product" ||
+        "product" ||
       typeof MutationObserver ===
-      "undefined"
+        "undefined"
     ) {
       return;
     }
 
     variantObserver =
       new MutationObserver(
-        function (
-          mutations
-        ) {
-          let relevantChange =
-            false;
-
-          for (
-            let i = 0;
-            i <
-            mutations.length;
-            i += 1
-          ) {
-            const mutation =
-              mutations[i];
-
-            if (
-              mutation.type ===
-              "attributes"
-            ) {
-              const target =
-                mutation.target;
-
-              if (
-                target &&
-                (
-                  target.matches &&
-                  target.matches(
-                    'input[name="id"], select[name="id"], [data-variant-id], [data-option-value]'
-                  )
-                )
-              ) {
-                relevantChange =
-                  true;
-
-                break;
-              }
-            }
-
-            if (
-              mutation.type ===
-              "childList"
-            ) {
-              relevantChange =
-                true;
-            }
-          }
-
-          if (
-            relevantChange
-          ) {
-            queueVariantSync(
-              "mutation"
-            );
-          }
+        function () {
+          queueVariantSync(
+            "mutation"
+          );
         }
       );
 
@@ -1948,6 +2160,8 @@
           "selected",
           "data-variant-id",
           "data-option-value",
+          "aria-checked",
+          "aria-selected",
           "class"
         ]
       }
@@ -1956,12 +2170,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Variant Polling Fallback
-  |--------------------------------------------------------------------------
-  |
-  | Some themes update JavaScript state without firing
-  | useful DOM events. This lightweight check catches it.
-  |
+  | Polling Fallback
   |--------------------------------------------------------------------------
   */
 
@@ -2012,10 +2221,6 @@
       return null;
     }
 
-    /*
-     * Force a sync immediately before answering.
-     */
-
     await syncVariantState(
       "question"
     );
@@ -2023,21 +2228,91 @@
     const product =
       await loadShopifyProductData();
 
-    if (
-      !product
-    ) {
+    if (!product) {
       return null;
     }
 
-    const variant =
-      getSelectedVariant(
+    const selection =
+      getCurrentSelection(
         product
       );
 
+    const variant =
+      selection.matchedVariant;
+
+    /*
+     * Current Size
+     *
+     * Important:
+     * Visible selection wins even when the combination is unavailable.
+     */
+
     if (
-      !variant
+      hasAnyPhrase(
+        question,
+        CURRENT_SIZE_PHRASES
+      )
     ) {
-      return null;
+      if (
+        selection.size
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "You're currently viewing the " +
+            selection.size +
+            " size" +
+            (
+              !variant
+                ? ", but this selected option combination is currently unavailable."
+                : "."
+            ),
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * Current Color
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        CURRENT_COLOR_PHRASES
+      )
+    ) {
+      if (
+        selection.color
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "You're currently viewing the " +
+            selection.color +
+            " color" +
+            (
+              !variant
+                ? ", but this selected option combination is currently unavailable."
+                : "."
+            ),
+
+          contextUsed:
+            true
+        };
+      }
     }
 
     /*
@@ -2051,6 +2326,7 @@
       )
     ) {
       if (
+        variant &&
         variant.sku
       ) {
         return {
@@ -2069,44 +2345,20 @@
             true
         };
       }
-    }
 
-    /*
-     * Current Size
-     */
+      return {
+        type:
+          "shopify-fact",
 
-    if (
-      hasAnyPhrase(
-        question,
-        CURRENT_SIZE_PHRASES
-      )
-    ) {
-      const size =
-        getVariantOptionValue(
-          product,
-          variant,
-          "size"
-        );
+        category:
+          "Product Details",
 
-      if (
-        size
-      ) {
-        return {
-          type:
-            "shopify-fact",
+        answer:
+          "The currently selected color and size combination is unavailable, so there is not an active purchasable SKU for this selection.",
 
-          category:
-            "Product Details",
-
-          answer:
-            "You're currently viewing the " +
-            size +
-            " size.",
-
-          contextUsed:
-            true
-        };
-      }
+        contextUsed:
+          true
+      };
     }
 
     /*
@@ -2140,45 +2392,7 @@
             sizes.join(
               ", "
             ) +
-            ".",
-
-          contextUsed:
-            true
-        };
-      }
-    }
-
-    /*
-     * Current Color
-     */
-
-    if (
-      hasAnyPhrase(
-        question,
-        CURRENT_COLOR_PHRASES
-      )
-    ) {
-      const color =
-        getVariantOptionValue(
-          product,
-          variant,
-          "color"
-        );
-
-      if (
-        color
-      ) {
-        return {
-          type:
-            "shopify-fact",
-
-          category:
-            "Product Details",
-
-          answer:
-            "You're currently viewing the " +
-            color +
-            " color.",
+            ". Availability can vary by color.",
 
           contextUsed:
             true
@@ -2217,7 +2431,7 @@
             colors.join(
               ", "
             ) +
-            ".",
+            ". Availability can vary by size.",
 
           contextUsed:
             true
@@ -2235,52 +2449,14 @@
         VARIANT_PHRASES
       )
     ) {
-      const color =
-        getVariantOptionValue(
-          product,
-          variant,
-          "color"
-        );
-
-      const size =
-        getVariantOptionValue(
-          product,
-          variant,
-          "size"
-        );
-
       const parts =
-        [];
+        [
+          selection.color,
+          selection.size
+        ].filter(Boolean);
 
       if (
-        color
-      ) {
-        parts.push(
-          color
-        );
-      }
-
-      if (
-        size
-      ) {
-        parts.push(
-          size
-        );
-      }
-
-      const variantName =
         parts.length
-          ? parts.join(
-              " / "
-            )
-          : (
-              variant.public_title ||
-              variant.title ||
-              ""
-            );
-
-      if (
-        variantName
       ) {
         return {
           type:
@@ -2291,8 +2467,14 @@
 
           answer:
             "You're currently viewing " +
-            variantName +
-            ".",
+            parts.join(
+              " / "
+            ) +
+            (
+              variant
+                ? "."
+                : ", but that option combination is currently unavailable."
+            ),
 
           contextUsed:
             true
@@ -2310,6 +2492,24 @@
         STOCK_PHRASES
       )
     ) {
+      if (
+        !variant
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Availability",
+
+          answer:
+            "No. The currently selected color and size combination is shown as unavailable.",
+
+          contextUsed:
+            true
+        };
+      }
+
       return {
         type:
           "shopify-fact",
@@ -2319,9 +2519,9 @@
 
         answer:
           variant.available ===
-          true
+            true
             ? "Yes. The selected variant is currently shown as available for purchase."
-            : "The selected variant is currently shown as unavailable for purchase.",
+            : "No. The selected variant is currently shown as unavailable for purchase.",
 
         contextUsed:
           true
@@ -2336,19 +2536,10 @@
       hasAnyPhrase(
         question,
         PRICE_PHRASES
-      ) &&
-      typeof variant.price !==
-        "undefined" &&
-      variant.price !==
-        null
+      )
     ) {
-      const formattedPrice =
-        formatMoneyFromCents(
-          variant.price
-        );
-
       if (
-        formattedPrice
+        !variant
       ) {
         return {
           type:
@@ -2358,13 +2549,43 @@
             "Product Details",
 
           answer:
-            "The selected variant is currently listed at " +
-            formattedPrice +
-            ".",
+            "The currently selected color and size combination is unavailable, so there is not a current purchasable price for this selection.",
 
           contextUsed:
             true
         };
+      }
+
+      if (
+        typeof variant.price !==
+          "undefined" &&
+        variant.price !==
+          null
+      ) {
+        const formattedPrice =
+          formatMoneyFromCents(
+            variant.price
+          );
+
+        if (
+          formattedPrice
+        ) {
+          return {
+            type:
+              "shopify-fact",
+
+            category:
+              "Product Details",
+
+            answer:
+              "The selected variant is currently listed at " +
+              formattedPrice +
+              ".",
+
+            contextUsed:
+              true
+          };
+        }
       }
     }
 
@@ -2373,7 +2594,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Knowledge Base Intent
+  | Knowledge Base Intent Detection
   |--------------------------------------------------------------------------
   */
 
@@ -2488,8 +2709,7 @@
 
     for (
       let i = 0;
-      i <
-      rules.length;
+      i < rules.length;
       i += 1
     ) {
       if (
@@ -2563,7 +2783,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | KB Helpers
+  | Knowledge Base Product Context
   |--------------------------------------------------------------------------
   */
 
@@ -2574,8 +2794,7 @@
       knowledgeBase.find(
         function (entry) {
           return (
-            entry.id ===
-            id
+            entry.id === id
           );
         }
       ) ||
@@ -2612,9 +2831,7 @@
         "boat"
       )
     ) {
-      return (
-        "outdoor-marine"
-      );
+      return "outdoor-marine";
     }
 
     if (
@@ -2628,9 +2845,7 @@
         "diamond tread"
       )
     ) {
-      return (
-        "garage-universal"
-      );
+      return "garage-universal";
     }
 
     if (
@@ -2671,10 +2886,6 @@
         question
       );
 
-    /*
-     * Waterproof
-     */
-
     if (
       intent ===
       "waterproof"
@@ -2702,10 +2913,6 @@
         };
       }
     }
-
-    /*
-     * Outdoor
-     */
 
     if (
       intent ===
@@ -2773,10 +2980,6 @@
       };
     }
 
-    /*
-     * Installation
-     */
-
     if (
       intent ===
         "installation" &&
@@ -2808,10 +3011,6 @@
         };
       }
     }
-
-    /*
-     * Cleaning
-     */
 
     if (
       intent ===
@@ -2850,7 +3049,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Fuzzy KB Matching
+  | Fuzzy Knowledge Base Matching
   |--------------------------------------------------------------------------
   */
 
@@ -2943,7 +3142,9 @@
     if (
       propertyMatch
     ) {
-      return propertyMatch;
+      return (
+        propertyMatch
+      );
     }
 
     const detectedIntent =
@@ -3048,7 +3249,9 @@
       return null;
     }
 
-    return bestResult;
+    return (
+      bestResult
+    );
   }
 
   /*
@@ -3492,6 +3695,14 @@
       font-size: 12px;
     }
 
+    .gfloor-page-context-warning {
+      display: block;
+      margin-top: 6px;
+      color: #b42318;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .gfloor-page-context-type {
       display: inline-block;
       margin-top: 6px;
@@ -3575,17 +3786,11 @@
 
   panel.innerHTML = `
     <div class="gfloor-chat-header">
-
       <div class="gfloor-chat-title-wrap">
-
-        <strong>
-          Chat with G-Floor
-        </strong>
-
+        <strong>Chat with G-Floor</strong>
         <span class="gfloor-conversation-id">
           ${conversationId}
         </span>
-
       </div>
 
       <button
@@ -3595,7 +3800,6 @@
       >
         &times;
       </button>
-
     </div>
 
     <div class="gfloor-chat-body">
@@ -3607,39 +3811,16 @@
         </p>
 
         <div class="gfloor-topic-list">
-
-          <button class="gfloor-topic-button" type="button" data-topic="flooring">
-            Find the Right Flooring
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="installation">
-            Installation Questions
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="shipping">
-            Shipping & Delivery
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="order">
-            Order Help
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
-            Cleaning & Maintenance
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="warranty">
-            Warranty & Returns
-          </button>
-
-          <button class="gfloor-topic-button" type="button" data-topic="other">
-            Something Else
-          </button>
-
+          <button class="gfloor-topic-button" type="button" data-topic="flooring">Find the Right Flooring</button>
+          <button class="gfloor-topic-button" type="button" data-topic="installation">Installation Questions</button>
+          <button class="gfloor-topic-button" type="button" data-topic="shipping">Shipping & Delivery</button>
+          <button class="gfloor-topic-button" type="button" data-topic="order">Order Help</button>
+          <button class="gfloor-topic-button" type="button" data-topic="cleaning">Cleaning & Maintenance</button>
+          <button class="gfloor-topic-button" type="button" data-topic="warranty">Warranty & Returns</button>
+          <button class="gfloor-topic-button" type="button" data-topic="other">Something Else</button>
         </div>
 
         <div class="gfloor-question-row">
-
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -3648,7 +3829,6 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
-
         </div>
 
         <button
@@ -3671,7 +3851,6 @@
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
-
           <button
             id="gfloor-helpful-yes"
             class="gfloor-small-button"
@@ -3687,7 +3866,6 @@
           >
             No
           </button>
-
         </div>
 
         <div class="gfloor-divider">
@@ -3708,7 +3886,6 @@
         id="gfloor-human-view"
         hidden
       >
-
         <button
           id="gfloor-human-back-button"
           class="gfloor-back"
@@ -3733,7 +3910,6 @@
           class="gfloor-human-actions"
           hidden
         >
-
           <button
             id="gfloor-connect-button"
             class="gfloor-primary-button"
@@ -3749,16 +3925,13 @@
           >
             No, keep using chat
           </button>
-
         </div>
-
       </div>
 
       <div
         id="gfloor-contact-view"
         hidden
       >
-
         <button
           id="gfloor-contact-back-button"
           class="gfloor-back"
@@ -3785,7 +3958,6 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-name">
               Name
             </label>
@@ -3797,11 +3969,9 @@
               autocomplete="name"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-email">
               Email
             </label>
@@ -3813,11 +3983,9 @@
               autocomplete="email"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-phone">
               Phone
             </label>
@@ -3829,11 +3997,9 @@
               autocomplete="tel"
               required
             >
-
           </div>
 
           <div class="gfloor-chat-field">
-
             <label for="gfloor-chat-message">
               How can we help?
             </label>
@@ -3843,7 +4009,6 @@
               name="message"
               required
             ></textarea>
-
           </div>
 
           <button
@@ -3866,12 +4031,6 @@
 
     </div>
   `;
-
-  /*
-  |--------------------------------------------------------------------------
-  | Launcher
-  |--------------------------------------------------------------------------
-  */
 
   const launcher =
     document.createElement(
@@ -3897,7 +4056,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Elements
+  | Element References
   |--------------------------------------------------------------------------
   */
 
@@ -4161,7 +4320,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Contact Context
+  | Customer Service Product Context
   |--------------------------------------------------------------------------
   */
 
@@ -4177,6 +4336,25 @@
       pageContext.pageType ===
       "product"
     ) {
+      const selectedParts =
+        [];
+
+      if (
+        pageContext.selectedColor
+      ) {
+        selectedParts.push(
+          pageContext.selectedColor
+        );
+      }
+
+      if (
+        pageContext.selectedSize
+      ) {
+        selectedParts.push(
+          pageContext.selectedSize
+        );
+      }
+
       pageContextBox.innerHTML = `
         <span class="gfloor-page-context-label">
           You're viewing
@@ -4189,11 +4367,13 @@
         </span>
 
         ${
-          pageContext.variantTitle
+          selectedParts.length
             ? `
               <span class="gfloor-page-context-variant">
-                Variant: ${escapeHtml(
-                  pageContext.variantTitle
+                Selection: ${escapeHtml(
+                  selectedParts.join(
+                    " / "
+                  )
                 )}
               </span>
             `
@@ -4207,6 +4387,16 @@
                 SKU: ${escapeHtml(
                   pageContext.sku
                 )}
+              </span>
+            `
+            : ""
+        }
+
+        ${
+          !pageContext.exactVariantMatch
+            ? `
+              <span class="gfloor-page-context-warning">
+                Selected option combination is unavailable.
               </span>
             `
             : ""
@@ -4299,7 +4489,7 @@
       </span>
 
       <div class="gfloor-context-note">
-        Answering from the product and variant currently selected on this page.
+        Answering from the product options currently selected on this page.
       </div>
 
       <span class="gfloor-response-category">
@@ -4522,20 +4712,9 @@
     );
 
     try {
-      /*
-       * Very important:
-       * synchronize the current Shopify variant
-       * immediately before answering.
-       */
-
       await syncVariantState(
         "question-submit"
       );
-
-      /*
-       * Step 1:
-       * Live Shopify facts.
-       */
 
       const shopifyFact =
         await resolveShopifyFactQuestion(
@@ -4554,11 +4733,6 @@
 
         return;
       }
-
-      /*
-       * Step 2:
-       * Approved KB.
-       */
 
       await loadKnowledgeBase();
 
@@ -4708,7 +4882,8 @@
     function () {
       if (
         helpfulActions
-          .dataset.mode ===
+          .dataset
+          .mode ===
         "escalation"
       ) {
         showHumanConfirmation();
@@ -4779,7 +4954,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Form Submission
+  | Customer Service Submission
   |--------------------------------------------------------------------------
   */
 
@@ -4800,11 +4975,6 @@
         "Sending...";
 
       await getAgentAvailability();
-
-      /*
-       * Synchronize one last time before sending
-       * product context to Customer Service.
-       */
 
       await syncVariantState(
         "customer-service-submit"
@@ -4936,7 +5106,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Initialize Real-Time Variant Sync
+  | Initialize Synchronization
   |--------------------------------------------------------------------------
   */
 
@@ -4945,12 +5115,6 @@
   setupVariantMutationObserver();
 
   setupVariantPolling();
-
-  /*
-  |--------------------------------------------------------------------------
-  | Initial Product / KB Load
-  |--------------------------------------------------------------------------
-  */
 
   setTimeout(
     function () {
