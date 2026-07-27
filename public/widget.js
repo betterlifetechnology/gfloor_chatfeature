@@ -43,12 +43,6 @@
   |--------------------------------------------------------------------------
   | Topics That Deserve Extra Review
   |--------------------------------------------------------------------------
-  |
-  | These do NOT automatically block approved answers.
-  |
-  | They cause the system to be more conservative when the match is not
-  | extremely strong.
-  |--------------------------------------------------------------------------
   */
 
   const REVIEW_SENSITIVE_INTENTS = new Set([
@@ -116,6 +110,87 @@
 
   /*
   |--------------------------------------------------------------------------
+  | STEP 14.1: Support Domain Guard
+  |--------------------------------------------------------------------------
+  |
+  | This prevents unrelated questions from accidentally matching a G-Floor
+  | support answer because of weak fuzzy word overlap.
+  |--------------------------------------------------------------------------
+  */
+
+  const SUPPORT_DOMAIN_KEYWORDS = new Set([
+    "gfloor",
+    "floor",
+    "floors",
+    "flooring",
+    "vinyl",
+    "garage",
+    "trailer",
+    "marine",
+    "outdoor",
+    "outside",
+    "pet",
+    "kennel",
+    "mat",
+    "mats",
+
+    "clean",
+    "cleaning",
+    "wash",
+    "stain",
+    "stains",
+    "scrub",
+    "detergent",
+    "chemical",
+    "chemicals",
+
+    "install",
+    "installation",
+    "glue",
+    "adhesive",
+    "tape",
+    "seam",
+    "seams",
+    "subfloor",
+    "substrate",
+    "wood",
+    "concrete",
+    "threshold",
+
+    "waterproof",
+    "water",
+    "wet",
+
+    "shipping",
+    "ship",
+    "delivery",
+    "freight",
+    "tracking",
+
+    "order",
+    "purchase",
+    "buy",
+
+    "warranty",
+    "return",
+    "returns",
+    "refund",
+    "claim",
+
+    "size",
+    "sizes",
+    "color",
+    "colors",
+    "sku",
+    "price",
+    "cost",
+    "stock",
+    "available",
+    "availability"
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
   | Product / Support Intent Phrases
   |--------------------------------------------------------------------------
   */
@@ -150,7 +225,9 @@
     "fully adhere",
     "floating install",
     "floating installation",
-    "loose lay"
+    "loose lay",
+    "glue this to wood",
+    "glue to wood"
   ];
 
   const WATERPROOF_PHRASES = [
@@ -401,11 +478,9 @@
   */
 
   function generateConversationId() {
-    const now =
-      new Date();
+    const now = new Date();
 
-    const year =
-      now.getFullYear();
+    const year = now.getFullYear();
 
     const month =
       String(
@@ -643,6 +718,104 @@
       rect.width > 0 ||
       rect.height > 0
     );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Domain Guard Helpers
+  |--------------------------------------------------------------------------
+  */
+
+  function getMeaningfulWords(value) {
+    return uniqueWords(
+      getWords(value).filter(
+        function (word) {
+          return !GENERIC_WORDS.has(
+            word
+          );
+        }
+      )
+    );
+  }
+
+  function countMeaningfulOverlap(
+    question,
+    phrase
+  ) {
+    const questionWords =
+      getMeaningfulWords(
+        question
+      );
+
+    const phraseWords =
+      getMeaningfulWords(
+        phrase
+      );
+
+    let matches = 0;
+
+    phraseWords.forEach(
+      function (word) {
+        if (
+          questionWords.includes(
+            word
+          )
+        ) {
+          matches += 1;
+        }
+      }
+    );
+
+    return matches;
+  }
+
+  function hasSupportDomainKeyword(
+    question
+  ) {
+    const words =
+      uniqueWords(
+        getWords(
+          question
+        )
+      );
+
+    return words.some(
+      function (word) {
+        return SUPPORT_DOMAIN_KEYWORDS.has(
+          word
+        );
+      }
+    );
+  }
+
+  function isLikelySupportQuestion(
+    question
+  ) {
+    if (
+      detectQuestionIntent(
+        question
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      determineFactType(
+        question
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      hasSupportDomainKeyword(
+        question
+      )
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   /*
@@ -2441,6 +2614,8 @@
     );
 
     if (
+      typeof contactView !== "undefined" &&
+      contactView &&
       !contactView.hidden
     ) {
       await renderPageContext();
@@ -3656,8 +3831,8 @@
       return 0;
     }
 
-    let matches =
-      0;
+    let weightedMatches = 0;
+    let meaningfulMatches = 0;
 
     phraseWords.forEach(
       function (word) {
@@ -3666,28 +3841,58 @@
             word
           )
         ) {
-          matches +=
+          if (
             GENERIC_WORDS.has(
               word
             )
-              ? 0.3
-              : 1;
+          ) {
+            weightedMatches +=
+              0.15;
+          } else {
+            weightedMatches +=
+              1;
+
+            meaningfulMatches +=
+              1;
+          }
         }
       }
     );
 
-    return (
-      matches /
+    if (
+      meaningfulMatches === 0
+    ) {
+      return 0;
+    }
+
+    const baseScore =
+      weightedMatches /
       Math.max(
         questionWords.length,
         phraseWords.length
-      )
+      );
+
+    if (
+      meaningfulMatches === 1
+    ) {
+      return Math.min(
+        baseScore,
+        0.54
+      );
+    }
+
+    return clampScore(
+      baseScore
     );
   }
 
   function searchKnowledgeBase(
     question
   ) {
+    /*
+     * First try deterministic, product-aware logic.
+     */
+
     const propertyMatch =
       resolveProductPropertyQuestion(
         question
@@ -3696,15 +3901,34 @@
     if (
       propertyMatch
     ) {
-      return (
-        propertyMatch
-      );
+      return propertyMatch;
     }
 
     const detectedIntent =
       detectQuestionIntent(
         question
       );
+
+    /*
+     * STEP 14.1 DOMAIN GUARD
+     *
+     * A question such as "What time does the Chiefs game start?"
+     * has no support-domain terminology and should never reach fuzzy
+     * knowledge-base matching.
+     */
+
+    if (
+      !isLikelySupportQuestion(
+        question
+      )
+    ) {
+      console.log(
+        "G-Floor domain guard rejected question:",
+        question
+      );
+
+      return null;
+    }
 
     let bestResult =
       null;
@@ -3721,19 +3945,38 @@
             : []
         );
 
-        let score =
-          0;
+        let score = 0;
+        let bestMeaningfulOverlap = 0;
 
         phrases.forEach(
           function (phrase) {
-            score =
-              Math.max(
-                score,
-                scorePhrase(
-                  question,
-                  phrase
-                )
+            const phraseScore =
+              scorePhrase(
+                question,
+                phrase
               );
+
+            const meaningfulOverlap =
+              countMeaningfulOverlap(
+                question,
+                phrase
+              );
+
+            if (
+              phraseScore >
+              score
+            ) {
+              score =
+                phraseScore;
+            }
+
+            if (
+              meaningfulOverlap >
+              bestMeaningfulOverlap
+            ) {
+              bestMeaningfulOverlap =
+                meaningfulOverlap;
+            }
           }
         );
 
@@ -3763,6 +4006,22 @@
               .intentMismatchPenalty;
         }
 
+        /*
+         * Without a known intent, a single shared meaningful word
+         * must never become a confident automated answer.
+         */
+
+        if (
+          !detectedIntent &&
+          bestMeaningfulOverlap < 2
+        ) {
+          score =
+            Math.min(
+              score,
+              0.54
+            );
+        }
+
         score =
           clampScore(
             score
@@ -3787,7 +4046,10 @@
               false,
 
             intent:
-              detectedIntent
+              detectedIntent,
+
+            meaningfulOverlap:
+              bestMeaningfulOverlap
           };
         }
       }
@@ -3899,11 +4161,6 @@
         responseType
     };
 
-    /*
-     * Shopify factual data is deterministic because we are reading the
-     * currently selected product / variant directly from Shopify.
-     */
-
     if (
       source ===
       "shopify"
@@ -3923,10 +4180,6 @@
       return decision;
     }
 
-    /*
-     * ALWAYS ESCALATE overrides every score.
-     */
-
     if (
       responseType ===
       "ALWAYS ESCALATE"
@@ -3942,11 +4195,6 @@
 
       return decision;
     }
-
-    /*
-     * HUMAN REVIEW means we may show approved information but must
-     * recommend Customer Service review.
-     */
 
     if (
       responseType ===
@@ -3964,10 +4212,6 @@
       return decision;
     }
 
-    /*
-     * Low confidence = don't guess.
-     */
-
     if (
       confidenceLevel ===
       "low"
@@ -3984,11 +4228,6 @@
       return decision;
     }
 
-    /*
-     * Medium confidence = show candidate answer but clearly recommend
-     * human verification.
-     */
-
     if (
       confidenceLevel ===
       "medium"
@@ -4004,12 +4243,6 @@
 
       return decision;
     }
-
-    /*
-     * Sensitive topics get extra protection.
-     *
-     * A high score under 0.92 still gets a review recommendation.
-     */
 
     if (
       intent &&
@@ -4647,59 +4880,31 @@
 
         <div class="gfloor-topic-list">
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="flooring"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="flooring">
             Find the Right Flooring
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="installation"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="installation">
             Installation Questions
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="shipping"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="shipping">
             Shipping & Delivery
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="order"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="order">
             Order Help
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="cleaning"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
             Cleaning & Maintenance
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="warranty"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="warranty">
             Warranty & Returns
           </button>
 
-          <button
-            class="gfloor-topic-button"
-            type="button"
-            data-topic="other"
-          >
+          <button class="gfloor-topic-button" type="button" data-topic="other">
             Something Else
           </button>
 
@@ -4738,7 +4943,6 @@
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
-
           <button
             id="gfloor-helpful-yes"
             class="gfloor-small-button"
@@ -4754,7 +4958,6 @@
           >
             No
           </button>
-
         </div>
 
         <div class="gfloor-divider">
@@ -4800,7 +5003,6 @@
           class="gfloor-human-actions"
           hidden
         >
-
           <button
             id="gfloor-connect-button"
             class="gfloor-primary-button"
@@ -4816,7 +5018,6 @@
           >
             No, keep using chat
           </button>
-
         </div>
 
       </div>
@@ -5365,7 +5566,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 14: Shopify Response
+  | Shopify Response
   |--------------------------------------------------------------------------
   */
 
@@ -5486,7 +5687,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 14: Low-Confidence Escalation
+  | Low-Confidence Escalation
   |--------------------------------------------------------------------------
   */
 
@@ -5592,7 +5793,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 14: No-Match Response
+  | No-Match Response
   |--------------------------------------------------------------------------
   */
 
@@ -5632,7 +5833,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | STEP 14: Knowledge Response
+  | Knowledge Response
   |--------------------------------------------------------------------------
   */
 
@@ -5669,10 +5870,6 @@
         responseType:
           responseType
       });
-
-    /*
-     * Don't show a possibly incorrect KB answer.
-     */
 
     if (
       decision.action ===
@@ -5904,10 +6101,6 @@
     }
 
     try {
-      /*
-       * 1. Current Shopify data
-       */
-
       const shopifyFact =
         await resolveShopifyFactQuestion(
           resolvedQuestion
@@ -5927,10 +6120,6 @@
 
         return;
       }
-
-      /*
-       * 2. Approved Knowledge Base
-       */
 
       await loadKnowledgeBase();
 
@@ -5953,10 +6142,6 @@
 
         return;
       }
-
-      /*
-       * 3. No match
-       */
 
       showNoMatchResponse(
         originalQuestion,
@@ -6245,10 +6430,6 @@
 
         matchScore:
           lastMatchScore,
-
-        /*
-         * STEP 14 data
-         */
 
         confidenceDecision:
           lastDecision,
