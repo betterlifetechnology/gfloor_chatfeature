@@ -28,8 +28,7 @@
   const MATCH_CONFIG = {
     minimumMatchScore: 0.43,
     intentMatchBonus: 0.32,
-    intentMismatchPenalty: 0.24,
-    productContextBonus: 0.18
+    intentMismatchPenalty: 0.24
   };
 
   const STOP_WORDS = new Set([
@@ -79,6 +78,12 @@
     "products",
     "vinyl"
   ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Intent Phrases
+  |--------------------------------------------------------------------------
+  */
 
   const GLUE_REMOVAL_PHRASES = [
     "get glue off",
@@ -145,13 +150,86 @@
     "clean it"
   ];
 
-  const SLIP_PHRASES = [
-    "is this slip resistant",
-    "is it slip resistant",
-    "is this slippery",
-    "is it slippery",
-    "does this get slippery"
+  /*
+  |--------------------------------------------------------------------------
+  | Shopify Fact Question Phrases
+  |--------------------------------------------------------------------------
+  */
+
+  const SKU_PHRASES = [
+    "what is the sku",
+    "what's the sku",
+    "whats the sku",
+    "sku",
+    "sku number",
+    "product sku"
   ];
+
+  const CURRENT_SIZE_PHRASES = [
+    "what size am i looking at",
+    "what size is this",
+    "what size is selected",
+    "what size do i have selected",
+    "which size is selected",
+    "current size"
+  ];
+
+  const ALL_SIZE_PHRASES = [
+    "what sizes are available",
+    "what sizes does this come in",
+    "what sizes do you have",
+    "available sizes",
+    "size options",
+    "what sizes"
+  ];
+
+  const CURRENT_COLOR_PHRASES = [
+    "what color am i looking at",
+    "what color is this",
+    "what color is selected",
+    "which color is selected",
+    "current color"
+  ];
+
+  const ALL_COLOR_PHRASES = [
+    "what colors are available",
+    "what colors does this come in",
+    "available colors",
+    "color options",
+    "what colors"
+  ];
+
+  const VARIANT_PHRASES = [
+    "what variant am i looking at",
+    "what variant is selected",
+    "which variant is selected",
+    "current variant"
+  ];
+
+  const STOCK_PHRASES = [
+    "is this in stock",
+    "is it in stock",
+    "do you have this in stock",
+    "is this available",
+    "availability",
+    "in stock",
+    "stock"
+  ];
+
+  const PRICE_PHRASES = [
+    "how much is this",
+    "what does this cost",
+    "what is the price",
+    "what's the price",
+    "price",
+    "cost"
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Base State
+  |--------------------------------------------------------------------------
+  */
 
   let knowledgeBase = [];
   let knowledgeBaseLoaded = false;
@@ -160,13 +238,22 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Conversation
+  | Shopify Product State
+  |--------------------------------------------------------------------------
+  */
+
+  let shopifyProductData = null;
+  let shopifyProductLoading = false;
+  let shopifyProductPromise = null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Conversation State
   |--------------------------------------------------------------------------
   */
 
   function generateConversationId() {
-    const now =
-      new Date();
+    const now = new Date();
 
     const year =
       now.getFullYear();
@@ -220,7 +307,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Generic Helpers
+  | Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -285,6 +372,29 @@
     );
   }
 
+  function formatMoneyFromCents(
+    cents
+  ) {
+    const value =
+      Number(cents);
+
+    if (
+      !Number.isFinite(value)
+    ) {
+      return "";
+    }
+
+    return new Intl.NumberFormat(
+      "en-US",
+      {
+        style: "currency",
+        currency: "USD"
+      }
+    ).format(
+      value / 100
+    );
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Transcript
@@ -321,16 +431,19 @@
     });
 
     if (
-      transcript.length > 100
+      transcript.length >
+      100
     ) {
       transcript =
-        transcript.slice(-100);
+        transcript.slice(
+          -100
+        );
     }
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Shopify Page Detection
+  | Page Detection
   |--------------------------------------------------------------------------
   */
 
@@ -457,55 +570,14 @@
     }
   }
 
-  function getShopifyProductData() {
-    if (
-      detectPageType() !==
-      "product"
-    ) {
-      return null;
-    }
-
-    try {
-      if (
-        window.ShopifyAnalytics &&
-        window.ShopifyAnalytics.meta &&
-        window.ShopifyAnalytics.meta.product
-      ) {
-        return (
-          window
-            .ShopifyAnalytics
-            .meta
-            .product
-        );
-      }
-    } catch (error) {
-      // Continue.
-    }
-
-    try {
-      if (
-        window.meta &&
-        window.meta.product
-      ) {
-        return (
-          window.meta.product
-        );
-      }
-    } catch (error) {
-      // Continue.
-    }
-
-    return null;
-  }
-
   function getSelectedVariantId() {
-    const urlVariant =
+    const urlVariantId =
       getUrlVariantId();
 
     if (
-      urlVariant
+      urlVariantId
     ) {
-      return urlVariant;
+      return urlVariantId;
     }
 
     const variantInput =
@@ -513,57 +585,16 @@
         'form[action*="/cart/add"] [name="id"]'
       );
 
-    return (
+    if (
       variantInput &&
       variantInput.value
-        ? String(
-            variantInput.value
-          )
-        : ""
-    );
-  }
-
-  function getVariantFromProduct(
-    product,
-    variantId
-  ) {
-    if (
-      !product ||
-      !Array.isArray(
-        product.variants
-      )
     ) {
-      return null;
+      return String(
+        variantInput.value
+      );
     }
 
-    if (
-      variantId
-    ) {
-      const result =
-        product.variants.find(
-          function (variant) {
-            return (
-              String(
-                variant.id
-              ) ===
-              String(
-                variantId
-              )
-            );
-          }
-        );
-
-      if (
-        result
-      ) {
-        return result;
-      }
-    }
-
-    return (
-      product.variants[0] ||
-      null
-    );
+    return "";
   }
 
   function getCollectionFromBreadcrumb() {
@@ -576,7 +607,8 @@
 
     for (
       let i = 0;
-      i < links.length;
+      i <
+      links.length;
       i += 1
     ) {
       const href =
@@ -620,19 +652,22 @@
     pageType
   ) {
     if (
-      pageType === "home"
+      pageType ===
+      "home"
     ) {
       return "G-Floor Homepage";
     }
 
     if (
-      pageType === "cart"
+      pageType ===
+      "cart"
     ) {
       return "Shopping Cart";
     }
 
     if (
-      pageType === "search"
+      pageType ===
+      "search"
     ) {
       return "G-Floor Search Results";
     }
@@ -646,112 +681,374 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Product Family
+  | Shopify Ajax Product API
   |--------------------------------------------------------------------------
   */
 
-  function detectProductFamily(
-    context
-  ) {
-    const value =
-      normalizeText(
-        [
-          context.productTitle,
-          context.productHandle,
-          context.productType,
-          context.collectionTitle
-        ].join(" ")
+  function getShopifyRoutesRoot() {
+    try {
+      if (
+        window.Shopify &&
+        window.Shopify.routes &&
+        window.Shopify.routes.root
+      ) {
+        return (
+          window.Shopify.routes.root
+        );
+      }
+    } catch (error) {
+      // Continue.
+    }
+
+    return "/";
+  }
+
+  async function loadShopifyProductData() {
+    if (
+      detectPageType() !==
+      "product"
+    ) {
+      return null;
+    }
+
+    const handle =
+      getProductHandleFromUrl();
+
+    if (
+      !handle
+    ) {
+      return null;
+    }
+
+    if (
+      shopifyProductData &&
+      shopifyProductData.handle ===
+        handle
+    ) {
+      return (
+        shopifyProductData
       );
-
-    if (
-      value.includes("outdoor") ||
-      value.includes("marine") ||
-      value.includes("pontoon") ||
-      value.includes("boat")
-    ) {
-      return "outdoor-marine";
     }
 
     if (
-      value.includes("shed")
+      shopifyProductLoading
     ) {
-      return "shed";
+      return (
+        shopifyProductPromise
+      );
     }
 
-    if (
-      value.includes("trailer")
-    ) {
-      return "trailer";
-    }
+    shopifyProductLoading =
+      true;
 
-    if (
-      value.includes("pet") ||
-      value.includes("kennel")
-    ) {
-      return "pet";
-    }
+    shopifyProductPromise =
+      (async function () {
+        try {
+          const root =
+            getShopifyRoutesRoot();
 
-    if (
-      value.includes("cheer") ||
-      value.includes("gymnastics") ||
-      value.includes("sport")
-    ) {
-      return "sport";
-    }
+          const response =
+            await fetch(
+              root +
+              "products/" +
+              encodeURIComponent(
+                handle
+              ) +
+              ".js",
+              {
+                method:
+                  "GET",
 
-    if (
-      value.includes("garage") ||
-      value.includes("ribbed") ||
-      value.includes("diamond tread")
-    ) {
-      return "garage-universal";
-    }
+                headers: {
+                  Accept:
+                    "application/json"
+                }
+              }
+            );
 
-    return "unknown";
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              "Shopify product data could not be loaded."
+            );
+          }
+
+          const product =
+            await response.json();
+
+          shopifyProductData =
+            product;
+
+          return product;
+        } catch (error) {
+          console.error(
+            "Shopify product API error:",
+            error
+          );
+
+          return null;
+        } finally {
+          shopifyProductLoading =
+            false;
+        }
+      })();
+
+    return (
+      shopifyProductPromise
+    );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Capture Shopify Context
+  | Shopify Variant Helpers
   |--------------------------------------------------------------------------
   */
 
-  function captureShopifyContext() {
+  function getSelectedVariant(
+    product
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return null;
+    }
+
+    const selectedVariantId =
+      getSelectedVariantId();
+
+    if (
+      selectedVariantId
+    ) {
+      const selected =
+        product.variants.find(
+          function (variant) {
+            return (
+              String(
+                variant.id
+              ) ===
+              String(
+                selectedVariantId
+              )
+            );
+          }
+        );
+
+      if (
+        selected
+      ) {
+        return selected;
+      }
+    }
+
+    return (
+      product.variants[0] ||
+      null
+    );
+  }
+
+  function getOptionNames(
+    product
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.options
+      )
+    ) {
+      return [];
+    }
+
+    return product.options.map(
+      function (option) {
+        if (
+          typeof option ===
+          "string"
+        ) {
+          return option;
+        }
+
+        return (
+          option &&
+          option.name
+            ? option.name
+            : ""
+        );
+      }
+    );
+  }
+
+  function getVariantOptionValue(
+    product,
+    variant,
+    requestedOption
+  ) {
+    if (
+      !product ||
+      !variant
+    ) {
+      return "";
+    }
+
+    const optionNames =
+      getOptionNames(
+        product
+      );
+
+    const requested =
+      normalizeText(
+        requestedOption
+      );
+
+    let optionIndex =
+      -1;
+
+    optionNames.forEach(
+      function (
+        name,
+        index
+      ) {
+        const normalizedName =
+          normalizeText(
+            name
+          );
+
+        if (
+          normalizedName.includes(
+            requested
+          )
+        ) {
+          optionIndex =
+            index;
+        }
+      }
+    );
+
+    if (
+      optionIndex === -1
+    ) {
+      return "";
+    }
+
+    const propertyName =
+      "option" +
+      (
+        optionIndex + 1
+      );
+
+    return (
+      variant[propertyName] ||
+      ""
+    );
+  }
+
+  function getUniqueOptionValues(
+    product,
+    requestedOption
+  ) {
+    if (
+      !product ||
+      !Array.isArray(
+        product.variants
+      )
+    ) {
+      return [];
+    }
+
+    const values =
+      product.variants
+        .map(
+          function (variant) {
+            return getVariantOptionValue(
+              product,
+              variant,
+              requestedOption
+            );
+          }
+        )
+        .filter(Boolean);
+
+    return uniqueWordsExact(
+      values
+    );
+  }
+
+  function uniqueWordsExact(
+    values
+  ) {
+    const seen =
+      new Set();
+
+    const result =
+      [];
+
+    values.forEach(
+      function (value) {
+        const key =
+          String(
+            value
+          )
+            .trim()
+            .toLowerCase();
+
+        if (
+          !key ||
+          seen.has(
+            key
+          )
+        ) {
+          return;
+        }
+
+        seen.add(
+          key
+        );
+
+        result.push(
+          String(
+            value
+          ).trim()
+        );
+      }
+    );
+
+    return result;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current Product Context
+  |--------------------------------------------------------------------------
+  */
+
+  async function captureShopifyContext() {
     const pageType =
       detectPageType();
 
     const product =
       pageType ===
       "product"
-        ? getShopifyProductData()
+        ? await loadShopifyProductData()
         : null;
 
-    const productHandle =
-      pageType ===
-      "product"
-        ? getProductHandleFromUrl()
-        : "";
-
-    const selectedVariantId =
-      pageType ===
-      "product"
-        ? getSelectedVariantId()
-        : "";
-
     const selectedVariant =
-      pageType ===
-      "product"
-        ? getVariantFromProduct(
-            product,
-            selectedVariantId
+      product
+        ? getSelectedVariant(
+            product
           )
         : null;
 
     const breadcrumbCollection =
       getCollectionFromBreadcrumb();
 
-    let collectionHandle = "";
-    let collectionTitle = "";
+    let collectionHandle =
+      "";
+
+    let collectionTitle =
+      "";
 
     if (
       pageType ===
@@ -775,7 +1072,7 @@
         breadcrumbCollection.title;
     }
 
-    const context = {
+    return {
       pageType:
         pageType,
 
@@ -785,60 +1082,49 @@
         ),
 
       browserTitle:
-        document.title || "",
+        document.title ||
+        "",
 
       pageUrl:
         window.location.href,
 
       referrer:
-        document.referrer || "",
+        document.referrer ||
+        "",
 
       productTitle:
-        pageType === "product"
-          ? (
-              (
-                product &&
-                (
-                  product.title ||
-                  product.name
-                )
-              ) ||
-              getPageHeading()
-            )
+        product
+          ? product.title ||
+            getPageHeading()
           : "",
 
       productHandle:
-        productHandle,
+        product
+          ? product.handle ||
+            getProductHandleFromUrl()
+          : "",
 
       productId:
         product &&
-        (
-          product.id ||
-          product.productId
-        )
+        product.id
           ? String(
-              product.id ||
-              product.productId
+              product.id
             )
           : "",
 
       variantId:
-        selectedVariantId ||
-        (
-          selectedVariant &&
-          selectedVariant.id
-            ? String(
-                selectedVariant.id
-              )
-            : ""
-        ),
+        selectedVariant &&
+        selectedVariant.id
+          ? String(
+              selectedVariant.id
+            )
+          : "",
 
       variantTitle:
         selectedVariant
           ? (
               selectedVariant.public_title ||
               selectedVariant.title ||
-              selectedVariant.name ||
               ""
             )
           : "",
@@ -856,35 +1142,418 @@
           : "",
 
       productType:
-        product
-          ? (
-              product.type ||
-              product.product_type ||
-              ""
-            )
+        product &&
+        product.type
+          ? product.type
           : "",
 
       collectionHandle:
         collectionHandle,
 
       collectionTitle:
-        collectionTitle
+        collectionTitle,
+
+      available:
+        selectedVariant
+          ? selectedVariant.available ===
+            true
+          : null,
+
+      price:
+        selectedVariant &&
+        typeof selectedVariant.price !==
+          "undefined"
+          ? selectedVariant.price
+          : null
     };
-
-    context.productFamily =
-      detectProductFamily(
-        context
-      );
-
-    return context;
   }
 
-  let pageContext =
-    captureShopifyContext();
+  let pageContext = {
+    pageType:
+      detectPageType(),
+
+    pageTitle:
+      getFriendlyPageTitle(
+        detectPageType()
+      ),
+
+    pageUrl:
+      window.location.href
+  };
 
   /*
   |--------------------------------------------------------------------------
-  | Intent Detection
+  | Shopify Fact Resolver
+  |--------------------------------------------------------------------------
+  */
+
+  async function resolveShopifyFactQuestion(
+    question
+  ) {
+    if (
+      detectPageType() !==
+      "product"
+    ) {
+      return null;
+    }
+
+    const product =
+      await loadShopifyProductData();
+
+    if (
+      !product
+    ) {
+      return null;
+    }
+
+    const variant =
+      getSelectedVariant(
+        product
+      );
+
+    if (
+      !variant
+    ) {
+      return null;
+    }
+
+    /*
+     * SKU
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        SKU_PHRASES
+      )
+    ) {
+      if (
+        variant.sku
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "The selected variant SKU is " +
+            variant.sku +
+            ".",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * Current Size
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        CURRENT_SIZE_PHRASES
+      )
+    ) {
+      const size =
+        getVariantOptionValue(
+          product,
+          variant,
+          "size"
+        );
+
+      if (
+        size
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "You're currently viewing the " +
+            size +
+            " size.",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * All Sizes
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        ALL_SIZE_PHRASES
+      )
+    ) {
+      const sizes =
+        getUniqueOptionValues(
+          product,
+          "size"
+        );
+
+      if (
+        sizes.length
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "Available size options shown for this product are: " +
+            sizes.join(
+              ", "
+            ) +
+            ".",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * Current Color
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        CURRENT_COLOR_PHRASES
+      )
+    ) {
+      const color =
+        getVariantOptionValue(
+          product,
+          variant,
+          "color"
+        );
+
+      if (
+        color
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "You're currently viewing the " +
+            color +
+            " color.",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * All Colors
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        ALL_COLOR_PHRASES
+      )
+    ) {
+      const colors =
+        getUniqueOptionValues(
+          product,
+          "color"
+        );
+
+      if (
+        colors.length
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "Available color options shown for this product are: " +
+            colors.join(
+              ", "
+            ) +
+            ".",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * Current Variant
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        VARIANT_PHRASES
+      )
+    ) {
+      const color =
+        getVariantOptionValue(
+          product,
+          variant,
+          "color"
+        );
+
+      const size =
+        getVariantOptionValue(
+          product,
+          variant,
+          "size"
+        );
+
+      const parts =
+        [];
+
+      if (
+        color
+      ) {
+        parts.push(
+          color
+        );
+      }
+
+      if (
+        size
+      ) {
+        parts.push(
+          size
+        );
+      }
+
+      const variantName =
+        parts.length
+          ? parts.join(
+              " / "
+            )
+          : (
+              variant.public_title ||
+              variant.title ||
+              ""
+            );
+
+      if (
+        variantName
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "You're currently viewing " +
+            variantName +
+            ".",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    /*
+     * Availability
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        STOCK_PHRASES
+      )
+    ) {
+      const available =
+        variant.available ===
+        true;
+
+      return {
+        type:
+          "shopify-fact",
+
+        category:
+          "Availability",
+
+        answer:
+          available
+            ? "Yes. The selected variant is currently shown as available for purchase."
+            : "The selected variant is currently shown as unavailable for purchase.",
+
+        contextUsed:
+          true
+      };
+    }
+
+    /*
+     * Price
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        PRICE_PHRASES
+      ) &&
+      typeof variant.price !==
+        "undefined" &&
+      variant.price !==
+        null
+    ) {
+      const formattedPrice =
+        formatMoneyFromCents(
+          variant.price
+        );
+
+      if (
+        formattedPrice
+      ) {
+        return {
+          type:
+            "shopify-fact",
+
+          category:
+            "Product Details",
+
+          answer:
+            "The selected variant is currently listed at " +
+            formattedPrice +
+            ".",
+
+          contextUsed:
+            true
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Base Intent
   |--------------------------------------------------------------------------
   */
 
@@ -936,17 +1605,10 @@
       return "cleaning";
     }
 
-    if (
-      hasAnyPhrase(
-        question,
-        SLIP_PHRASES
-      )
-    ) {
-      return "slip";
-    }
-
     const normalized =
-      normalizeText(question);
+      normalizeText(
+        question
+      );
 
     const rules = [
       [
@@ -989,9 +1651,7 @@
         [
           "order",
           "buy",
-          "price",
-          "pricing",
-          "cost"
+          "purchase"
         ]
       ],
 
@@ -1008,7 +1668,8 @@
 
     for (
       let i = 0;
-      i < rules.length;
+      i <
+      rules.length;
       i += 1
     ) {
       if (
@@ -1020,7 +1681,9 @@
           }
         )
       ) {
-        return rules[i][0];
+        return (
+          rules[i][0]
+        );
       }
     }
 
@@ -1033,11 +1696,6 @@
     const category =
       normalizeText(
         entry.category
-      );
-
-    const question =
-      normalizeText(
-        entry.question
       );
 
     if (
@@ -1075,9 +1733,6 @@
     if (
       category.includes(
         "warranty"
-      ) ||
-      question.includes(
-        "return"
       )
     ) {
       return "warranty";
@@ -1088,7 +1743,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Find KB Entry By ID
+  | Knowledge Base Product Properties
   |--------------------------------------------------------------------------
   */
 
@@ -1107,15 +1762,71 @@
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Product Property Resolver
-  |--------------------------------------------------------------------------
-  |
-  | This runs BEFORE fuzzy matching.
-  |
-  |--------------------------------------------------------------------------
-  */
+  function detectProductFamily(
+    context
+  ) {
+    const value =
+      normalizeText(
+        [
+          context.productTitle,
+          context.productHandle,
+          context.productType,
+          context.collectionTitle
+        ].join(" ")
+      );
+
+    if (
+      value.includes(
+        "outdoor"
+      ) ||
+      value.includes(
+        "marine"
+      ) ||
+      value.includes(
+        "pontoon"
+      ) ||
+      value.includes(
+        "boat"
+      )
+    ) {
+      return "outdoor-marine";
+    }
+
+    if (
+      value.includes(
+        "garage"
+      ) ||
+      value.includes(
+        "ribbed"
+      ) ||
+      value.includes(
+        "diamond tread"
+      )
+    ) {
+      return "garage-universal";
+    }
+
+    if (
+      value.includes(
+        "trailer"
+      )
+    ) {
+      return "trailer";
+    }
+
+    if (
+      value.includes(
+        "pet"
+      ) ||
+      value.includes(
+        "kennel"
+      )
+    ) {
+      return "pet";
+    }
+
+    return "unknown";
+  }
 
   function resolveProductPropertyQuestion(
     question
@@ -1133,10 +1844,6 @@
         question
       );
 
-    /*
-     * WATERPROOF
-     */
-
     if (
       intent ===
       "waterproof"
@@ -1150,39 +1857,32 @@
         entry
       ) {
         return {
-          entry: {
-            ...entry,
+          type:
+            "knowledge",
 
-            responseType:
-              "HUMAN REVIEW"
-          },
+          entry:
+            entry,
 
-          score: 0.98,
+          score:
+            0.98,
 
-          contextUsed: true,
-
-          property:
-            "waterproof"
+          contextUsed:
+            true
         };
       }
     }
-
-    /*
-     * OUTDOOR USE
-     */
 
     if (
       intent ===
       "outdoor"
     ) {
-      /*
-       * The customer is viewing an actual
-       * Outdoor & Marine product.
-       */
+      const family =
+        detectProductFamily(
+          pageContext
+        );
 
       if (
-        pageContext
-          .productFamily ===
+        family ===
         "outdoor-marine"
       ) {
         const entry =
@@ -1194,6 +1894,9 @@
           entry
         ) {
           return {
+            type:
+              "knowledge",
+
             entry:
               entry,
 
@@ -1201,64 +1904,39 @@
               0.99,
 
             contextUsed:
-              true,
-
-            property:
-              "outdoor"
+              true
           };
         }
       }
 
-      /*
-       * They are NOT viewing an Outdoor & Marine
-       * product. Do not tell them their current
-       * product is approved outside.
-       */
-
       return {
+        type:
+          "knowledge",
+
         entry: {
           id:
-            "context-current-product-outdoor-use",
+            "context-outdoor-use",
 
           category:
             "Product Use",
 
-          question:
-            "Can the current product be used outside?",
-
-          variations:
-            [],
-
           answer:
-            "The product you're currently viewing is not identified in the approved chat information as a G-Floor® Outdoor & Marine Flooring product. G-Floor® Outdoor & Marine Flooring is the product line specifically engineered for outdoor and marine exposure. Please confirm with Customer Service before installing this product outdoors.",
+            "The product you're currently viewing is not identified in the approved chat information as a G-Floor® Outdoor & Marine Flooring product. G-Floor® Outdoor & Marine Flooring is specifically engineered for outdoor and marine exposure. Please confirm with Customer Service before installing this product outdoors.",
 
           sourceUrl:
             "https://gfloor.com/collections/g-floor-outdoor-marine-flooring",
 
           responseType:
-            "HUMAN REVIEW",
-
-          product:
-            pageContext.productTitle,
-
-          lastReviewed:
-            "2026-07-27"
+            "HUMAN REVIEW"
         },
 
         score:
           1,
 
         contextUsed:
-          true,
-
-        property:
-          "outdoor"
+          true
       };
     }
-
-    /*
-     * INSTALLATION / ADHESIVE
-     */
 
     if (
       intent ===
@@ -1277,6 +1955,9 @@
         entry
       ) {
         return {
+          type:
+            "knowledge",
+
           entry:
             entry,
 
@@ -1284,21 +1965,14 @@
             0.99,
 
           contextUsed:
-            true,
-
-          property:
-            "installation"
+            true
         };
       }
     }
 
-    /*
-     * CLEANING
-     */
-
     if (
       intent ===
-      "cleaning" &&
+        "cleaning" &&
       !hasAnyPhrase(
         question,
         GLUE_REMOVAL_PHRASES
@@ -1313,6 +1987,9 @@
         entry
       ) {
         return {
+          type:
+            "knowledge",
+
           entry:
             entry,
 
@@ -1320,80 +1997,7 @@
             0.96,
 
           contextUsed:
-            true,
-
-          property:
-            "cleaning"
-        };
-      }
-    }
-
-    /*
-     * GLUE REMOVAL
-     */
-
-    if (
-      hasAnyPhrase(
-        question,
-        GLUE_REMOVAL_PHRASES
-      )
-    ) {
-      const entry =
-        findKnowledgeEntry(
-          "kb-019-how-to-remove-stains-or-tar-from-vinyl"
-        );
-
-      if (
-        entry
-      ) {
-        return {
-          entry:
-            entry,
-
-          score:
-            0.99,
-
-          contextUsed:
-            true,
-
-          property:
-            "cleaning"
-        };
-      }
-    }
-
-    /*
-     * SLIP RESISTANCE
-     */
-
-    if (
-      intent ===
-      "slip"
-    ) {
-      const entry =
-        findKnowledgeEntry(
-          "kb-047-slip-resistance"
-        );
-
-      if (
-        entry
-      ) {
-        return {
-          entry: {
-            ...entry,
-
-            responseType:
-              "HUMAN REVIEW"
-          },
-
-          score:
-            0.96,
-
-          contextUsed:
-            true,
-
-          property:
-            "slip"
+            true
         };
       }
     }
@@ -1403,7 +2007,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Fuzzy Matching
+  | Fuzzy KB Matching
   |--------------------------------------------------------------------------
   */
 
@@ -1435,32 +2039,6 @@
       return 1;
     }
 
-    if (
-      normalizedQuestion.includes(
-        normalizedPhrase
-      ) ||
-      normalizedPhrase.includes(
-        normalizedQuestion
-      )
-    ) {
-      const shorter =
-        Math.min(
-          normalizedQuestion.length,
-          normalizedPhrase.length
-        );
-
-      const longer =
-        Math.max(
-          normalizedQuestion.length,
-          normalizedPhrase.length
-        );
-
-      return Math.max(
-        0.78,
-        shorter / longer
-      );
-    }
-
     const questionWords =
       uniqueWords(
         getWords(
@@ -1482,7 +2060,8 @@
       return 0;
     }
 
-    let matches = 0;
+    let matches =
+      0;
 
     phraseWords.forEach(
       function (word) {
@@ -1513,28 +2092,18 @@
   function searchKnowledgeBase(
     question
   ) {
-    /*
-     * Step 1:
-     * Resolve contextual property questions first.
-     */
-
-    const directProductMatch =
+    const propertyMatch =
       resolveProductPropertyQuestion(
         question
       );
 
     if (
-      directProductMatch
+      propertyMatch
     ) {
       return (
-        directProductMatch
+        propertyMatch
       );
     }
-
-    /*
-     * Step 2:
-     * Normal knowledge-base matching.
-     */
 
     const detectedIntent =
       detectQuestionIntent(
@@ -1556,7 +2125,8 @@
             : []
         );
 
-        let score = 0;
+        let score =
+          0;
 
         phrases.forEach(
           function (phrase) {
@@ -1612,6 +2182,9 @@
             bestResult.score
         ) {
           bestResult = {
+            type:
+              "knowledge",
+
             entry:
               entry,
 
@@ -1634,7 +2207,9 @@
       return null;
     }
 
-    return bestResult;
+    return (
+      bestResult
+    );
   }
 
   /*
@@ -2161,6 +2736,7 @@
 
   panel.innerHTML = `
     <div class="gfloor-chat-header">
+
       <div class="gfloor-chat-title-wrap">
 
         <strong>
@@ -2180,6 +2756,7 @@
       >
         &times;
       </button>
+
     </div>
 
     <div class="gfloor-chat-body">
@@ -2369,65 +2946,23 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-name">
-              Name
-            </label>
-
-            <input
-              id="gfloor-chat-name"
-              name="name"
-              type="text"
-              autocomplete="name"
-              required
-            >
-
+            <label for="gfloor-chat-name">Name</label>
+            <input id="gfloor-chat-name" name="name" type="text" autocomplete="name" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-email">
-              Email
-            </label>
-
-            <input
-              id="gfloor-chat-email"
-              name="email"
-              type="email"
-              autocomplete="email"
-              required
-            >
-
+            <label for="gfloor-chat-email">Email</label>
+            <input id="gfloor-chat-email" name="email" type="email" autocomplete="email" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-phone">
-              Phone
-            </label>
-
-            <input
-              id="gfloor-chat-phone"
-              name="phone"
-              type="tel"
-              autocomplete="tel"
-              required
-            >
-
+            <label for="gfloor-chat-phone">Phone</label>
+            <input id="gfloor-chat-phone" name="phone" type="tel" autocomplete="tel" required>
           </div>
 
           <div class="gfloor-chat-field">
-
-            <label for="gfloor-chat-message">
-              How can we help?
-            </label>
-
-            <textarea
-              id="gfloor-chat-message"
-              name="message"
-              required
-            ></textarea>
-
+            <label for="gfloor-chat-message">How can we help?</label>
+            <textarea id="gfloor-chat-message" name="message" required></textarea>
           </div>
 
           <button
@@ -2438,11 +2973,7 @@
             Send Message
           </button>
 
-          <div
-            id="gfloor-chat-result"
-            role="status"
-            aria-live="polite"
-          ></div>
+          <div id="gfloor-chat-result"></div>
 
         </form>
 
@@ -2481,7 +3012,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Element References
+  | Elements
   |--------------------------------------------------------------------------
   */
 
@@ -2612,21 +3143,14 @@
   */
 
   function hideAllViews() {
-    homeView.hidden =
-      true;
-
-    humanView.hidden =
-      true;
-
-    contactView.hidden =
-      true;
+    homeView.hidden = true;
+    humanView.hidden = true;
+    contactView.hidden = true;
   }
 
   function showHome() {
     hideAllViews();
-
-    homeView.hidden =
-      false;
+    homeView.hidden = false;
   }
 
   function togglePanel(open) {
@@ -2638,20 +3162,17 @@
     if (
       open
     ) {
-      pageContext =
-        captureShopifyContext();
-
-      loadKnowledgeBase()
-        .catch(
-          function (
+      Promise.all([
+        loadKnowledgeBase(),
+        loadShopifyProductData()
+      ]).catch(
+        function (error) {
+          console.error(
+            "Chat preload error:",
             error
-          ) {
-            console.error(
-              "Knowledge base error:",
-              error
-            );
-          }
-        );
+          );
+        }
+      );
     }
   }
 
@@ -2725,8 +3246,7 @@
         Our Customer Service team is currently offline.
 
         <div style="margin-top:8px;">
-          Live support hours are Monday-Friday,
-          8 AM-5 PM Central Time.
+          Live support hours are Monday-Friday, 8 AM-5 PM Central Time.
         </div>
 
         <div style="margin-top:8px;">
@@ -2748,13 +3268,13 @@
   |--------------------------------------------------------------------------
   */
 
-  function renderPageContext() {
+  async function renderPageContext() {
     pageContext =
-      captureShopifyContext();
+      await captureShopifyContext();
 
     if (
       pageContext.pageType ===
-        "product"
+      "product"
     ) {
       pageContextBox.innerHTML = `
         <span class="gfloor-page-context-label">
@@ -2806,12 +3326,6 @@
             pageContext.pageTitle
           )}
         </span>
-
-        <span class="gfloor-page-context-type">
-          ${escapeHtml(
-            pageContext.pageType
-          )}
-        </span>
       `;
     }
 
@@ -2819,13 +3333,13 @@
       false;
   }
 
-  function showContactForm() {
+  async function showContactForm() {
     hideAllViews();
 
     contactView.hidden =
       false;
 
-    renderPageContext();
+    await renderPageContext();
 
     if (
       lastQuestion
@@ -2860,16 +3374,65 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Render Answers
+  | Response Rendering
   |--------------------------------------------------------------------------
   */
 
-  function showNoMatchResponse() {
+  function showShopifyFactResponse(
+    fact
+  ) {
     lastMatchedIntent =
       null;
 
     lastMatchScore =
-      0;
+      1;
+
+    addTranscriptEntry(
+      "G-Floor Support",
+      fact.answer
+    );
+
+    responseBox.innerHTML = `
+      <span class="gfloor-response-title">
+        G-Floor Support
+      </span>
+
+      <div class="gfloor-context-note">
+        Answering from the product and variant currently selected on this page.
+      </div>
+
+      <span class="gfloor-response-category">
+        ${escapeHtml(
+          fact.category
+        )}
+      </span>
+
+      <div>
+        ${escapeHtml(
+          fact.answer
+        )}
+      </div>
+
+      <div class="gfloor-helpful-question">
+        Did this answer your question?
+      </div>
+    `;
+
+    responseBox.classList.add(
+      "show"
+    );
+
+    helpfulActions.dataset.mode =
+      "helpful";
+
+    helpfulActions.classList.add(
+      "show"
+    );
+  }
+
+  function showNoMatchResponse() {
+    lastMatchedIntent = null;
+    lastMatchScore = 0;
 
     const answer =
       "I couldn't find a confident answer to that question in our approved support information.";
@@ -2942,27 +3505,26 @@
       responseType ===
         "ALWAYS ESCALATE";
 
-    const contextHtml =
-      match.contextUsed &&
-      pageContext.productTitle
-        ? `
-          <div class="gfloor-context-note">
-            Answering based on the product you're currently viewing:
-            <strong>
-              ${escapeHtml(
-                pageContext.productTitle
-              )}
-            </strong>
-          </div>
-        `
-        : "";
-
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
         G-Floor Support
       </span>
 
-      ${contextHtml}
+      ${
+        match.contextUsed &&
+        pageContext.productTitle
+          ? `
+            <div class="gfloor-context-note">
+              Answering based on the product you're currently viewing:
+              <strong>
+                ${escapeHtml(
+                  pageContext.productTitle
+                )}
+              </strong>
+            </div>
+          `
+          : ""
+      }
 
       <span class="gfloor-response-category">
         ${escapeHtml(
@@ -3041,39 +3603,8 @@
       return;
     }
 
-    pageContext =
-      captureShopifyContext();
-
     lastQuestion =
       cleanQuestion;
-
-    addTranscriptEntry(
-      "Customer",
-      cleanQuestion
-    );
-
-    if (
-      pageContext.pageType ===
-        "product"
-    ) {
-      addTranscriptEntry(
-        "System",
-        "Customer is viewing: " +
-        pageContext.productTitle +
-        (
-          pageContext.variantTitle
-            ? " | Variant: " +
-              pageContext.variantTitle
-            : ""
-        ) +
-        (
-          pageContext.sku
-            ? " | SKU: " +
-              pageContext.sku
-            : ""
-        )
-      );
-    }
 
     questionSubmit.disabled =
       true;
@@ -3081,47 +3612,49 @@
     questionSubmit.textContent =
       "Searching...";
 
+    addTranscriptEntry(
+      "Customer",
+      cleanQuestion
+    );
+
     try {
+      /*
+       * Step 1:
+       * Shopify live product/variant facts.
+       */
+
+      const shopifyFact =
+        await resolveShopifyFactQuestion(
+          cleanQuestion
+        );
+
+      if (
+        shopifyFact
+      ) {
+        pageContext =
+          await captureShopifyContext();
+
+        showShopifyFactResponse(
+          shopifyFact
+        );
+
+        return;
+      }
+
+      /*
+       * Step 2:
+       * Approved KB.
+       */
+
       await loadKnowledgeBase();
+
+      pageContext =
+        await captureShopifyContext();
 
       const match =
         searchKnowledgeBase(
           cleanQuestion
         );
-
-      console.log(
-        "G-Floor product property match:",
-        {
-          question:
-            cleanQuestion,
-
-          product:
-            pageContext.productTitle,
-
-          family:
-            pageContext.productFamily,
-
-          matchedId:
-            match
-              ? match.entry.id
-              : null,
-
-          category:
-            match
-              ? match.entry.category
-              : null,
-
-          score:
-            match
-              ? match.score
-              : null,
-
-          contextUsed:
-            match
-              ? match.contextUsed
-              : false
-        }
-      );
 
       if (
         match
@@ -3134,7 +3667,7 @@
       }
     } catch (error) {
       console.error(
-        "Knowledge search error:",
+        "Chat question error:",
         error
       );
 
@@ -3200,7 +3733,8 @@
           };
 
           const topic =
-            topicButton.dataset.topic;
+            topicButton.dataset
+              .topic;
 
           if (
             topic ===
@@ -3324,7 +3858,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Contact Form
+  | Form Submission
   |--------------------------------------------------------------------------
   */
 
@@ -3347,7 +3881,7 @@
       await getAgentAvailability();
 
       pageContext =
-        captureShopifyContext();
+        await captureShopifyContext();
 
       const contactMessage =
         form.message.value.trim();
@@ -3478,15 +4012,17 @@
 
   setTimeout(
     function () {
-      loadKnowledgeBase()
-        .catch(
-          function (error) {
-            console.error(
-              "Knowledge base preload error:",
-              error
-            );
-          }
-        );
+      Promise.all([
+        loadKnowledgeBase(),
+        loadShopifyProductData()
+      ]).catch(
+        function (error) {
+          console.error(
+            "Chat preload error:",
+            error
+          );
+        }
+      );
     },
     1000
   );
