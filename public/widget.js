@@ -66,6 +66,7 @@
     .gfloor-chat-body {
       padding: 16px;
       overflow-y: auto;
+      scroll-behavior: smooth;
     }
 
     .gfloor-chat-intro {
@@ -112,11 +113,29 @@
       text-align: center;
     }
 
+    .gfloor-secondary-button:hover,
+    .gfloor-secondary-button:focus {
+      border-color: #d2232a;
+      color: #d2232a;
+      outline: none;
+    }
+
     .gfloor-primary-button {
       border: 0;
       background: #d2232a;
       color: #ffffff;
       text-align: center;
+    }
+
+    .gfloor-primary-button:hover,
+    .gfloor-primary-button:focus {
+      background: #b91f25;
+      outline: none;
+    }
+
+    .gfloor-primary-button:disabled {
+      opacity: .65;
+      cursor: wait;
     }
 
     .gfloor-question-row {
@@ -142,6 +161,14 @@
       color: #222222;
       background: #ffffff;
       font: 14px Arial, sans-serif;
+    }
+
+    .gfloor-question-row textarea:focus,
+    .gfloor-chat-field input:focus,
+    .gfloor-chat-field textarea:focus {
+      border-color: #d2232a;
+      outline: 2px solid rgba(210,35,42,.12);
+      outline-offset: 1px;
     }
 
     .gfloor-question-row textarea,
@@ -209,6 +236,13 @@
       cursor: pointer;
     }
 
+    .gfloor-small-button:hover,
+    .gfloor-small-button:focus {
+      border-color: #d2232a;
+      color: #d2232a;
+      outline: none;
+    }
+
     .gfloor-back {
       margin-bottom: 12px;
       border: 0;
@@ -217,6 +251,12 @@
       font: 700 13px Arial, sans-serif;
       cursor: pointer;
       padding: 0;
+    }
+
+    .gfloor-back:hover,
+    .gfloor-back:focus {
+      color: #d2232a;
+      outline: none;
     }
 
     .gfloor-chat-field {
@@ -267,7 +307,13 @@
   panel.innerHTML = `
     <div class="gfloor-chat-header">
       <strong>Chat with G-Floor</strong>
-      <button id="gfloor-chat-close" type="button" aria-label="Close chat">&times;</button>
+      <button
+        id="gfloor-chat-close"
+        type="button"
+        aria-label="Close chat"
+      >
+        &times;
+      </button>
     </div>
 
     <div class="gfloor-chat-body">
@@ -278,37 +324,68 @@
         </p>
 
         <div class="gfloor-topic-list">
-          <button class="gfloor-topic-button" type="button" data-topic="flooring">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="flooring"
+          >
             Find the Right Flooring
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="installation">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="installation"
+          >
             Installation Questions
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="shipping">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="shipping"
+          >
             Shipping & Delivery
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="order">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="order"
+          >
             Order Help
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="cleaning"
+          >
             Cleaning & Maintenance
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="warranty">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="warranty"
+          >
             Warranty & Returns
           </button>
 
-          <button class="gfloor-topic-button" type="button" data-topic="other">
+          <button
+            class="gfloor-topic-button"
+            type="button"
+            data-topic="other"
+          >
             Something Else
           </button>
         </div>
 
         <div class="gfloor-question-row">
-          <label for="gfloor-chat-question">Or type your question</label>
+          <label for="gfloor-chat-question">
+            Or type your question
+          </label>
+
           <textarea
             id="gfloor-chat-question"
             placeholder="Type your question here..."
@@ -324,18 +401,37 @@
           Ask a Question
         </button>
 
-        <div id="gfloor-response-box" class="gfloor-response-box"></div>
+        <div
+          id="gfloor-response-box"
+          class="gfloor-response-box"
+          role="status"
+          aria-live="polite"
+        ></div>
 
-        <div id="gfloor-helpful-actions" class="gfloor-helpful-actions">
-          <button id="gfloor-helpful-yes" class="gfloor-small-button" type="button">
+        <div
+          id="gfloor-helpful-actions"
+          class="gfloor-helpful-actions"
+        >
+          <button
+            id="gfloor-helpful-yes"
+            class="gfloor-small-button"
+            type="button"
+          >
             Yes
           </button>
-          <button id="gfloor-helpful-no" class="gfloor-small-button" type="button">
+
+          <button
+            id="gfloor-helpful-no"
+            class="gfloor-small-button"
+            type="button"
+          >
             No
           </button>
         </div>
 
-        <div class="gfloor-divider">or</div>
+        <div class="gfloor-divider">
+          or
+        </div>
 
         <button
           id="gfloor-human-button"
@@ -347,7 +443,11 @@
       </div>
 
       <div id="gfloor-contact-view" hidden>
-        <button id="gfloor-back-button" class="gfloor-back" type="button">
+        <button
+          id="gfloor-back-button"
+          class="gfloor-back"
+          type="button"
+        >
           &larr; Back
         </button>
 
@@ -355,27 +455,65 @@
           Please provide your contact information so our Customer Service team can help.
         </p>
 
-        <div id="gfloor-agent-status" class="gfloor-status-box"></div>
+        <div
+          id="gfloor-agent-status"
+          class="gfloor-status-box"
+        ></div>
 
         <form id="gfloor-chat-form">
+
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-name">Name</label>
-            <input id="gfloor-chat-name" name="name" type="text" required>
+            <label for="gfloor-chat-name">
+              Name
+            </label>
+
+            <input
+              id="gfloor-chat-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+            >
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-email">Email</label>
-            <input id="gfloor-chat-email" name="email" type="email" required>
+            <label for="gfloor-chat-email">
+              Email
+            </label>
+
+            <input
+              id="gfloor-chat-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            >
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-phone">Phone</label>
-            <input id="gfloor-chat-phone" name="phone" type="tel" required>
+            <label for="gfloor-chat-phone">
+              Phone
+            </label>
+
+            <input
+              id="gfloor-chat-phone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              required
+            >
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-message">How can we help?</label>
-            <textarea id="gfloor-chat-message" name="message" required></textarea>
+            <label for="gfloor-chat-message">
+              How can we help?
+            </label>
+
+            <textarea
+              id="gfloor-chat-message"
+              name="message"
+              required
+            ></textarea>
           </div>
 
           <button
@@ -386,7 +524,12 @@
             Send Message
           </button>
 
-          <div id="gfloor-chat-result" role="status" aria-live="polite"></div>
+          <div
+            id="gfloor-chat-result"
+            role="status"
+            aria-live="polite"
+          ></div>
+
         </form>
       </div>
 
@@ -398,43 +541,96 @@
   button.type = "button";
   button.textContent = "Chat with us";
   button.setAttribute("aria-expanded", "false");
+  button.setAttribute("aria-controls", "gfloor-chat-panel");
 
   document.body.appendChild(panel);
   document.body.appendChild(button);
 
+  const chatBody = panel.querySelector(".gfloor-chat-body");
   const closeButton = panel.querySelector("#gfloor-chat-close");
+
   const homeView = panel.querySelector("#gfloor-chat-home");
   const contactView = panel.querySelector("#gfloor-contact-view");
 
-  const topicButtons = panel.querySelectorAll(".gfloor-topic-button");
-  const questionInput = panel.querySelector("#gfloor-chat-question");
-  const questionSubmit = panel.querySelector("#gfloor-question-submit");
+  const topicButtons = panel.querySelectorAll(
+    ".gfloor-topic-button"
+  );
 
-  const responseBox = panel.querySelector("#gfloor-response-box");
-  const helpfulActions = panel.querySelector("#gfloor-helpful-actions");
-  const helpfulYes = panel.querySelector("#gfloor-helpful-yes");
-  const helpfulNo = panel.querySelector("#gfloor-helpful-no");
+  const questionInput = panel.querySelector(
+    "#gfloor-chat-question"
+  );
 
-  const humanButton = panel.querySelector("#gfloor-human-button");
-  const backButton = panel.querySelector("#gfloor-back-button");
+  const questionSubmit = panel.querySelector(
+    "#gfloor-question-submit"
+  );
 
-  const agentStatus = panel.querySelector("#gfloor-agent-status");
+  const responseBox = panel.querySelector(
+    "#gfloor-response-box"
+  );
 
-  const form = panel.querySelector("#gfloor-chat-form");
-  const messageField = panel.querySelector("#gfloor-chat-message");
-  const submitButton = panel.querySelector("#gfloor-chat-submit");
-  const result = panel.querySelector("#gfloor-chat-result");
+  const helpfulActions = panel.querySelector(
+    "#gfloor-helpful-actions"
+  );
+
+  const helpfulYes = panel.querySelector(
+    "#gfloor-helpful-yes"
+  );
+
+  const helpfulNo = panel.querySelector(
+    "#gfloor-helpful-no"
+  );
+
+  const humanButton = panel.querySelector(
+    "#gfloor-human-button"
+  );
+
+  const backButton = panel.querySelector(
+    "#gfloor-back-button"
+  );
+
+  const agentStatus = panel.querySelector(
+    "#gfloor-agent-status"
+  );
+
+  const form = panel.querySelector(
+    "#gfloor-chat-form"
+  );
+
+  const messageField = panel.querySelector(
+    "#gfloor-chat-message"
+  );
+
+  const submitButton = panel.querySelector(
+    "#gfloor-chat-submit"
+  );
+
+  const result = panel.querySelector(
+    "#gfloor-chat-result"
+  );
 
   let lastQuestion = "";
 
   function togglePanel(open) {
     panel.classList.toggle("open", open);
     button.setAttribute("aria-expanded", String(open));
+
+    if (open) {
+      setTimeout(function () {
+        closeButton.focus();
+      }, 50);
+    }
   }
 
   function showHome() {
     homeView.hidden = false;
     contactView.hidden = true;
+
+    setTimeout(function () {
+      chatBody.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }, 50);
   }
 
   function showContactForm(prefilledMessage) {
@@ -447,6 +643,21 @@
     if (prefilledMessage) {
       messageField.value = prefilledMessage;
     }
+
+    setTimeout(function () {
+      chatBody.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+
+      const firstField = panel.querySelector(
+        "#gfloor-chat-name"
+      );
+
+      if (firstField) {
+        firstField.focus();
+      }
+    }, 100);
   }
 
   function getAgentAvailability() {
@@ -470,12 +681,25 @@
     const hour = Number(values.hour);
     const minute = Number(values.minute);
 
-    const businessDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-    const isBusinessDay = businessDays.includes(weekday);
+    const businessDays = [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri"
+    ];
 
-    const minutesSinceMidnight = hour * 60 + minute;
-    const openingMinutes = 8 * 60;
-    const closingMinutes = 17 * 60;
+    const isBusinessDay =
+      businessDays.includes(weekday);
+
+    const minutesSinceMidnight =
+      hour * 60 + minute;
+
+    const openingMinutes =
+      8 * 60;
+
+    const closingMinutes =
+      17 * 60;
 
     const open =
       isBusinessDay &&
@@ -524,10 +748,30 @@
     return responses[topic] || responses.other;
   }
 
+  function scrollToResponse() {
+    setTimeout(function () {
+      responseBox.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest"
+      });
+
+      setTimeout(function () {
+        helpfulActions.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest"
+        });
+      }, 150);
+    }, 100);
+  }
+
   function showResponse(message) {
     responseBox.innerHTML = `
-      <span class="gfloor-response-title">G-Floor Support</span>
+      <span class="gfloor-response-title">
+        G-Floor Support
+      </span>
+
       ${message}
+
       <div style="margin-top:10px;font-weight:700;">
         Did this answer your question?
       </div>
@@ -535,112 +779,240 @@
 
     responseBox.classList.add("show");
     helpfulActions.classList.add("show");
+
+    scrollToResponse();
   }
 
   button.addEventListener("click", function () {
-    togglePanel(!panel.classList.contains("open"));
+    togglePanel(
+      !panel.classList.contains("open")
+    );
   });
 
   closeButton.addEventListener("click", function () {
     togglePanel(false);
+    button.focus();
   });
 
   topicButtons.forEach(function (topicButton) {
     topicButton.addEventListener("click", function () {
-      const topic = topicButton.dataset.topic;
+      const topic =
+        topicButton.dataset.topic;
 
-      lastQuestion = topicButton.textContent.trim();
+      lastQuestion =
+        topicButton.textContent.trim();
 
-      showResponse(getTopicResponse(topic));
+      showResponse(
+        getTopicResponse(topic)
+      );
     });
   });
 
-  questionSubmit.addEventListener("click", function () {
-    const question = questionInput.value.trim();
+  questionSubmit.addEventListener(
+    "click",
+    function () {
+      const question =
+        questionInput.value.trim();
 
-    if (!question) {
-      responseBox.innerHTML =
-        '<span class="gfloor-response-title">Please enter a question.</span>';
+      if (!question) {
+        responseBox.innerHTML = `
+          <span class="gfloor-response-title">
+            Please enter a question.
+          </span>
+        `;
 
-      responseBox.classList.add("show");
-      helpfulActions.classList.remove("show");
-      return;
-    }
+        responseBox.classList.add("show");
+        helpfulActions.classList.remove("show");
 
-    lastQuestion = question;
+        setTimeout(function () {
+          responseBox.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+          });
+        }, 100);
 
-    showResponse(
-      "Thanks for your question. Our approved automated answer library is still being built. For now, you can connect with Customer Service for help with this question."
-    );
-  });
+        questionInput.focus();
 
-  helpfulYes.addEventListener("click", function () {
-    responseBox.innerHTML = `
-      <span class="gfloor-response-title">Glad we could help!</span>
-      You can choose another topic or ask another question anytime.
-    `;
-
-    helpfulActions.classList.remove("show");
-  });
-
-  helpfulNo.addEventListener("click", function () {
-    showContactForm(lastQuestion);
-  });
-
-  humanButton.addEventListener("click", function () {
-    showContactForm(lastQuestion);
-  });
-
-  backButton.addEventListener("click", function () {
-    showHome();
-  });
-
-  form.addEventListener("submit", async function (event) {
-    event.preventDefault();
-
-    result.textContent = "";
-    submitButton.disabled = true;
-    submitButton.textContent = "Sending...";
-
-    const availability = getAgentAvailability();
-
-    const payload = {
-      name: form.name.value.trim(),
-      email: form.email.value.trim(),
-      phone: form.phone.value.trim(),
-      message: form.message.value.trim(),
-      pageUrl: window.location.href,
-      pageTitle: document.title,
-      requestedLiveAgent: availability.open
-    };
-
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Message could not be sent.");
+        return;
       }
 
-      result.style.color = "#16733c";
-      result.textContent =
-        "Thank you. Your message has been sent to G-Floor Customer Service.";
+      lastQuestion = question;
 
-      form.reset();
-    } catch (error) {
-      result.style.color = "#b42318";
-      result.textContent =
-        "Email delivery is not active yet. Your chat interface is working, but Microsoft Graph email delivery is still being configured.";
-    } finally {
-      submitButton.disabled = false;
-      submitButton.textContent = "Send Message";
+      showResponse(
+        "Thanks for your question. Our approved automated answer library is still being built. For now, you can connect with Customer Service for help with this question."
+      );
     }
-  });
+  );
+
+  questionInput.addEventListener(
+    "keydown",
+    function (event) {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        questionSubmit.click();
+      }
+    }
+  );
+
+  helpfulYes.addEventListener(
+    "click",
+    function () {
+      responseBox.innerHTML = `
+        <span class="gfloor-response-title">
+          Glad we could help!
+        </span>
+
+        You can choose another topic or ask another question anytime.
+      `;
+
+      helpfulActions.classList.remove("show");
+
+      setTimeout(function () {
+        responseBox.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest"
+        });
+      }, 100);
+    }
+  );
+
+  helpfulNo.addEventListener(
+    "click",
+    function () {
+      showContactForm(lastQuestion);
+    }
+  );
+
+  humanButton.addEventListener(
+    "click",
+    function () {
+      showContactForm(lastQuestion);
+    }
+  );
+
+  backButton.addEventListener(
+    "click",
+    function () {
+      showHome();
+    }
+  );
+
+  form.addEventListener(
+    "submit",
+    async function (event) {
+      event.preventDefault();
+
+      result.textContent = "";
+
+      submitButton.disabled = true;
+      submitButton.textContent = "Sending...";
+
+      const availability =
+        getAgentAvailability();
+
+      const payload = {
+        name:
+          form.name.value.trim(),
+
+        email:
+          form.email.value.trim(),
+
+        phone:
+          form.phone.value.trim(),
+
+        message:
+          form.message.value.trim(),
+
+        pageUrl:
+          window.location.href,
+
+        pageTitle:
+          document.title,
+
+        requestedLiveAgent:
+          availability.open
+      };
+
+      try {
+        const response = await fetch(
+          API_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+            body:
+              JSON.stringify(payload)
+          }
+        );
+
+        let data = {};
+
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          data = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              "Message could not be sent."
+          );
+        }
+
+        result.style.color = "#16733c";
+
+        result.textContent =
+          "Thank you. Your message has been sent to G-Floor Customer Service.";
+
+        form.reset();
+
+        setTimeout(function () {
+          result.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+          });
+        }, 100);
+      } catch (error) {
+        console.error(
+          "G-Floor chat submission error:",
+          error
+        );
+
+        result.style.color = "#b42318";
+
+        result.textContent =
+          "Email delivery is not active yet. Your chat interface is working, but Microsoft Graph email delivery is still being configured.";
+
+        setTimeout(function () {
+          result.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+          });
+        }, 100);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent =
+          "Send Message";
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    function (event) {
+      if (
+        event.key === "Escape" &&
+        panel.classList.contains("open")
+      ) {
+        togglePanel(false);
+        button.focus();
+      }
+    }
+  );
 })();
