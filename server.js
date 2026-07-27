@@ -42,35 +42,32 @@ app.use(
         new Error("Origin is not allowed by CORS.")
       );
     },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"]
+
+    methods: [
+      "GET",
+      "POST",
+      "OPTIONS"
+    ],
+
+    allowedHeaders: [
+      "Content-Type"
+    ]
   })
 );
 
 app.use(
   express.json({
-    limit: "20kb"
+    limit: "50kb"
   })
 );
 
-app.use(express.static("public"));
+app.use(
+  express.static("public")
+);
 
 /*
 |--------------------------------------------------------------------------
-| Live Chat Configuration
-|--------------------------------------------------------------------------
-|
-| Render environment variables:
-|
-| LIVE_AGENT_QUEUE_STATUS=normal
-| LIVE_AGENT_NORMAL_WAIT=2-5
-| LIVE_AGENT_BUSY_WAIT=5-10
-|
-| Queue status options:
-|
-| normal
-| busy
-|
+| Live Agent Wait Configuration
 |--------------------------------------------------------------------------
 */
 
@@ -121,33 +118,59 @@ function getLiveAgentWaitEstimate() {
 */
 
 function getCustomerServiceStatus() {
-  const now = new Date();
+  const now =
+    new Date();
 
   const formattedParts =
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Chicago",
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    }).formatToParts(now);
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/Chicago",
 
-  const centralTime = {};
+        weekday:
+          "short",
 
-  formattedParts.forEach(function (part) {
-    if (part.type !== "literal") {
-      centralTime[part.type] = part.value;
+        hour:
+          "2-digit",
+
+        minute:
+          "2-digit",
+
+        hour12:
+          false
+      }
+    ).formatToParts(now);
+
+  const centralTime =
+    {};
+
+  formattedParts.forEach(
+    function (part) {
+      if (
+        part.type !==
+        "literal"
+      ) {
+        centralTime[
+          part.type
+        ] =
+          part.value;
+      }
     }
-  });
+  );
 
   const weekday =
     centralTime.weekday;
 
   const hour =
-    Number(centralTime.hour);
+    Number(
+      centralTime.hour
+    );
 
   const minute =
-    Number(centralTime.minute);
+    Number(
+      centralTime.minute
+    );
 
   const businessDays = [
     "Mon",
@@ -158,10 +181,13 @@ function getCustomerServiceStatus() {
   ];
 
   const isBusinessDay =
-    businessDays.includes(weekday);
+    businessDays.includes(
+      weekday
+    );
 
   const minutesSinceMidnight =
-    hour * 60 + minute;
+    hour * 60 +
+    minute;
 
   const openingMinutes =
     8 * 60;
@@ -171,24 +197,31 @@ function getCustomerServiceStatus() {
 
   const liveAgentAvailable =
     isBusinessDay &&
-    minutesSinceMidnight >= openingMinutes &&
-    minutesSinceMidnight < closingMinutes;
+    minutesSinceMidnight >=
+      openingMinutes &&
+    minutesSinceMidnight <
+      closingMinutes;
 
-  if (liveAgentAvailable) {
+  if (
+    liveAgentAvailable
+  ) {
     const waitEstimate =
       getLiveAgentWaitEstimate();
 
     return {
-      liveAgentAvailable: true,
+      liveAgentAvailable:
+        true,
 
       businessHours:
         "Monday-Friday, 8 AM-5 PM Central Time",
 
       queueStatus:
-        waitEstimate.queueStatus,
+        waitEstimate
+          .queueStatus,
 
       estimatedWaitMinutes:
-        waitEstimate.estimatedWaitMinutes,
+        waitEstimate
+          .estimatedWaitMinutes,
 
       message:
         "A Customer Service representative is currently available. " +
@@ -199,7 +232,8 @@ function getCustomerServiceStatus() {
   }
 
   return {
-    liveAgentAvailable: false,
+    liveAgentAvailable:
+      false,
 
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
@@ -212,10 +246,120 @@ function getCustomerServiceStatus() {
 
     message:
       "Our Customer Service team is currently offline. " +
-      "Live support hours are Monday-Friday, " +
-      "8 AM-5 PM Central Time. " +
+      "Live support hours are Monday-Friday, 8 AM-5 PM Central Time. " +
       "Please leave a message and our team will follow up."
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Input Helpers
+|--------------------------------------------------------------------------
+*/
+
+function cleanText(
+  value,
+  maximumLength
+) {
+  if (
+    typeof value !==
+    "string"
+  ) {
+    return "";
+  }
+
+  return value
+    .trim()
+    .slice(
+      0,
+      maximumLength
+    );
+}
+
+function isValidEmail(
+  email
+) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    email
+  );
+}
+
+function cleanTranscript(
+  transcript
+) {
+  if (
+    !Array.isArray(
+      transcript
+    )
+  ) {
+    return [];
+  }
+
+  return transcript
+    .slice(0, 100)
+    .map(
+      function (entry) {
+        return {
+          role:
+            cleanText(
+              entry &&
+                entry.role,
+              30
+            ),
+
+          message:
+            cleanText(
+              entry &&
+                entry.message,
+              5000
+            ),
+
+          timestamp:
+            cleanText(
+              entry &&
+                entry.timestamp,
+              100
+            )
+        };
+      }
+    )
+    .filter(
+      function (entry) {
+        return (
+          entry.role &&
+          entry.message
+        );
+      }
+    );
+}
+
+function formatTranscript(
+  transcript
+) {
+  if (
+    !transcript ||
+    transcript.length === 0
+  ) {
+    return "No transcript available.";
+  }
+
+  return transcript
+    .map(
+      function (entry) {
+        const timestamp =
+          entry.timestamp
+            ? ` [${entry.timestamp}]`
+            : "";
+
+        return (
+          `${entry.role}${timestamp}:\n` +
+          entry.message
+        );
+      }
+    )
+    .join(
+      "\n\n"
+    );
 }
 
 /*
@@ -224,11 +368,14 @@ function getCustomerServiceStatus() {
 |--------------------------------------------------------------------------
 */
 
-app.get("/", function (req, res) {
-  res.send(
-    "G-Floor chat backend is running."
-  );
-});
+app.get(
+  "/",
+  function (req, res) {
+    res.send(
+      "G-Floor chat backend is running."
+    );
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -236,51 +383,64 @@ app.get("/", function (req, res) {
 |--------------------------------------------------------------------------
 */
 
-app.get("/health", function (req, res) {
-  const requiredEnvironmentVariables = [
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_USER",
-    "SMTP_PASS",
-    "SMTP_FROM",
-    "CUSTOMER_SERVICE_EMAIL"
-  ];
+app.get(
+  "/health",
+  function (req, res) {
+    const requiredEnvironmentVariables = [
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASS",
+      "SMTP_FROM",
+      "CUSTOMER_SERVICE_EMAIL"
+    ];
 
-  const missingEnvironmentVariables =
-    requiredEnvironmentVariables.filter(
-      function (variableName) {
-        return !process.env[variableName];
-      }
-    );
+    const missingEnvironmentVariables =
+      requiredEnvironmentVariables.filter(
+        function (
+          variableName
+        ) {
+          return !process.env[
+            variableName
+          ];
+        }
+      );
 
-  const supportStatus =
-    getCustomerServiceStatus();
+    const supportStatus =
+      getCustomerServiceStatus();
 
-  res.json({
-    status: "ok",
+    res.json({
+      status:
+        "ok",
 
-    app:
-      "gfloor-chatfeature",
+      app:
+        "gfloor-chatfeature",
 
-    serverTime:
-      new Date().toISOString(),
+      serverTime:
+        new Date()
+          .toISOString(),
 
-    emailConfigured:
-      missingEnvironmentVariables.length === 0,
+      emailConfigured:
+        missingEnvironmentVariables
+          .length === 0,
 
-    missingEnvironmentVariables:
-      missingEnvironmentVariables,
+      missingEnvironmentVariables:
+        missingEnvironmentVariables,
 
-    liveAgentAvailable:
-      supportStatus.liveAgentAvailable,
+      liveAgentAvailable:
+        supportStatus
+          .liveAgentAvailable,
 
-    queueStatus:
-      supportStatus.queueStatus,
+      queueStatus:
+        supportStatus
+          .queueStatus,
 
-    estimatedWaitMinutes:
-      supportStatus.estimatedWaitMinutes
-  });
-});
+      estimatedWaitMinutes:
+        supportStatus
+          .estimatedWaitMinutes
+    });
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -288,55 +448,69 @@ app.get("/health", function (req, res) {
 |--------------------------------------------------------------------------
 */
 
-app.get("/chat/status", function (req, res) {
-  try {
-    const status =
-      getCustomerServiceStatus();
+app.get(
+  "/chat/status",
+  function (req, res) {
+    try {
+      const status =
+        getCustomerServiceStatus();
 
-    return res.status(200).json({
-      success: true,
+      return res
+        .status(200)
+        .json({
+          success:
+            true,
 
-      liveAgentAvailable:
-        status.liveAgentAvailable,
+          liveAgentAvailable:
+            status
+              .liveAgentAvailable,
 
-      businessHours:
-        status.businessHours,
+          businessHours:
+            status
+              .businessHours,
 
-      queueStatus:
-        status.queueStatus,
+          queueStatus:
+            status
+              .queueStatus,
 
-      estimatedWaitMinutes:
-        status.estimatedWaitMinutes,
+          estimatedWaitMinutes:
+            status
+              .estimatedWaitMinutes,
 
-      message:
-        status.message
-    });
-  } catch (error) {
-    console.error(
-      "Chat status error:",
-      error
-    );
+          message:
+            status
+              .message
+        });
+    } catch (error) {
+      console.error(
+        "Chat status error:",
+        error
+      );
 
-    return res.status(500).json({
-      success: false,
+      return res
+        .status(500)
+        .json({
+          success:
+            false,
 
-      liveAgentAvailable:
-        false,
+          liveAgentAvailable:
+            false,
 
-      businessHours:
-        "Monday-Friday, 8 AM-5 PM Central Time",
+          businessHours:
+            "Monday-Friday, 8 AM-5 PM Central Time",
 
-      queueStatus:
-        "unavailable",
+          queueStatus:
+            "unavailable",
 
-      estimatedWaitMinutes:
-        null,
+          estimatedWaitMinutes:
+            null,
 
-      message:
-        "Customer Service availability could not be checked right now."
-    });
+          message:
+            "Customer Service availability could not be checked right now."
+        });
+    }
   }
-});
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -346,41 +520,89 @@ app.get("/chat/status", function (req, res) {
 
 app.post(
   "/chat/message",
-  async function (req, res) {
+  async function (
+    req,
+    res
+  ) {
     try {
+      const conversationId =
+        cleanText(
+          req.body
+            .conversationId,
+          100
+        );
+
       const name =
-        typeof req.body.name === "string"
-          ? req.body.name.trim()
-          : "";
+        cleanText(
+          req.body.name,
+          100
+        );
 
       const email =
-        typeof req.body.email === "string"
-          ? req.body.email.trim()
-          : "";
+        cleanText(
+          req.body.email,
+          254
+        );
 
       const phone =
-        typeof req.body.phone === "string"
-          ? req.body.phone.trim()
-          : "";
+        cleanText(
+          req.body.phone,
+          50
+        );
 
       const message =
-        typeof req.body.message === "string"
-          ? req.body.message.trim()
-          : "";
+        cleanText(
+          req.body.message,
+          5000
+        );
 
       const pageUrl =
-        typeof req.body.pageUrl === "string"
-          ? req.body.pageUrl.trim()
-          : "";
+        cleanText(
+          req.body.pageUrl,
+          2000
+        );
 
       const pageTitle =
-        typeof req.body.pageTitle === "string"
-          ? req.body.pageTitle.trim()
-          : "";
+        cleanText(
+          req.body.pageTitle,
+          300
+        );
+
+      const matchedIntent =
+        cleanText(
+          req.body
+            .matchedIntent,
+          200
+        );
+
+      const matchedQuestion =
+        cleanText(
+          req.body
+            .matchedQuestion,
+          500
+        );
+
+      const matchScore =
+        typeof req.body
+          .matchScore ===
+        "number"
+          ? req.body
+              .matchScore
+          : null;
+
+      const transcript =
+        cleanTranscript(
+          req.body
+            .transcript
+        );
 
       const requestedLiveAgent =
-        req.body.requestedLiveAgent === true ||
-        req.body.requestedLiveAgent === "true";
+        req.body
+          .requestedLiveAgent ===
+          true ||
+        req.body
+          .requestedLiveAgent ===
+          "true";
 
       const currentSupportStatus =
         getCustomerServiceStatus();
@@ -391,24 +613,31 @@ app.post(
         !phone ||
         !message
       ) {
-        return res.status(400).json({
-          success: false,
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
 
-          error:
-            "Name, email, phone, and message are required."
-        });
+            error:
+              "Name, email, phone, and message are required."
+          });
       }
 
-      const emailPattern =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (
+        !isValidEmail(
+          email
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
 
-      if (!emailPattern.test(email)) {
-        return res.status(400).json({
-          success: false,
-
-          error:
-            "Please enter a valid email address."
-        });
+            error:
+              "Please enter a valid email address."
+          });
       }
 
       const requiredEnvironmentVariables = [
@@ -422,25 +651,35 @@ app.post(
 
       const missingEnvironmentVariables =
         requiredEnvironmentVariables.filter(
-          function (variableName) {
-            return !process.env[variableName];
+          function (
+            variableName
+          ) {
+            return !process.env[
+              variableName
+            ];
           }
         );
 
       if (
-        missingEnvironmentVariables.length > 0
+        missingEnvironmentVariables
+          .length > 0
       ) {
         console.error(
           "Missing email environment variables:",
-          missingEnvironmentVariables.join(", ")
+          missingEnvironmentVariables.join(
+            ", "
+          )
         );
 
-        return res.status(500).json({
-          success: false,
+        return res
+          .status(500)
+          .json({
+            success:
+              false,
 
-          error:
-            "Email delivery is not fully configured."
-        });
+            error:
+              "Email delivery is not fully configured."
+          });
       }
 
       /*
@@ -448,23 +687,27 @@ app.post(
       | Temporary SMTP Transport
       |--------------------------------------------------------------------------
       |
-      | This remains temporary until NetStandard completes
-      | the Microsoft Graph configuration.
+      | This will be replaced by Microsoft Graph when NetStandard
+      | completes the required permissions.
       |
       */
 
       const transporter =
         nodemailer.createTransport({
           host:
-            process.env.SMTP_HOST,
+            process.env
+              .SMTP_HOST,
 
           port:
             Number(
-              process.env.SMTP_PORT || 587
+              process.env
+                .SMTP_PORT ||
+              587
             ),
 
           secure:
-            process.env.SMTP_SECURE ===
+            process.env
+              .SMTP_SECURE ===
             "true",
 
           requireTLS:
@@ -481,10 +724,12 @@ app.post(
 
           auth: {
             user:
-              process.env.SMTP_USER,
+              process.env
+                .SMTP_USER,
 
             pass:
-              process.env.SMTP_PASS
+              process.env
+                .SMTP_PASS
           },
 
           tls: {
@@ -493,8 +738,20 @@ app.post(
           }
         });
 
+      const formattedTranscript =
+        formatTranscript(
+          transcript
+        );
+
       const emailBody = [
         "New G-Floor chat message",
+
+        "",
+
+        `Conversation ID: ${
+          conversationId ||
+          "Not provided"
+        }`,
 
         "",
 
@@ -504,17 +761,38 @@ app.post(
 
         "",
 
-        "Message:",
+        "Customer message:",
         message,
 
         "",
 
         `Page title: ${
-          pageTitle || "Not provided"
+          pageTitle ||
+          "Not provided"
         }`,
 
         `Page URL: ${
-          pageUrl || "Not provided"
+          pageUrl ||
+          "Not provided"
+        }`,
+
+        "",
+
+        `Matched intent ID: ${
+          matchedIntent ||
+          "None"
+        }`,
+
+        `Matched question: ${
+          matchedQuestion ||
+          "None"
+        }`,
+
+        `Match score: ${
+          matchScore !==
+          null
+            ? matchScore
+            : "None"
         }`,
 
         "",
@@ -525,68 +803,98 @@ app.post(
             : "No"
         }`,
 
-        "",
-
         `Live agent available at submission: ${
-          currentSupportStatus.liveAgentAvailable
+          currentSupportStatus
+            .liveAgentAvailable
             ? "Yes"
             : "No"
         }`,
 
         `Queue status: ${
-          currentSupportStatus.queueStatus
+          currentSupportStatus
+            .queueStatus
         }`,
 
         `Estimated wait time: ${
-          currentSupportStatus.estimatedWaitMinutes
-            ? currentSupportStatus.estimatedWaitMinutes +
+          currentSupportStatus
+            .estimatedWaitMinutes
+            ? currentSupportStatus
+                .estimatedWaitMinutes +
               " minutes"
             : "Not available"
         }`,
 
         `Business hours: ${
-          currentSupportStatus.businessHours
-        }`
-      ].join("\n");
+          currentSupportStatus
+            .businessHours
+        }`,
+
+        "",
+
+        "Conversation Transcript",
+        "-----------------------",
+        formattedTranscript
+      ].join(
+        "\n"
+      );
 
       const emailResult =
-        await transporter.sendMail({
-          from:
-            process.env.SMTP_FROM,
+        await transporter
+          .sendMail({
+            from:
+              process.env
+                .SMTP_FROM,
 
-          to:
-            process.env.CUSTOMER_SERVICE_EMAIL,
+            to:
+              process.env
+                .CUSTOMER_SERVICE_EMAIL,
 
-          replyTo:
-            email,
+            replyTo:
+              email,
 
-          subject:
-            `New G-Floor Chat Message from ${name}`,
+            subject:
+              `[${conversationId || "G-Floor Chat"}] New G-Floor Chat Message from ${name}`,
 
-          text:
-            emailBody
-        });
+            text:
+              emailBody
+          });
 
       console.log(
         "Chat email sent successfully:",
-        emailResult.messageId
+        {
+          conversationId:
+            conversationId,
+
+          messageId:
+            emailResult
+              .messageId
+        }
       );
 
-      return res.status(200).json({
-        success: true,
+      return res
+        .status(200)
+        .json({
+          success:
+            true,
 
-        message:
-          "Your message was sent successfully.",
+          conversationId:
+            conversationId,
 
-        liveAgentAvailable:
-          currentSupportStatus.liveAgentAvailable,
+          message:
+            "Your message was sent successfully.",
 
-        queueStatus:
-          currentSupportStatus.queueStatus,
+          liveAgentAvailable:
+            currentSupportStatus
+              .liveAgentAvailable,
 
-        estimatedWaitMinutes:
-          currentSupportStatus.estimatedWaitMinutes
-      });
+          queueStatus:
+            currentSupportStatus
+              .queueStatus,
+
+          estimatedWaitMinutes:
+            currentSupportStatus
+              .estimatedWaitMinutes
+        });
     } catch (error) {
       console.error(
         "Chat message error:",
@@ -611,12 +919,15 @@ app.post(
         }
       );
 
-      return res.status(500).json({
-        success: false,
+      return res
+        .status(500)
+        .json({
+          success:
+            false,
 
-        error:
-          "Message could not be sent. Please contact Customer Service directly."
-      });
+          error:
+            "Message could not be sent. Please contact Customer Service directly."
+        });
     }
   }
 );
