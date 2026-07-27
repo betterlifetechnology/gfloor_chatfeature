@@ -983,7 +983,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Current Conversation State
+  | Conversation State
   |--------------------------------------------------------------------------
   */
 
@@ -1073,6 +1073,45 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Specific Intent Phrase Groups
+  |--------------------------------------------------------------------------
+  */
+
+  const GLUE_REMOVAL_PHRASES = [
+    "get glue off",
+    "remove glue",
+    "removing glue",
+    "clean glue",
+    "clean off glue",
+    "glue residue",
+    "adhesive residue",
+    "remove adhesive",
+    "get adhesive off",
+    "adhesive off",
+    "glue stain"
+  ];
+
+  const GLUE_INSTALLATION_PHRASES = [
+    "glue down",
+    "glue it down",
+    "have to glue",
+    "need to glue",
+    "need glue",
+    "require glue",
+    "requires glue",
+    "need adhesive",
+    "require adhesive",
+    "requires adhesive",
+    "use adhesive",
+    "install with adhesive",
+    "fully adhere",
+    "floating install",
+    "floating installation",
+    "loose lay"
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
   | Intent Detection
   |--------------------------------------------------------------------------
   */
@@ -1080,17 +1119,56 @@
   function detectQuestionIntent(
     question
   ) {
+    /*
+     * Removal intent MUST be checked before generic "glue".
+     */
+
+    if (
+      hasAnyPhrase(
+        question,
+        GLUE_REMOVAL_PHRASES
+      )
+    ) {
+      return "cleaning";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        GLUE_INSTALLATION_PHRASES
+      )
+    ) {
+      return "installation";
+    }
+
     const normalized =
       normalizeText(question);
 
     const intentRules = [
       {
-        intent:
-          "installation",
+        intent: "cleaning",
 
         phrases: [
-          "glue down",
-          "glue",
+          "clean",
+          "cleaning",
+          "wash",
+          "washing",
+          "stain",
+          "stains",
+          "tar",
+          "scrub",
+          "cleaner",
+          "bleach",
+          "chalk",
+          "yellowing",
+          "remove stain"
+        ]
+      },
+
+      {
+        intent: "installation",
+
+        phrases: [
           "adhesive",
           "install",
           "installation",
@@ -1099,7 +1177,6 @@
           "seam",
           "seams",
           "seam tape",
-          "tape",
           "floating floor",
           "floating flooring",
           "threshold",
@@ -1110,31 +1187,7 @@
       },
 
       {
-        intent:
-          "cleaning",
-
-        phrases: [
-          "clean",
-          "cleaning",
-          "wash",
-          "washing",
-          "stain",
-          "stains",
-          "remove stain",
-          "tar",
-          "scrub",
-          "cleaner",
-          "bleach",
-          "remove glue",
-          "get glue off",
-          "chalk",
-          "yellowing"
-        ]
-      },
-
-      {
-        intent:
-          "shipping",
+        intent: "shipping",
 
         phrases: [
           "shipping",
@@ -1149,8 +1202,7 @@
       },
 
       {
-        intent:
-          "ordering",
+        intent: "ordering",
 
         phrases: [
           "order",
@@ -1166,8 +1218,7 @@
       },
 
       {
-        intent:
-          "warranty",
+        intent: "warranty",
 
         phrases: [
           "warranty",
@@ -1181,8 +1232,7 @@
       },
 
       {
-        intent:
-          "pet",
+        intent: "pet",
 
         phrases: [
           "dog",
@@ -1200,8 +1250,7 @@
       },
 
       {
-        intent:
-          "marine",
+        intent: "marine",
 
         phrases: [
           "boat",
@@ -1216,8 +1265,7 @@
       },
 
       {
-        intent:
-          "shed",
+        intent: "shed",
 
         phrases: [
           "shed",
@@ -1226,8 +1274,7 @@
       },
 
       {
-        intent:
-          "garage",
+        intent: "garage",
 
         phrases: [
           "garage",
@@ -1237,8 +1284,7 @@
       },
 
       {
-        intent:
-          "sport",
+        intent: "sport",
 
         phrases: [
           "gym",
@@ -1583,13 +1629,11 @@
         ) {
           if (
             Array.isArray(
-              window
-                .GFloorKnowledgeBase
+              window.GFloorKnowledgeBase
             )
           ) {
             knowledgeBase =
-              window
-                .GFloorKnowledgeBase;
+              window.GFloorKnowledgeBase;
 
             knowledgeBaseLoaded =
               true;
@@ -1624,13 +1668,11 @@
             function () {
               if (
                 Array.isArray(
-                  window
-                    .GFloorKnowledgeBase
+                  window.GFloorKnowledgeBase
                 )
               ) {
                 knowledgeBase =
-                  window
-                    .GFloorKnowledgeBase;
+                  window.GFloorKnowledgeBase;
 
                 knowledgeBaseLoaded =
                   true;
@@ -1719,6 +1761,18 @@
         customerQuestion
       );
 
+    const isGlueRemovalQuestion =
+      hasAnyPhrase(
+        customerQuestion,
+        GLUE_REMOVAL_PHRASES
+      );
+
+    const isGlueInstallationQuestion =
+      hasAnyPhrase(
+        customerQuestion,
+        GLUE_INSTALLATION_PHRASES
+      );
+
     let bestResult =
       null;
 
@@ -1786,7 +1840,7 @@
           );
 
         /*
-         * Intent is one of the most important signals.
+         * Standard intent matching.
          */
 
         if (
@@ -1808,74 +1862,101 @@
         }
 
         /*
-         * Installation-specific signals.
+         * Explicit disambiguation:
          *
-         * This prevents "glue down" from matching
-         * cleaning answers about removing glue.
+         * "Do I have to glue G-Floor down?"
+         * should strongly favor kb-013.
          */
 
         if (
-          detectedIntent ===
-          "installation"
+          isGlueInstallationQuestion
         ) {
           if (
-            hasAnyPhrase(
-              customerQuestion,
-              [
-                "glue down",
-                "adhesive",
-                "install",
-                "installation",
-                "lay flooring",
-                "floating"
-              ]
-            ) &&
-            entryIntent ===
-            "installation"
+            entry.id ===
+            "kb-013-installation-adhesive-tape-and-seams"
           ) {
             entryBestScore +=
-              0.22;
+              0.5;
           }
 
           if (
-            entryIntent ===
-            "cleaning"
+            entry.id ===
+            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
           ) {
             entryBestScore -=
-              0.2;
+              0.5;
           }
         }
 
         /*
-         * Cleaning-specific removal signals.
+         * "How do I get glue off G-Floor?"
+         * should strongly favor kb-019.
          */
 
         if (
-          detectedIntent ===
-          "cleaning"
+          isGlueRemovalQuestion
         ) {
           if (
-            hasAnyPhrase(
-              customerQuestion,
-              [
-                "remove glue",
-                "get glue off",
-                "remove tar",
-                "stain",
-                "clean",
-                "wash"
-              ]
-            ) &&
-            entryIntent ===
-            "cleaning"
+            entry.id ===
+            "kb-019-how-to-remove-stains-or-tar-from-vinyl"
           ) {
             entryBestScore +=
-              0.18;
+              0.55;
+          }
+
+          if (
+            entry.id ===
+            "kb-013-installation-adhesive-tape-and-seams" ||
+            entry.id ===
+            "kb-039-glue-vinyl-to-wood"
+          ) {
+            entryBestScore -=
+              0.55;
           }
         }
 
         /*
-         * Reward important non-generic shared words.
+         * Prevent generic installation "glue"
+         * matches from beating explicit removal.
+         */
+
+        if (
+          isGlueRemovalQuestion &&
+          entryIntent ===
+          "installation"
+        ) {
+          entryBestScore -=
+            0.35;
+        }
+
+        /*
+         * Reward relevant cleaning entries.
+         */
+
+        if (
+          isGlueRemovalQuestion &&
+          entryIntent ===
+          "cleaning"
+        ) {
+          entryBestScore +=
+            0.25;
+        }
+
+        /*
+         * Reward relevant installation entries.
+         */
+
+        if (
+          isGlueInstallationQuestion &&
+          entryIntent ===
+          "installation"
+        ) {
+          entryBestScore +=
+            0.25;
+        }
+
+        /*
+         * Important non-generic shared words.
          */
 
         const customerWords =
@@ -2079,8 +2160,7 @@
           true,
 
         estimatedWaitMinutes:
-          data
-            .estimatedWaitMinutes,
+          data.estimatedWaitMinutes,
 
         businessHours:
           data.businessHours,
@@ -2165,8 +2245,7 @@
         <div class="gfloor-wait-time">
           Estimated wait time: approximately
           ${escapeHtml(
-            status
-              .estimatedWaitMinutes ||
+            status.estimatedWaitMinutes ||
               "2-5"
           )} minutes.
         </div>
@@ -2440,8 +2519,7 @@
 
     const confidenceHtml =
       score <
-      MATCH_CONFIG
-        .strongMatchScore
+      MATCH_CONFIG.strongMatchScore
         ? `
           <div class="gfloor-match-note">
             I found a related answer, but your question may need additional review.
@@ -2505,7 +2583,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Process Customer Question
+  | Process Question
   |--------------------------------------------------------------------------
   */
 
@@ -2584,6 +2662,11 @@
               ? match.entry.question
               : null,
 
+          matchedId:
+            match
+              ? match.entry.id
+              : null,
+
           category:
             match
               ? match.entry.category
@@ -2604,6 +2687,11 @@
           matchedIntent:
             match
               ? match.entryIntent
+              : null,
+
+          bestPhrase:
+            match
+              ? match.bestPhrase
               : null
         }
       );
@@ -2637,7 +2725,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Chat Open / Close
+  | Chat Controls
   |--------------------------------------------------------------------------
   */
 
@@ -2688,8 +2776,7 @@
 
             chatBody.scrollTo({
               top:
-                questionInput
-                  .offsetTop -
+                questionInput.offsetTop -
                 20,
 
               behavior:
@@ -2749,7 +2836,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Helpful / Escalation Buttons
+  | Helpful Buttons
   |--------------------------------------------------------------------------
   */
 
@@ -2914,8 +3001,7 @@
 
         matchedQuestion:
           lastMatchedIntent
-            ? lastMatchedIntent
-                .question
+            ? lastMatchedIntent.question
             : null,
 
         matchScore:
