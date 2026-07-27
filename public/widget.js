@@ -81,7 +81,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Intent Phrases
+  | Product / Support Intent Phrases
   |--------------------------------------------------------------------------
   */
 
@@ -227,6 +227,35 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Conversational Follow-Up Phrases
+  |--------------------------------------------------------------------------
+  */
+
+  const GENERIC_FOLLOW_UP_PHRASES = [
+    "what about now",
+    "how about now",
+    "and now",
+    "now",
+    "what about this one",
+    "how about this one",
+    "what about this",
+    "how about this",
+    "this one",
+    "what about it",
+    "how about it",
+    "what about that",
+    "how about that"
+  ];
+
+  const CURRENT_SELECTION_FOLLOW_UP_PHRASES = [
+    "which one am i looking at",
+    "which one is selected",
+    "what one am i looking at",
+    "what one is selected"
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
   | Knowledge Base State
   |--------------------------------------------------------------------------
   */
@@ -248,7 +277,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Real-Time Selection State
+  | Real-Time Product Selection State
   |--------------------------------------------------------------------------
   */
 
@@ -267,6 +296,32 @@
   let variantSyncTimer = null;
   let variantSyncInterval = null;
   let variantObserver = null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 13: Conversation Memory
+  |--------------------------------------------------------------------------
+  */
+
+  const conversationMemory = {
+    lastOriginalQuestion: "",
+    lastResolvedQuestion: "",
+    lastIntent: null,
+    lastFactType: null,
+    lastKnowledgeEntryId: null,
+    lastAnswer: "",
+    lastCategory: "",
+    lastProductTitle: "",
+    lastProductHandle: "",
+    lastVariantId: "",
+    lastColor: "",
+    lastSize: "",
+    lastSku: "",
+    lastPrice: null,
+    lastAvailable: null,
+    lastExactVariantMatch: null,
+    lastQuestionTimestamp: null
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -424,6 +479,23 @@
     return phrases.some(
       function (phrase) {
         return normalized.includes(
+          normalizeText(phrase)
+        );
+      }
+    );
+  }
+
+  function matchesEntirePhrase(
+    text,
+    phrases
+  ) {
+    const normalized =
+      normalizeText(text);
+
+    return phrases.some(
+      function (phrase) {
+        return (
+          normalized ===
           normalizeText(phrase)
         );
       }
@@ -696,7 +768,8 @@
 
           title:
             (
-              links[i].textContent ||
+              links[i]
+                .textContent ||
               ""
             ).trim()
         };
@@ -713,19 +786,22 @@
     pageType
   ) {
     if (
-      pageType === "home"
+      pageType ===
+      "home"
     ) {
       return "G-Floor Homepage";
     }
 
     if (
-      pageType === "cart"
+      pageType ===
+      "cart"
     ) {
       return "Shopping Cart";
     }
 
     if (
-      pageType === "search"
+      pageType ===
+      "search"
     ) {
       return "G-Floor Search Results";
     }
@@ -943,7 +1019,8 @@
     );
 
     if (
-      optionIndex === -1
+      optionIndex ===
+      -1
     ) {
       return "";
     }
@@ -994,17 +1071,6 @@
   |--------------------------------------------------------------------------
   | Visible Storefront Option Detection
   |--------------------------------------------------------------------------
-  |
-  | This is critical.
-  |
-  | Shopify can keep the last valid variant ID in the URL while the shopper
-  | has clicked an unavailable color/size combination.
-  |
-  | Therefore:
-  |
-  | Visible Color / Size != Always the same thing as current variant ID.
-  |
-  |--------------------------------------------------------------------------
   */
 
   function getDisplayedOptionValue(
@@ -1018,10 +1084,6 @@
     if (!requested) {
       return "";
     }
-
-    /*
-     * First try checked radio controls.
-     */
 
     const checkedInputs =
       Array.from(
@@ -1095,10 +1157,6 @@
       }
     }
 
-    /*
-     * Try selects.
-     */
-
     const selects =
       Array.from(
         document.querySelectorAll(
@@ -1143,15 +1201,6 @@
         }
       }
     }
-
-    /*
-     * Wonder/theme fallback:
-     *
-     * Look for visible storefront text such as:
-     *
-     * Color: Sandstone
-     * Size: 8'6" x 24'
-     */
 
     const candidates =
       Array.from(
@@ -1207,10 +1256,6 @@
             " "
           )
           .trim();
-
-      /*
-       * Avoid matching giant container elements.
-       */
 
       if (
         !text ||
@@ -1351,10 +1396,6 @@
       return "";
     }
 
-    /*
-     * URL
-     */
-
     const urlVariantId =
       getUrlVariantId();
 
@@ -1369,10 +1410,6 @@
         urlVariantId
       );
     }
-
-    /*
-     * Add-to-cart hidden variant inputs.
-     */
 
     const variantInputs =
       Array.from(
@@ -1455,21 +1492,12 @@
         "Size"
       );
 
-    /*
-     * Try exact visible color/size combination first.
-     */
-
     let matchedVariant =
       findVariantBySelectedOptions(
         product,
         color,
         size
       );
-
-    /*
-     * If storefront option extraction was not available,
-     * fall back to the active Shopify variant ID.
-     */
 
     if (
       !matchedVariant
@@ -1484,13 +1512,6 @@
           product,
           fallbackVariantId
         );
-
-      /*
-       * Only use fallback option values when the page didn't
-       * provide a visible selection.
-       *
-       * Do NOT overwrite visible unavailable selections.
-       */
 
       if (
         fallbackVariant
@@ -1742,6 +1763,489 @@
 
   /*
   |--------------------------------------------------------------------------
+  | STEP 13: Memory Helpers
+  |--------------------------------------------------------------------------
+  */
+
+  function updateConversationMemory(
+    data
+  ) {
+    conversationMemory.lastOriginalQuestion =
+      data.originalQuestion ||
+      conversationMemory.lastOriginalQuestion;
+
+    conversationMemory.lastResolvedQuestion =
+      data.resolvedQuestion ||
+      conversationMemory.lastResolvedQuestion;
+
+    conversationMemory.lastIntent =
+      typeof data.intent !==
+      "undefined"
+        ? data.intent
+        : conversationMemory.lastIntent;
+
+    conversationMemory.lastFactType =
+      typeof data.factType !==
+      "undefined"
+        ? data.factType
+        : conversationMemory.lastFactType;
+
+    conversationMemory.lastKnowledgeEntryId =
+      typeof data.knowledgeEntryId !==
+      "undefined"
+        ? data.knowledgeEntryId
+        : conversationMemory.lastKnowledgeEntryId;
+
+    conversationMemory.lastAnswer =
+      typeof data.answer !==
+      "undefined"
+        ? data.answer
+        : conversationMemory.lastAnswer;
+
+    conversationMemory.lastCategory =
+      typeof data.category !==
+      "undefined"
+        ? data.category
+        : conversationMemory.lastCategory;
+
+    conversationMemory.lastProductTitle =
+      pageContext.productTitle ||
+      conversationMemory.lastProductTitle;
+
+    conversationMemory.lastProductHandle =
+      pageContext.productHandle ||
+      conversationMemory.lastProductHandle;
+
+    conversationMemory.lastVariantId =
+      pageContext.variantId ||
+      "";
+
+    conversationMemory.lastColor =
+      pageContext.selectedColor ||
+      "";
+
+    conversationMemory.lastSize =
+      pageContext.selectedSize ||
+      "";
+
+    conversationMemory.lastSku =
+      pageContext.sku ||
+      "";
+
+    conversationMemory.lastPrice =
+      typeof pageContext.price !==
+      "undefined"
+        ? pageContext.price
+        : null;
+
+    conversationMemory.lastAvailable =
+      typeof pageContext.available !==
+      "undefined"
+        ? pageContext.available
+        : null;
+
+    conversationMemory.lastExactVariantMatch =
+      typeof pageContext.exactVariantMatch !==
+      "undefined"
+        ? pageContext.exactVariantMatch
+        : null;
+
+    conversationMemory.lastQuestionTimestamp =
+      new Date()
+        .toISOString();
+  }
+
+  function determineFactType(
+    question
+  ) {
+    if (
+      hasAnyPhrase(
+        question,
+        SKU_PHRASES
+      )
+    ) {
+      return "sku";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        CURRENT_SIZE_PHRASES
+      )
+    ) {
+      return "current-size";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        ALL_SIZE_PHRASES
+      )
+    ) {
+      return "all-sizes";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        CURRENT_COLOR_PHRASES
+      )
+    ) {
+      return "current-color";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        ALL_COLOR_PHRASES
+      )
+    ) {
+      return "all-colors";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        VARIANT_PHRASES
+      )
+    ) {
+      return "variant";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        STOCK_PHRASES
+      )
+    ) {
+      return "availability";
+    }
+
+    if (
+      hasAnyPhrase(
+        question,
+        PRICE_PHRASES
+      )
+    ) {
+      return "price";
+    }
+
+    return null;
+  }
+
+  function factTypeToQuestion(
+    factType
+  ) {
+    const questions = {
+      sku:
+        "What's the SKU?",
+
+      "current-size":
+        "What size am I looking at?",
+
+      "all-sizes":
+        "What sizes does this come in?",
+
+      "current-color":
+        "What color am I looking at?",
+
+      "all-colors":
+        "What colors are available?",
+
+      variant:
+        "What variant am I looking at?",
+
+      availability:
+        "Is this in stock?",
+
+      price:
+        "How much is this?"
+    };
+
+    return (
+      questions[
+        factType
+      ] ||
+      ""
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | STEP 13: Follow-Up Resolver
+  |--------------------------------------------------------------------------
+  */
+
+  function resolveFollowUpQuestion(
+    question
+  ) {
+    const cleanQuestion =
+      String(
+        question || ""
+      ).trim();
+
+    const normalized =
+      normalizeText(
+        cleanQuestion
+      );
+
+    if (
+      !cleanQuestion
+    ) {
+      return cleanQuestion;
+    }
+
+    /*
+     * "What about outside?"
+     */
+
+    if (
+      normalized ===
+        "what about outside" ||
+      normalized ===
+        "how about outside" ||
+      normalized ===
+        "what about outdoors" ||
+      normalized ===
+        "how about outdoors"
+    ) {
+      return (
+        "Can I use this outside?"
+      );
+    }
+
+    /*
+     * "What about waterproof?"
+     */
+
+    if (
+      normalized ===
+        "what about waterproof" ||
+      normalized ===
+        "how about waterproof" ||
+      normalized ===
+        "what about water" ||
+      normalized ===
+        "how about water"
+    ) {
+      return (
+        "Is this waterproof?"
+      );
+    }
+
+    /*
+     * "What about cleaning?"
+     */
+
+    if (
+      normalized ===
+        "what about cleaning" ||
+      normalized ===
+        "how about cleaning" ||
+      normalized ===
+        "how do i clean it"
+    ) {
+      return (
+        "How do I clean this?"
+      );
+    }
+
+    /*
+     * "What about glue?"
+     */
+
+    if (
+      normalized ===
+        "what about glue" ||
+      normalized ===
+        "how about glue" ||
+      normalized ===
+        "what about adhesive" ||
+      normalized ===
+        "how about adhesive"
+    ) {
+      return (
+        "Do I have to glue this down?"
+      );
+    }
+
+    /*
+     * "Which one am I looking at?"
+     *
+     * Use the last subject.
+     */
+
+    if (
+      matchesEntirePhrase(
+        cleanQuestion,
+        CURRENT_SELECTION_FOLLOW_UP_PHRASES
+      )
+    ) {
+      if (
+        conversationMemory
+          .lastFactType ===
+        "all-sizes"
+      ) {
+        return (
+          "What size am I looking at?"
+        );
+      }
+
+      if (
+        conversationMemory
+          .lastFactType ===
+        "all-colors"
+      ) {
+        return (
+          "What color am I looking at?"
+        );
+      }
+
+      return (
+        "What variant am I looking at?"
+      );
+    }
+
+    /*
+     * Generic:
+     *
+     * "What about now?"
+     * "And now?"
+     * "What about this one?"
+     *
+     * Repeat the previous factual question against
+     * the CURRENT Shopify state.
+     */
+
+    if (
+      matchesEntirePhrase(
+        cleanQuestion,
+        GENERIC_FOLLOW_UP_PHRASES
+      )
+    ) {
+      if (
+        conversationMemory
+          .lastFactType
+      ) {
+        const resolved =
+          factTypeToQuestion(
+            conversationMemory
+              .lastFactType
+          );
+
+        if (
+          resolved
+        ) {
+          return resolved;
+        }
+      }
+
+      /*
+       * If the previous question was a knowledge
+       * question, reuse it against current product context.
+       */
+
+      if (
+        conversationMemory
+          .lastResolvedQuestion
+      ) {
+        return (
+          conversationMemory
+            .lastResolvedQuestion
+        );
+      }
+    }
+
+    /*
+     * "What about the price?"
+     */
+
+    if (
+      normalized.includes(
+        "what about the price"
+      ) ||
+      normalized.includes(
+        "how about the price"
+      )
+    ) {
+      return (
+        "How much is this?"
+      );
+    }
+
+    /*
+     * "What about the sku?"
+     */
+
+    if (
+      normalized.includes(
+        "what about the sku"
+      ) ||
+      normalized.includes(
+        "how about the sku"
+      )
+    ) {
+      return (
+        "What's the SKU?"
+      );
+    }
+
+    /*
+     * "What about the size?"
+     */
+
+    if (
+      normalized.includes(
+        "what about the size"
+      ) ||
+      normalized.includes(
+        "how about the size"
+      )
+    ) {
+      return (
+        "What size am I looking at?"
+      );
+    }
+
+    /*
+     * "What about the color?"
+     */
+
+    if (
+      normalized.includes(
+        "what about the color"
+      ) ||
+      normalized.includes(
+        "how about the color"
+      )
+    ) {
+      return (
+        "What color am I looking at?"
+      );
+    }
+
+    /*
+     * "Is this one available?"
+     */
+
+    if (
+      normalized ===
+        "is this one available" ||
+      normalized ===
+        "is this one in stock" ||
+      normalized ===
+        "what about availability"
+    ) {
+      return (
+        "Is this in stock?"
+      );
+    }
+
+    return cleanQuestion;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Real-Time Selection Synchronization
   |--------------------------------------------------------------------------
   */
@@ -1763,17 +2267,16 @@
       return;
     }
 
-    const previousSelection =
-      {
-        color:
-          currentSelection.color,
+    const previousSelection = {
+      color:
+        currentSelection.color,
 
-        size:
-          currentSelection.size,
+      size:
+        currentSelection.size,
 
-        variantId:
-          currentVariantId
-      };
+      variantId:
+        currentVariantId
+    };
 
     const newSelection =
       getCurrentSelection(
@@ -1995,14 +2498,7 @@
 
     document.addEventListener(
       "change",
-      function (event) {
-        const target =
-          event.target;
-
-        if (!target) {
-          return;
-        }
-
+      function () {
         queueVariantSync(
           "change"
         );
@@ -2012,14 +2508,7 @@
 
     document.addEventListener(
       "input",
-      function (event) {
-        const target =
-          event.target;
-
-        if (!target) {
-          return;
-        }
-
+      function () {
         queueVariantSync(
           "input"
         );
@@ -2242,9 +2731,6 @@
 
     /*
      * Current Size
-     *
-     * Important:
-     * Visible selection wins even when the combination is unavailable.
      */
 
     if (
@@ -2259,6 +2745,9 @@
         return {
           type:
             "shopify-fact",
+
+          factType:
+            "current-size",
 
           category:
             "Product Details",
@@ -2295,6 +2784,9 @@
         return {
           type:
             "shopify-fact",
+
+          factType:
+            "current-color",
 
           category:
             "Product Details",
@@ -2333,6 +2825,9 @@
           type:
             "shopify-fact",
 
+          factType:
+            "sku",
+
           category:
             "Product Details",
 
@@ -2349,6 +2844,9 @@
       return {
         type:
           "shopify-fact",
+
+        factType:
+          "sku",
 
         category:
           "Product Details",
@@ -2383,6 +2881,9 @@
         return {
           type:
             "shopify-fact",
+
+          factType:
+            "all-sizes",
 
           category:
             "Product Details",
@@ -2423,6 +2924,9 @@
           type:
             "shopify-fact",
 
+          factType:
+            "all-colors",
+
           category:
             "Product Details",
 
@@ -2462,6 +2966,9 @@
           type:
             "shopify-fact",
 
+          factType:
+            "variant",
+
           category:
             "Product Details",
 
@@ -2499,6 +3006,9 @@
           type:
             "shopify-fact",
 
+          factType:
+            "availability",
+
           category:
             "Availability",
 
@@ -2513,6 +3023,9 @@
       return {
         type:
           "shopify-fact",
+
+        factType:
+          "availability",
 
         category:
           "Availability",
@@ -2545,6 +3058,9 @@
           type:
             "shopify-fact",
 
+          factType:
+            "price",
+
           category:
             "Product Details",
 
@@ -2573,6 +3089,9 @@
           return {
             type:
               "shopify-fact",
+
+            factType:
+              "price",
 
             category:
               "Product Details",
@@ -2909,7 +3428,10 @@
             0.98,
 
           contextUsed:
-            true
+            true,
+
+          intent:
+            "waterproof"
         };
       }
     }
@@ -2946,7 +3468,10 @@
               0.99,
 
             contextUsed:
-              true
+              true,
+
+            intent:
+              "outdoor"
           };
         }
       }
@@ -2976,7 +3501,10 @@
           1,
 
         contextUsed:
-          true
+          true,
+
+        intent:
+          "outdoor"
       };
     }
 
@@ -3007,7 +3535,10 @@
             0.99,
 
           contextUsed:
-            true
+            true,
+
+          intent:
+            "installation"
         };
       }
     }
@@ -3039,7 +3570,10 @@
             0.96,
 
           contextUsed:
-            true
+            true,
+
+          intent:
+            "cleaning"
         };
       }
     }
@@ -3049,7 +3583,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Fuzzy Knowledge Base Matching
+  | Fuzzy KB Matching
   |--------------------------------------------------------------------------
   */
 
@@ -3234,7 +3768,10 @@
               score,
 
             contextUsed:
-              false
+              false,
+
+            intent:
+              detectedIntent
           };
         }
       }
@@ -3786,11 +4323,17 @@
 
   panel.innerHTML = `
     <div class="gfloor-chat-header">
+
       <div class="gfloor-chat-title-wrap">
-        <strong>Chat with G-Floor</strong>
+
+        <strong>
+          Chat with G-Floor
+        </strong>
+
         <span class="gfloor-conversation-id">
           ${conversationId}
         </span>
+
       </div>
 
       <button
@@ -3800,6 +4343,7 @@
       >
         &times;
       </button>
+
     </div>
 
     <div class="gfloor-chat-body">
@@ -3811,16 +4355,39 @@
         </p>
 
         <div class="gfloor-topic-list">
-          <button class="gfloor-topic-button" type="button" data-topic="flooring">Find the Right Flooring</button>
-          <button class="gfloor-topic-button" type="button" data-topic="installation">Installation Questions</button>
-          <button class="gfloor-topic-button" type="button" data-topic="shipping">Shipping & Delivery</button>
-          <button class="gfloor-topic-button" type="button" data-topic="order">Order Help</button>
-          <button class="gfloor-topic-button" type="button" data-topic="cleaning">Cleaning & Maintenance</button>
-          <button class="gfloor-topic-button" type="button" data-topic="warranty">Warranty & Returns</button>
-          <button class="gfloor-topic-button" type="button" data-topic="other">Something Else</button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="flooring">
+            Find the Right Flooring
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="installation">
+            Installation Questions
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="shipping">
+            Shipping & Delivery
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="order">
+            Order Help
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="cleaning">
+            Cleaning & Maintenance
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="warranty">
+            Warranty & Returns
+          </button>
+
+          <button class="gfloor-topic-button" type="button" data-topic="other">
+            Something Else
+          </button>
+
         </div>
 
         <div class="gfloor-question-row">
+
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -3829,6 +4396,7 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
+
         </div>
 
         <button
@@ -3851,6 +4419,7 @@
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
+
           <button
             id="gfloor-helpful-yes"
             class="gfloor-small-button"
@@ -3866,6 +4435,7 @@
           >
             No
           </button>
+
         </div>
 
         <div class="gfloor-divider">
@@ -3886,6 +4456,7 @@
         id="gfloor-human-view"
         hidden
       >
+
         <button
           id="gfloor-human-back-button"
           class="gfloor-back"
@@ -3910,6 +4481,7 @@
           class="gfloor-human-actions"
           hidden
         >
+
           <button
             id="gfloor-connect-button"
             class="gfloor-primary-button"
@@ -3925,13 +4497,16 @@
           >
             No, keep using chat
           </button>
+
         </div>
+
       </div>
 
       <div
         id="gfloor-contact-view"
         hidden
       >
+
         <button
           id="gfloor-contact-back-button"
           class="gfloor-back"
@@ -3958,10 +4533,7 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-name">
-              Name
-            </label>
-
+            <label for="gfloor-chat-name">Name</label>
             <input
               id="gfloor-chat-name"
               name="name"
@@ -3972,10 +4544,7 @@
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-email">
-              Email
-            </label>
-
+            <label for="gfloor-chat-email">Email</label>
             <input
               id="gfloor-chat-email"
               name="email"
@@ -3986,10 +4555,7 @@
           </div>
 
           <div class="gfloor-chat-field">
-            <label for="gfloor-chat-phone">
-              Phone
-            </label>
-
+            <label for="gfloor-chat-phone">Phone</label>
             <input
               id="gfloor-chat-phone"
               name="phone"
@@ -4031,6 +4597,12 @@
 
     </div>
   `;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Launcher
+  |--------------------------------------------------------------------------
+  */
 
   const launcher =
     document.createElement(
@@ -4320,7 +4892,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Customer Service Product Context
+  | Contact Context
   |--------------------------------------------------------------------------
   */
 
@@ -4470,7 +5042,9 @@
   */
 
   function showShopifyFactResponse(
-    fact
+    fact,
+    originalQuestion,
+    resolvedQuestion
   ) {
     lastMatchedIntent =
       null;
@@ -4482,6 +5056,32 @@
       "G-Floor Support",
       fact.answer
     );
+
+    updateConversationMemory({
+      originalQuestion:
+        originalQuestion,
+
+      resolvedQuestion:
+        resolvedQuestion,
+
+      intent:
+        "shopify-fact",
+
+      factType:
+        fact.factType ||
+        determineFactType(
+          resolvedQuestion
+        ),
+
+      knowledgeEntryId:
+        null,
+
+      answer:
+        fact.answer,
+
+      category:
+        fact.category
+    });
 
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
@@ -4521,7 +5121,10 @@
     );
   }
 
-  function showNoMatchResponse() {
+  function showNoMatchResponse(
+    originalQuestion,
+    resolvedQuestion
+  ) {
     lastMatchedIntent =
       null;
 
@@ -4535,6 +5138,29 @@
       "G-Floor Support",
       answer
     );
+
+    updateConversationMemory({
+      originalQuestion:
+        originalQuestion,
+
+      resolvedQuestion:
+        resolvedQuestion,
+
+      intent:
+        null,
+
+      factType:
+        null,
+
+      knowledgeEntryId:
+        null,
+
+      answer:
+        answer,
+
+      category:
+        "Escalation"
+    });
 
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
@@ -4569,7 +5195,9 @@
   }
 
   function showKnowledgeResponse(
-    match
+    match,
+    originalQuestion,
+    resolvedQuestion
   ) {
     const entry =
       match.entry;
@@ -4584,6 +5212,33 @@
       "G-Floor Support",
       entry.answer
     );
+
+    updateConversationMemory({
+      originalQuestion:
+        originalQuestion,
+
+      resolvedQuestion:
+        resolvedQuestion,
+
+      intent:
+        match.intent ||
+        detectQuestionIntent(
+          resolvedQuestion
+        ),
+
+      factType:
+        null,
+
+      knowledgeEntryId:
+        entry.id ||
+        null,
+
+      answer:
+        entry.answer,
+
+      category:
+        entry.category
+    });
 
     const responseType =
       String(
@@ -4679,26 +5334,38 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Process Question
+  | STEP 13: Process Question With Memory
   |--------------------------------------------------------------------------
   */
 
   async function processQuestion(
     question
   ) {
-    const cleanQuestion =
+    const originalQuestion =
       String(
         question || ""
       ).trim();
 
     if (
-      !cleanQuestion
+      !originalQuestion
     ) {
       return;
     }
 
+    await syncVariantState(
+      "question-submit"
+    );
+
+    pageContext =
+      await captureShopifyContext();
+
+    const resolvedQuestion =
+      resolveFollowUpQuestion(
+        originalQuestion
+      );
+
     lastQuestion =
-      cleanQuestion;
+      originalQuestion;
 
     questionSubmit.disabled =
       true;
@@ -4708,17 +5375,51 @@
 
     addTranscriptEntry(
       "Customer",
-      cleanQuestion
+      originalQuestion
     );
 
-    try {
-      await syncVariantState(
-        "question-submit"
+    if (
+      normalizeText(
+        originalQuestion
+      ) !==
+      normalizeText(
+        resolvedQuestion
+      )
+    ) {
+      addTranscriptEntry(
+        "System",
+        "Interpreted follow-up question as: " +
+        resolvedQuestion
       );
+
+      console.log(
+        "G-Floor follow-up resolved:",
+        {
+          originalQuestion:
+            originalQuestion,
+
+          resolvedQuestion:
+            resolvedQuestion,
+
+          previousFactType:
+            conversationMemory
+              .lastFactType,
+
+          previousIntent:
+            conversationMemory
+              .lastIntent
+        }
+      );
+    }
+
+    try {
+      /*
+       * 1. Shopify factual answer.
+       */
 
       const shopifyFact =
         await resolveShopifyFactQuestion(
-          cleanQuestion
+          resolvedQuestion
         );
 
       if (
@@ -4728,11 +5429,17 @@
           await captureShopifyContext();
 
         showShopifyFactResponse(
-          shopifyFact
+          shopifyFact,
+          originalQuestion,
+          resolvedQuestion
         );
 
         return;
       }
+
+      /*
+       * 2. Approved support KB.
+       */
 
       await loadKnowledgeBase();
 
@@ -4741,17 +5448,22 @@
 
       const match =
         searchKnowledgeBase(
-          cleanQuestion
+          resolvedQuestion
         );
 
       if (
         match
       ) {
         showKnowledgeResponse(
-          match
+          match,
+          originalQuestion,
+          resolvedQuestion
         );
       } else {
-        showNoMatchResponse();
+        showNoMatchResponse(
+          originalQuestion,
+          resolvedQuestion
+        );
       }
     } catch (error) {
       console.error(
@@ -4759,7 +5471,10 @@
         error
       );
 
-      showNoMatchResponse();
+      showNoMatchResponse(
+        originalQuestion,
+        resolvedQuestion
+      );
     } finally {
       questionSubmit.disabled =
         false;
@@ -4954,7 +5669,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Customer Service Submission
+  | Customer Service Form
   |--------------------------------------------------------------------------
   */
 
@@ -5034,6 +5749,9 @@
         matchScore:
           lastMatchScore,
 
+        conversationMemory:
+          conversationMemory,
+
         transcript:
           transcript
       };
@@ -5106,7 +5824,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Initialize Synchronization
+  | Initialize
   |--------------------------------------------------------------------------
   */
 
