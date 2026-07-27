@@ -1,4 +1,12 @@
 (function () {
+  "use strict";
+
+  /*
+  |--------------------------------------------------------------------------
+  | API Configuration
+  |--------------------------------------------------------------------------
+  */
+
   const API_BASE_URL =
     "https://gfloor-chatfeature.onrender.com";
 
@@ -7,6 +15,39 @@
 
   const STATUS_API_URL =
     API_BASE_URL + "/chat/status";
+
+  const KNOWLEDGE_BASE_URL =
+    API_BASE_URL + "/knowledge-base.js";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Base Settings
+  |--------------------------------------------------------------------------
+  |
+  | Exact/strong matches can answer automatically.
+  | Medium-confidence matches can still be shown but should encourage
+  | Customer Service assistance when appropriate.
+  |
+  */
+
+  const MATCH_CONFIG = {
+    strongMatchScore: 0.72,
+    minimumMatchScore: 0.42
+  };
+
+  let knowledgeBase = [];
+
+  let knowledgeBaseLoaded = false;
+
+  let knowledgeBaseLoading = false;
+
+  let knowledgeBaseLoadPromise = null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Styles
+  |--------------------------------------------------------------------------
+  */
 
   const style =
     document.createElement("style");
@@ -25,6 +66,12 @@
       font: 700 16px Arial, sans-serif;
       cursor: pointer;
       box-shadow: 0 4px 18px rgba(0,0,0,.25);
+    }
+
+    #gfloor-chat-button:hover,
+    #gfloor-chat-button:focus {
+      background: #b91f25;
+      outline: none;
     }
 
     #gfloor-chat-panel {
@@ -70,6 +117,12 @@
       font-size: 26px;
       line-height: 1;
       cursor: pointer;
+    }
+
+    #gfloor-chat-close:hover,
+    #gfloor-chat-close:focus {
+      opacity: .8;
+      outline: none;
     }
 
     .gfloor-chat-body {
@@ -220,7 +273,59 @@
 
     .gfloor-response-title {
       display: block;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .gfloor-response-category {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #e7e9eb;
+      color: #4c5156;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .gfloor-response-answer {
+      margin-top: 2px;
+    }
+
+    .gfloor-response-source {
+      margin-top: 12px;
+    }
+
+    .gfloor-response-source a {
+      color: #b91f25;
+      font-weight: 700;
+      text-decoration: underline;
+    }
+
+    .gfloor-response-source a:hover,
+    .gfloor-response-source a:focus {
+      color: #8f171c;
+    }
+
+    .gfloor-escalation-note {
+      margin-top: 12px;
+      padding: 10px;
+      border-left: 4px solid #d2232a;
+      background: #fff7f7;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .gfloor-match-note {
+      margin-top: 10px;
+      color: #666666;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .gfloor-helpful-question {
+      margin-top: 12px;
       font-weight: 700;
     }
 
@@ -300,12 +405,6 @@
       line-height: 1.35;
     }
 
-    .gfloor-human-copy {
-      margin: 0 0 14px;
-      font-size: 14px;
-      line-height: 1.55;
-    }
-
     .gfloor-human-actions {
       display: grid;
       gap: 9px;
@@ -321,6 +420,14 @@
       margin: 0 0 14px;
       font-size: 14px;
       line-height: 1.5;
+    }
+
+    .gfloor-kb-status {
+      margin-top: 8px;
+      color: #777777;
+      font-size: 11px;
+      line-height: 1.4;
+      text-align: center;
     }
 
     #gfloor-chat-result {
@@ -344,6 +451,12 @@
   `;
 
   document.head.appendChild(style);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Chat HTML
+  |--------------------------------------------------------------------------
+  */
 
   const panel =
     document.createElement("section");
@@ -439,6 +552,7 @@
         </div>
 
         <div class="gfloor-question-row">
+
           <label for="gfloor-chat-question">
             Or type your question
           </label>
@@ -447,6 +561,7 @@
             id="gfloor-chat-question"
             placeholder="Type your question here..."
           ></textarea>
+
         </div>
 
         <button
@@ -469,6 +584,7 @@
           id="gfloor-helpful-actions"
           class="gfloor-helpful-actions"
         >
+
           <button
             id="gfloor-helpful-yes"
             class="gfloor-small-button"
@@ -484,6 +600,7 @@
           >
             No
           </button>
+
         </div>
 
         <div class="gfloor-divider">
@@ -498,6 +615,12 @@
           Talk to a Customer Service Representative
         </button>
 
+        <div
+          id="gfloor-kb-status"
+          class="gfloor-kb-status"
+          aria-live="polite"
+        ></div>
+
       </div>
 
       <!-- HUMAN CONFIRMATION VIEW -->
@@ -505,6 +628,7 @@
         id="gfloor-human-view"
         hidden
       >
+
         <button
           id="gfloor-human-back-button"
           class="gfloor-back"
@@ -531,6 +655,7 @@
           class="gfloor-human-actions"
           hidden
         >
+
           <button
             id="gfloor-connect-button"
             class="gfloor-primary-button"
@@ -546,7 +671,9 @@
           >
             No, keep using chat
           </button>
+
         </div>
+
       </div>
 
       <!-- CONTACT VIEW -->
@@ -554,6 +681,7 @@
         id="gfloor-contact-view"
         hidden
       >
+
         <button
           id="gfloor-contact-back-button"
           class="gfloor-back"
@@ -576,6 +704,7 @@
         <form id="gfloor-chat-form">
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-name">
               Name
             </label>
@@ -587,9 +716,11 @@
               autocomplete="name"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-email">
               Email
             </label>
@@ -601,9 +732,11 @@
               autocomplete="email"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-phone">
               Phone
             </label>
@@ -615,9 +748,11 @@
               autocomplete="tel"
               required
             >
+
           </div>
 
           <div class="gfloor-chat-field">
+
             <label for="gfloor-chat-message">
               How can we help?
             </label>
@@ -627,6 +762,7 @@
               name="message"
               required
             ></textarea>
+
           </div>
 
           <button
@@ -644,10 +780,17 @@
           ></div>
 
         </form>
+
       </div>
 
     </div>
   `;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Launcher
+  |--------------------------------------------------------------------------
+  */
 
   const button =
     document.createElement("button");
@@ -674,87 +817,615 @@
   document.body.appendChild(panel);
   document.body.appendChild(button);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Element References
+  |--------------------------------------------------------------------------
+  */
+
   const chatBody =
-    panel.querySelector(".gfloor-chat-body");
+    panel.querySelector(
+      ".gfloor-chat-body"
+    );
 
   const closeButton =
-    panel.querySelector("#gfloor-chat-close");
+    panel.querySelector(
+      "#gfloor-chat-close"
+    );
 
   const homeView =
-    panel.querySelector("#gfloor-chat-home");
+    panel.querySelector(
+      "#gfloor-chat-home"
+    );
 
   const humanView =
-    panel.querySelector("#gfloor-human-view");
+    panel.querySelector(
+      "#gfloor-human-view"
+    );
 
   const contactView =
-    panel.querySelector("#gfloor-contact-view");
+    panel.querySelector(
+      "#gfloor-contact-view"
+    );
 
   const topicButtons =
-    panel.querySelectorAll(".gfloor-topic-button");
+    panel.querySelectorAll(
+      ".gfloor-topic-button"
+    );
 
   const questionInput =
-    panel.querySelector("#gfloor-chat-question");
+    panel.querySelector(
+      "#gfloor-chat-question"
+    );
 
   const questionSubmit =
-    panel.querySelector("#gfloor-question-submit");
+    panel.querySelector(
+      "#gfloor-question-submit"
+    );
 
   const responseBox =
-    panel.querySelector("#gfloor-response-box");
+    panel.querySelector(
+      "#gfloor-response-box"
+    );
 
   const helpfulActions =
-    panel.querySelector("#gfloor-helpful-actions");
+    panel.querySelector(
+      "#gfloor-helpful-actions"
+    );
 
   const helpfulYes =
-    panel.querySelector("#gfloor-helpful-yes");
+    panel.querySelector(
+      "#gfloor-helpful-yes"
+    );
 
   const helpfulNo =
-    panel.querySelector("#gfloor-helpful-no");
+    panel.querySelector(
+      "#gfloor-helpful-no"
+    );
 
   const humanButton =
-    panel.querySelector("#gfloor-human-button");
+    panel.querySelector(
+      "#gfloor-human-button"
+    );
 
   const humanBackButton =
-    panel.querySelector("#gfloor-human-back-button");
+    panel.querySelector(
+      "#gfloor-human-back-button"
+    );
 
   const humanStatus =
-    panel.querySelector("#gfloor-human-status");
+    panel.querySelector(
+      "#gfloor-human-status"
+    );
 
   const humanActions =
-    panel.querySelector("#gfloor-human-actions");
+    panel.querySelector(
+      "#gfloor-human-actions"
+    );
 
   const connectButton =
-    panel.querySelector("#gfloor-connect-button");
+    panel.querySelector(
+      "#gfloor-connect-button"
+    );
 
   const stayChatButton =
-    panel.querySelector("#gfloor-stay-chat-button");
+    panel.querySelector(
+      "#gfloor-stay-chat-button"
+    );
 
   const contactBackButton =
-    panel.querySelector("#gfloor-contact-back-button");
+    panel.querySelector(
+      "#gfloor-contact-back-button"
+    );
 
   const agentStatus =
-    panel.querySelector("#gfloor-agent-status");
+    panel.querySelector(
+      "#gfloor-agent-status"
+    );
 
   const form =
-    panel.querySelector("#gfloor-chat-form");
+    panel.querySelector(
+      "#gfloor-chat-form"
+    );
 
   const messageField =
-    panel.querySelector("#gfloor-chat-message");
+    panel.querySelector(
+      "#gfloor-chat-message"
+    );
 
   const submitButton =
-    panel.querySelector("#gfloor-chat-submit");
+    panel.querySelector(
+      "#gfloor-chat-submit"
+    );
 
   const result =
-    panel.querySelector("#gfloor-chat-result");
+    panel.querySelector(
+      "#gfloor-chat-result"
+    );
+
+  const kbStatus =
+    panel.querySelector(
+      "#gfloor-kb-status"
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current Conversation State
+  |--------------------------------------------------------------------------
+  */
 
   let lastQuestion = "";
+
+  let lastMatchedIntent = null;
+
+  let lastMatchScore = 0;
 
   let currentSupportStatus = {
     liveAgentAvailable: false,
     estimatedWaitMinutes: null,
     businessHours:
       "Monday-Friday, 8 AM-5 PM Central Time",
+    queueStatus: "unknown",
     message: ""
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Utility Functions
+  |--------------------------------------------------------------------------
+  */
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value);
+  }
+
+  function normalizeText(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/®/g, "")
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9\\s]/g, " ")
+      .replace(/\\s+/g, " ")
+      .trim();
+  }
+
+  function getWords(value) {
+    const normalized =
+      normalizeText(value);
+
+    if (!normalized) {
+      return [];
+    }
+
+    const stopWords = new Set([
+      "a",
+      "an",
+      "and",
+      "are",
+      "as",
+      "at",
+      "be",
+      "can",
+      "do",
+      "does",
+      "for",
+      "from",
+      "how",
+      "i",
+      "in",
+      "is",
+      "it",
+      "my",
+      "of",
+      "on",
+      "or",
+      "the",
+      "this",
+      "to",
+      "what",
+      "where",
+      "which",
+      "with",
+      "you",
+      "your"
+    ]);
+
+    return normalized
+      .split(" ")
+      .filter(function (word) {
+        return (
+          word.length > 1 &&
+          !stopWords.has(word)
+        );
+      });
+  }
+
+  function uniqueWords(words) {
+    return Array.from(
+      new Set(words)
+    );
+  }
+
+  function calculateTokenScore(
+    customerQuestion,
+    knowledgePhrase
+  ) {
+    const questionWords =
+      uniqueWords(
+        getWords(customerQuestion)
+      );
+
+    const phraseWords =
+      uniqueWords(
+        getWords(knowledgePhrase)
+      );
+
+    if (
+      questionWords.length === 0 ||
+      phraseWords.length === 0
+    ) {
+      return 0;
+    }
+
+    const questionSet =
+      new Set(questionWords);
+
+    const phraseSet =
+      new Set(phraseWords);
+
+    let intersection = 0;
+
+    phraseSet.forEach(function (word) {
+      if (questionSet.has(word)) {
+        intersection += 1;
+      }
+    });
+
+    if (intersection === 0) {
+      return 0;
+    }
+
+    const precision =
+      intersection /
+      questionSet.size;
+
+    const recall =
+      intersection /
+      phraseSet.size;
+
+    const f1 =
+      (2 * precision * recall) /
+      (precision + recall);
+
+    return f1;
+  }
+
+  function calculatePhraseScore(
+    customerQuestion,
+    knowledgePhrase
+  ) {
+    const question =
+      normalizeText(customerQuestion);
+
+    const phrase =
+      normalizeText(knowledgePhrase);
+
+    if (!question || !phrase) {
+      return 0;
+    }
+
+    if (question === phrase) {
+      return 1;
+    }
+
+    if (
+      question.includes(phrase) ||
+      phrase.includes(question)
+    ) {
+      const shorterLength =
+        Math.min(
+          question.length,
+          phrase.length
+        );
+
+      const longerLength =
+        Math.max(
+          question.length,
+          phrase.length
+        );
+
+      return Math.max(
+        0.8,
+        shorterLength /
+          longerLength
+      );
+    }
+
+    return calculateTokenScore(
+      customerQuestion,
+      knowledgePhrase
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Base Loader
+  |--------------------------------------------------------------------------
+  */
+
+  function loadKnowledgeBase() {
+    if (knowledgeBaseLoaded) {
+      return Promise.resolve(
+        knowledgeBase
+      );
+    }
+
+    if (knowledgeBaseLoading) {
+      return knowledgeBaseLoadPromise;
+    }
+
+    knowledgeBaseLoading = true;
+
+    kbStatus.textContent =
+      "Loading support answers...";
+
+    knowledgeBaseLoadPromise =
+      new Promise(function (
+        resolve,
+        reject
+      ) {
+        /*
+         * If another script already loaded it,
+         * use the existing global variable.
+         */
+
+        if (
+          Array.isArray(
+            window.GFloorKnowledgeBase
+          )
+        ) {
+          knowledgeBase =
+            window.GFloorKnowledgeBase;
+
+          knowledgeBaseLoaded =
+            true;
+
+          knowledgeBaseLoading =
+            false;
+
+          kbStatus.textContent =
+            "";
+
+          resolve(knowledgeBase);
+
+          return;
+        }
+
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src =
+          KNOWLEDGE_BASE_URL +
+          "?v=" +
+          Date.now();
+
+        script.async =
+          true;
+
+        script.onload =
+          function () {
+            if (
+              Array.isArray(
+                window.GFloorKnowledgeBase
+              )
+            ) {
+              knowledgeBase =
+                window.GFloorKnowledgeBase;
+
+              knowledgeBaseLoaded =
+                true;
+
+              knowledgeBaseLoading =
+                false;
+
+              kbStatus.textContent =
+                "";
+
+              console.log(
+                "G-Floor knowledge base loaded:",
+                knowledgeBase.length,
+                "intents"
+              );
+
+              resolve(
+                knowledgeBase
+              );
+
+              return;
+            }
+
+            knowledgeBaseLoading =
+              false;
+
+            kbStatus.textContent =
+              "Support answers are temporarily unavailable.";
+
+            reject(
+              new Error(
+                "Knowledge base did not initialize."
+              )
+            );
+          };
+
+        script.onerror =
+          function () {
+            knowledgeBaseLoading =
+              false;
+
+            kbStatus.textContent =
+              "Support answers are temporarily unavailable.";
+
+            reject(
+              new Error(
+                "Knowledge base could not be loaded."
+              )
+            );
+          };
+
+        document.head.appendChild(
+          script
+        );
+      });
+
+    return knowledgeBaseLoadPromise;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Base Search
+  |--------------------------------------------------------------------------
+  */
+
+  function searchKnowledgeBase(
+    customerQuestion
+  ) {
+    if (
+      !Array.isArray(
+        knowledgeBase
+      ) ||
+      knowledgeBase.length === 0
+    ) {
+      return null;
+    }
+
+    let bestResult = null;
+
+    knowledgeBase.forEach(
+      function (entry) {
+        const phrases = [
+          entry.question
+        ];
+
+        if (
+          Array.isArray(
+            entry.variations
+          )
+        ) {
+          phrases.push.apply(
+            phrases,
+            entry.variations
+          );
+        }
+
+        let entryBestScore = 0;
+
+        phrases.forEach(
+          function (phrase) {
+            const score =
+              calculatePhraseScore(
+                customerQuestion,
+                phrase
+              );
+
+            if (
+              score >
+              entryBestScore
+            ) {
+              entryBestScore =
+                score;
+            }
+          }
+        );
+
+        /*
+         * Small category/product bonus.
+         */
+
+        const customerNormalized =
+          normalizeText(
+            customerQuestion
+          );
+
+        const categoryNormalized =
+          normalizeText(
+            entry.category
+          );
+
+        const productNormalized =
+          normalizeText(
+            entry.product
+          );
+
+        if (
+          categoryNormalized &&
+          customerNormalized.includes(
+            categoryNormalized
+          )
+        ) {
+          entryBestScore +=
+            0.05;
+        }
+
+        if (
+          productNormalized &&
+          productNormalized !== "n a" &&
+          customerNormalized.includes(
+            productNormalized
+          )
+        ) {
+          entryBestScore +=
+            0.05;
+        }
+
+        entryBestScore =
+          Math.min(
+            entryBestScore,
+            1
+          );
+
+        if (
+          !bestResult ||
+          entryBestScore >
+            bestResult.score
+        ) {
+          bestResult = {
+            entry:
+              entry,
+
+            score:
+              entryBestScore
+          };
+        }
+      }
+    );
+
+    if (
+      !bestResult ||
+      bestResult.score <
+        MATCH_CONFIG.minimumMatchScore
+    ) {
+      return null;
+    }
+
+    return bestResult;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | View Controls
+  |--------------------------------------------------------------------------
+  */
 
   function togglePanel(open) {
     panel.classList.toggle(
@@ -766,12 +1437,27 @@
       "aria-expanded",
       String(open)
     );
+
+    if (open) {
+      loadKnowledgeBase()
+        .catch(function (error) {
+          console.error(
+            "Knowledge base load error:",
+            error
+          );
+        });
+    }
   }
 
   function hideAllViews() {
-    homeView.hidden = true;
-    humanView.hidden = true;
-    contactView.hidden = true;
+    homeView.hidden =
+      true;
+
+    humanView.hidden =
+      true;
+
+    contactView.hidden =
+      true;
   }
 
   function scrollToTop() {
@@ -786,10 +1472,17 @@
   function showHome() {
     hideAllViews();
 
-    homeView.hidden = false;
+    homeView.hidden =
+      false;
 
     scrollToTop();
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Agent Availability
+  |--------------------------------------------------------------------------
+  */
 
   async function getAgentAvailability() {
     try {
@@ -799,7 +1492,8 @@
           {
             method: "GET",
             headers: {
-              Accept: "application/json"
+              Accept:
+                "application/json"
             }
           }
         );
@@ -810,19 +1504,24 @@
       if (!response.ok) {
         throw new Error(
           data.message ||
-          "Availability could not be checked."
+            "Availability could not be checked."
         );
       }
 
       currentSupportStatus = {
         liveAgentAvailable:
-          data.liveAgentAvailable === true,
+          data.liveAgentAvailable ===
+          true,
 
         estimatedWaitMinutes:
           data.estimatedWaitMinutes,
 
         businessHours:
           data.businessHours,
+
+        queueStatus:
+          data.queueStatus ||
+          "normal",
 
         message:
           data.message
@@ -836,10 +1535,18 @@
       );
 
       currentSupportStatus = {
-        liveAgentAvailable: false,
-        estimatedWaitMinutes: null,
+        liveAgentAvailable:
+          false,
+
+        estimatedWaitMinutes:
+          null,
+
         businessHours:
           "Monday-Friday, 8 AM-5 PM Central Time",
+
+        queueStatus:
+          "unavailable",
+
         message:
           "Customer Service availability could not be checked right now."
       };
@@ -848,12 +1555,20 @@
     }
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Human Confirmation
+  |--------------------------------------------------------------------------
+  */
+
   async function showHumanConfirmation() {
     hideAllViews();
 
-    humanView.hidden = false;
+    humanView.hidden =
+      false;
 
-    humanActions.hidden = true;
+    humanActions.hidden =
+      true;
 
     humanStatus.className =
       "gfloor-status-box loading";
@@ -861,16 +1576,20 @@
     humanStatus.textContent =
       "Checking Customer Service availability...";
 
-    connectButton.disabled = true;
+    connectButton.disabled =
+      true;
 
     scrollToTop();
 
     const status =
       await getAgentAvailability();
 
-    connectButton.disabled = false;
+    connectButton.disabled =
+      false;
 
-    if (status.liveAgentAvailable) {
+    if (
+      status.liveAgentAvailable
+    ) {
       humanStatus.className =
         "gfloor-status-box available";
 
@@ -879,7 +1598,12 @@
 
         <div class="gfloor-wait-time">
           Estimated wait time: approximately
-          ${status.estimatedWaitMinutes || "2-5"} minutes.
+          ${
+            escapeHtml(
+              status.estimatedWaitMinutes ||
+                "2-5"
+            )
+          } minutes.
         </div>
       `;
 
@@ -912,13 +1636,21 @@
         "Keep Using Chat";
     }
 
-    humanActions.hidden = false;
+    humanActions.hidden =
+      false;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Contact Form
+  |--------------------------------------------------------------------------
+  */
 
   function showContactForm() {
     hideAllViews();
 
-    contactView.hidden = false;
+    contactView.hidden =
+      false;
 
     if (lastQuestion) {
       messageField.value =
@@ -926,7 +1658,8 @@
     }
 
     if (
-      currentSupportStatus.liveAgentAvailable
+      currentSupportStatus
+        .liveAgentAvailable
     ) {
       agentStatus.className =
         "gfloor-status-box available";
@@ -961,74 +1694,330 @@
     }, 150);
   }
 
-  function getTopicResponse(topic) {
-    const responses = {
+  /*
+  |--------------------------------------------------------------------------
+  | Topic Button Responses
+  |--------------------------------------------------------------------------
+  */
+
+  function getTopicPrompt(topic) {
+    const prompts = {
       flooring:
-        "We can help you choose the right G-Floor product based on where the flooring will be used. This section will be connected to the approved G-Floor product guidance knowledge base.",
+        "What is the best flooring for a garage?",
 
       installation:
-        "We can help with installation questions including subfloor preparation, adhesive, trimming, seams, and installation methods. Approved installation answers will be added to the knowledge base.",
+        "Does G-Floor require adhesive for installation?",
 
       shipping:
-        "We can help with shipping and delivery questions. Approved shipping timelines, freight information, and delivery guidance will be added here.",
+        "What are your shipping and delivery details?",
 
       order:
-        "For help with an existing order, Customer Service may need your order details. You can connect with a representative below.",
+        "I need help with my G-Floor order.",
 
       cleaning:
-        "We can help with cleaning and maintenance questions. Approved care and maintenance guidance will be added to the chat knowledge base.",
+        "How do I clean G-Floor?",
 
       warranty:
-        "We can help with warranty and return questions. Some warranty or return situations may need to be reviewed by Customer Service.",
+        "I have a warranty or return question.",
 
       other:
-        "Please type your question below and we'll help point you in the right direction."
+        ""
     };
 
-    return responses[topic] ||
-      responses.other;
+    return (
+      prompts[topic] ||
+      ""
+    );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Response Rendering
+  |--------------------------------------------------------------------------
+  */
 
   function scrollToResponse() {
     setTimeout(function () {
       responseBox.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest"
+        behavior:
+          "smooth",
+
+        block:
+          "nearest"
       });
 
       setTimeout(function () {
         helpfulActions.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest"
+          behavior:
+            "smooth",
+
+          block:
+            "nearest"
         });
       }, 150);
     }, 100);
   }
 
-  function showResponse(message) {
+  function showNoMatchResponse() {
+    lastMatchedIntent =
+      null;
+
+    lastMatchScore =
+      0;
+
     responseBox.innerHTML = `
       <span class="gfloor-response-title">
         G-Floor Support
       </span>
 
-      ${message}
+      <div class="gfloor-response-answer">
+        I couldn't find a confident answer to that question in our approved support information.
+      </div>
 
-      <div
-        style="
-          margin-top:10px;
-          font-weight:700;
-        "
-      >
+      <div class="gfloor-escalation-note">
+        A Customer Service representative can help with this question.
+      </div>
+
+      <div class="gfloor-helpful-question">
+        Would you like help from Customer Service?
+      </div>
+    `;
+
+    responseBox.classList.add(
+      "show"
+    );
+
+    helpfulYes.textContent =
+      "Yes";
+
+    helpfulNo.textContent =
+      "No";
+
+    helpfulActions.classList.add(
+      "show"
+    );
+
+    helpfulActions.dataset.mode =
+      "escalation";
+
+    scrollToResponse();
+  }
+
+  function showKnowledgeResponse(
+    match
+  ) {
+    const entry =
+      match.entry;
+
+    const score =
+      match.score;
+
+    lastMatchedIntent =
+      entry;
+
+    lastMatchScore =
+      score;
+
+    const responseType =
+      String(
+        entry.responseType ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const requiresReview =
+      responseType ===
+        "HUMAN REVIEW" ||
+      responseType ===
+        "ALWAYS ESCALATE";
+
+    const sourceHtml =
+      entry.sourceUrl
+        ? `
+          <div class="gfloor-response-source">
+            <a
+              href="${escapeAttribute(
+                entry.sourceUrl
+              )}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Learn More
+            </a>
+          </div>
+        `
+        : "";
+
+    const escalationHtml =
+      requiresReview
+        ? `
+          <div class="gfloor-escalation-note">
+            This question may depend on your specific situation. Customer Service can review the details with you before you make a final decision.
+          </div>
+        `
+        : "";
+
+    const confidenceHtml =
+      score <
+      MATCH_CONFIG.strongMatchScore
+        ? `
+          <div class="gfloor-match-note">
+            I found a related answer, but your question may need additional review.
+          </div>
+        `
+        : "";
+
+    responseBox.innerHTML = `
+      <span class="gfloor-response-title">
+        G-Floor Support
+      </span>
+
+      ${
+        entry.category
+          ? `
+            <span class="gfloor-response-category">
+              ${escapeHtml(
+                entry.category
+              )}
+            </span>
+          `
+          : ""
+      }
+
+      <div class="gfloor-response-answer">
+        ${escapeHtml(
+          entry.answer
+        )}
+      </div>
+
+      ${sourceHtml}
+
+      ${escalationHtml}
+
+      ${confidenceHtml}
+
+      <div class="gfloor-helpful-question">
         Did this answer your question?
       </div>
     `;
 
-    responseBox.classList.add("show");
+    responseBox.classList.add(
+      "show"
+    );
 
-    helpfulActions.classList.add("show");
+    helpfulYes.textContent =
+      "Yes";
+
+    helpfulNo.textContent =
+      "No";
+
+    helpfulActions.dataset.mode =
+      "helpful";
+
+    helpfulActions.classList.add(
+      "show"
+    );
 
     scrollToResponse();
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Process Customer Question
+  |--------------------------------------------------------------------------
+  */
+
+  async function processQuestion(
+    question
+  ) {
+    const cleanQuestion =
+      String(question || "")
+        .trim();
+
+    if (!cleanQuestion) {
+      responseBox.innerHTML = `
+        <span class="gfloor-response-title">
+          Please enter a question.
+        </span>
+      `;
+
+      responseBox.classList.add(
+        "show"
+      );
+
+      helpfulActions.classList.remove(
+        "show"
+      );
+
+      questionInput.focus();
+
+      return;
+    }
+
+    lastQuestion =
+      cleanQuestion;
+
+    questionSubmit.disabled =
+      true;
+
+    questionSubmit.textContent =
+      "Searching...";
+
+    responseBox.innerHTML = `
+      <span class="gfloor-response-title">
+        G-Floor Support
+      </span>
+
+      Searching our support information...
+    `;
+
+    responseBox.classList.add(
+      "show"
+    );
+
+    helpfulActions.classList.remove(
+      "show"
+    );
+
+    try {
+      await loadKnowledgeBase();
+
+      const match =
+        searchKnowledgeBase(
+          cleanQuestion
+        );
+
+      if (!match) {
+        showNoMatchResponse();
+
+        return;
+      }
+
+      showKnowledgeResponse(
+        match
+      );
+    } catch (error) {
+      console.error(
+        "Knowledge search error:",
+        error
+      );
+
+      showNoMatchResponse();
+    } finally {
+      questionSubmit.disabled =
+        false;
+
+      questionSubmit.textContent =
+        "Ask a Question";
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Chat Open / Close
+  |--------------------------------------------------------------------------
+  */
 
   button.addEventListener(
     "click",
@@ -1050,54 +2039,64 @@
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Topic Buttons
+  |--------------------------------------------------------------------------
+  */
+
   topicButtons.forEach(
     function (topicButton) {
       topicButton.addEventListener(
         "click",
-        function () {
+        async function () {
           const topic =
             topicButton.dataset.topic;
 
-          lastQuestion =
-            topicButton.textContent.trim();
+          if (
+            topic === "other"
+          ) {
+            questionInput.focus();
 
-          showResponse(
-            getTopicResponse(topic)
+            chatBody.scrollTo({
+              top:
+                questionInput.offsetTop -
+                20,
+
+              behavior:
+                "smooth"
+            });
+
+            return;
+          }
+
+          const prompt =
+            getTopicPrompt(
+              topic
+            );
+
+          questionInput.value =
+            prompt;
+
+          await processQuestion(
+            prompt
           );
         }
       );
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Typed Questions
+  |--------------------------------------------------------------------------
+  */
+
   questionSubmit.addEventListener(
     "click",
     function () {
-      const question =
-        questionInput.value.trim();
-
-      if (!question) {
-        responseBox.innerHTML = `
-          <span class="gfloor-response-title">
-            Please enter a question.
-          </span>
-        `;
-
-        responseBox.classList.add("show");
-
-        helpfulActions.classList.remove(
-          "show"
-        );
-
-        questionInput.focus();
-
-        return;
-      }
-
-      lastQuestion =
-        question;
-
-      showResponse(
-        "Thanks for your question. Our approved automated answer library is still being built. For now, you can connect with Customer Service for help with this question."
+      processQuestion(
+        questionInput.value
       );
     }
   );
@@ -1111,20 +2110,43 @@
       ) {
         event.preventDefault();
 
-        questionSubmit.click();
+        processQuestion(
+          questionInput.value
+        );
       }
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Helpful / Escalation Buttons
+  |--------------------------------------------------------------------------
+  */
+
   helpfulYes.addEventListener(
     "click",
     function () {
+      const mode =
+        helpfulActions.dataset
+          .mode;
+
+      if (
+        mode ===
+        "escalation"
+      ) {
+        showHumanConfirmation();
+
+        return;
+      }
+
       responseBox.innerHTML = `
         <span class="gfloor-response-title">
           Glad we could help!
         </span>
 
-        You can choose another topic or ask another question anytime.
+        <div class="gfloor-response-answer">
+          You can choose another topic or ask another question anytime.
+        </div>
       `;
 
       helpfulActions.classList.remove(
@@ -1136,9 +2158,40 @@
   helpfulNo.addEventListener(
     "click",
     function () {
+      const mode =
+        helpfulActions.dataset
+          .mode;
+
+      if (
+        mode ===
+        "escalation"
+      ) {
+        responseBox.innerHTML = `
+          <span class="gfloor-response-title">
+            No problem.
+          </span>
+
+          <div class="gfloor-response-answer">
+            You can try another question or choose one of the support topics above.
+          </div>
+        `;
+
+        helpfulActions.classList.remove(
+          "show"
+        );
+
+        return;
+      }
+
       showHumanConfirmation();
     }
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Human Support
+  |--------------------------------------------------------------------------
+  */
 
   humanButton.addEventListener(
     "click",
@@ -1175,17 +2228,30 @@
     }
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Contact Form Submission
+  |--------------------------------------------------------------------------
+  */
+
   form.addEventListener(
     "submit",
     async function (event) {
       event.preventDefault();
 
-      result.textContent = "";
+      result.textContent =
+        "";
 
-      submitButton.disabled = true;
+      submitButton.disabled =
+        true;
 
       submitButton.textContent =
         "Sending...";
+
+      /*
+       * Refresh server-side availability immediately
+       * before sending the request.
+       */
 
       await getAgentAvailability();
 
@@ -1210,7 +2276,20 @@
 
         requestedLiveAgent:
           currentSupportStatus
-            .liveAgentAvailable
+            .liveAgentAvailable,
+
+        matchedIntent:
+          lastMatchedIntent
+            ? lastMatchedIntent.id
+            : null,
+
+        matchedQuestion:
+          lastMatchedIntent
+            ? lastMatchedIntent.question
+            : null,
+
+        matchScore:
+          lastMatchScore
       };
 
       try {
@@ -1218,7 +2297,8 @@
           await fetch(
             MESSAGE_API_URL,
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
@@ -1226,7 +2306,9 @@
               },
 
               body:
-                JSON.stringify(payload)
+                JSON.stringify(
+                  payload
+                )
             }
           );
 
@@ -1235,14 +2317,16 @@
         try {
           data =
             await response.json();
-        } catch (jsonError) {
+        } catch (
+          jsonError
+        ) {
           data = {};
         }
 
         if (!response.ok) {
           throw new Error(
             data.error ||
-            "Message could not be sent."
+              "Message could not be sent."
           );
         }
 
@@ -1253,7 +2337,6 @@
           "Thank you. Your message has been sent to G-Floor Customer Service.";
 
         form.reset();
-
       } catch (error) {
         console.error(
           "G-Floor chat submission error:",
@@ -1265,7 +2348,6 @@
 
         result.textContent =
           "Email delivery is not active yet. Your chat interface is working, but Microsoft Graph email delivery is still being configured.";
-
       } finally {
         submitButton.disabled =
           false;
@@ -1275,6 +2357,12 @@
       }
     }
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Escape Key
+  |--------------------------------------------------------------------------
+  */
 
   document.addEventListener(
     "keydown",
@@ -1291,4 +2379,24 @@
       }
     }
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Preload Knowledge Base
+  |--------------------------------------------------------------------------
+  |
+  | Don't block page loading. Give the storefront a moment to finish,
+  | then load the support data in the background.
+  |
+  */
+
+  setTimeout(function () {
+    loadKnowledgeBase()
+      .catch(function (error) {
+        console.error(
+          "G-Floor knowledge base preload error:",
+          error
+        );
+      });
+  }, 1000);
 })();
