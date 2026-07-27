@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "learn": "node learn-inbox.js"
+    "learn": "node learn-inbox.js",
+    "training-import": "node scripts/import-training-data.js",
+    "prelaunch": "node scripts/prelaunch-check.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
