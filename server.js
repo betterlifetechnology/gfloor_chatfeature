@@ -9,6 +9,11 @@ const adminReviewsRouter =
     "./routes/admin-reviews"
   );
 
+const approvedKnowledgeRouter =
+  require(
+    "./routes/approved-knowledge"
+  );
+
 require("dotenv").config();
 
 const app = express();
@@ -117,6 +122,26 @@ app.use(
 app.use(
   "/admin",
   adminReviewsRouter
+);
+
+/*
+|--------------------------------------------------------------------------
+| STEP 20G: Human-Approved Chat Knowledge
+|--------------------------------------------------------------------------
+|
+| PUBLIC READ-ONLY ENDPOINTS
+|
+| /chat/approved-knowledge
+| /chat/approved-knowledge/health
+| /chat/approved-knowledge.js
+|
+| The router reads ONLY from chat_active_knowledge.
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/chat",
+  approvedKnowledgeRouter
 );
 
 /*
@@ -2202,6 +2227,17 @@ app.listen(
 
         smtpConfigured:
           isSmtpConfigured()
+      }
+    );
+
+    console.log(
+      "Approved knowledge API:",
+      {
+        mounted:
+          true,
+
+        basePath:
+          "/chat/approved-knowledge"
       }
     );
   }
