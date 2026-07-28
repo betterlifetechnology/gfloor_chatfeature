@@ -6,33 +6,32 @@
   | G-Floor Chat Knowledge Review Dashboard
   |--------------------------------------------------------------------------
   |
-  | STEP 20C
+  | STEP 20D
   |
   | Features:
   |
-  | - ADMIN_TOKEN login
-  | - protected API health check
-  | - pending / approved / denied counts
-  | - review list
-  | - status filter
-  | - category filter
-  | - search
-  | - pagination
-  | - full review detail panel
-  | - sensitive information warnings
+  | - ADMIN_TOKEN authentication
+  | - database health
+  | - review counts
+  | - pending / approved / denied filtering
+  | - review detail
+  | - editable pending reviews
+  | - Save Changes
+  | - Approve
+  | - Deny
+  | - required reviewer identity
+  | - required denial reason
+  | - sensitive-information approval lock
   | - duplicate warnings
-  |
-  | Editing / Approve / Deny becomes active in Step 20D.
   |
   |--------------------------------------------------------------------------
   */
 
   const VERSION =
-    "20.3";
+    "20.4";
 
   const API_BASE =
     "/admin";
-
 
   /*
   |--------------------------------------------------------------------------
@@ -48,6 +47,9 @@
       [],
 
     selectedReviewId:
+      null,
+
+    selectedReview:
       null,
 
     page:
@@ -69,9 +71,17 @@
       "",
 
     search:
-      ""
-  };
+      "",
 
+    saving:
+      false,
+
+    approving:
+      false,
+
+    denying:
+      false
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -219,10 +229,207 @@
       "gfloor-admin-toast"
     );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Action Buttons
+  |--------------------------------------------------------------------------
+  */
+
+  const actionButtons =
+    document.querySelectorAll(
+      ".gfloor-detail-actions button"
+    );
+
+  const denyButton =
+    actionButtons[0] ||
+    null;
+
+  const saveButton =
+    actionButtons[1] ||
+    null;
+
+  const approveButton =
+    actionButtons[2] ||
+    null;
+
+  const actionNote =
+    document.querySelector(
+      ".gfloor-detail-action-note"
+    );
+
+  if (denyButton) {
+    denyButton.id =
+      "gfloor-review-deny";
+  }
+
+  if (saveButton) {
+    saveButton.id =
+      "gfloor-review-save";
+  }
+
+  if (approveButton) {
+    approveButton.id =
+      "gfloor-review-approve";
+  }
 
   /*
   |--------------------------------------------------------------------------
-  | Helpers
+  | Inject Step 20D Styles
+  |--------------------------------------------------------------------------
+  |
+  | This keeps admin-review.css unchanged.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  function injectStep20DStyles() {
+    const style =
+      document.createElement(
+        "style"
+      );
+
+    style.id =
+      "gfloor-step-20d-styles";
+
+    style.textContent = `
+      .gfloor-edit-control {
+        width: 100%;
+        min-height: 42px;
+        padding: 10px 11px;
+        border: 1px solid #bfc5ca;
+        border-radius: 5px;
+        background: #ffffff;
+        color: #252b30;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        outline: none;
+      }
+
+      .gfloor-edit-control:focus {
+        border-color: #d2232a;
+        box-shadow: 0 0 0 2px rgba(210, 35, 42, 0.08);
+      }
+
+      textarea.gfloor-edit-control {
+        min-height: 115px;
+        resize: vertical;
+      }
+
+      textarea.gfloor-edit-control.gfloor-answer-editor {
+        min-height: 180px;
+      }
+
+      textarea.gfloor-edit-control.gfloor-variations-editor {
+        min-height: 105px;
+      }
+
+      .gfloor-field-help {
+        display: block;
+        margin-top: 5px;
+        color: #66717a;
+        font-size: 11px;
+      }
+
+      .gfloor-required {
+        color: #d2232a;
+      }
+
+      .gfloor-sensitive-confirmation {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 14px;
+        border: 1px solid #e3c36a;
+        border-radius: 5px;
+        background: #fff5d6;
+      }
+
+      .gfloor-sensitive-confirmation input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        flex: 0 0 auto;
+        accent-color: #d2232a;
+      }
+
+      .gfloor-sensitive-confirmation label {
+        margin: 0;
+        color: #6f5000;
+        font-size: 12px;
+        line-height: 1.5;
+        cursor: pointer;
+      }
+
+      .gfloor-sensitive-confirmation strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #5f4300;
+      }
+
+      .gfloor-action-validation {
+        margin-bottom: 14px;
+        padding: 11px 13px;
+        border-left: 4px solid #d2232a;
+        border-radius: 4px;
+        background: #fdeced;
+        color: #8d1e23;
+        font-size: 12px;
+      }
+
+      .gfloor-action-validation.is-hidden {
+        display: none;
+      }
+
+      .gfloor-action-success {
+        margin-bottom: 14px;
+        padding: 11px 13px;
+        border-left: 4px solid #1c7c44;
+        border-radius: 4px;
+        background: #e9f6ee;
+        color: #145c32;
+        font-size: 12px;
+      }
+
+      .gfloor-action-success.is-hidden {
+        display: none;
+      }
+
+      .gfloor-readonly-status-message {
+        margin-bottom: 15px;
+        padding: 12px;
+        border-radius: 5px;
+        background: #f1f3f4;
+        color: #59636b;
+        font-size: 12px;
+      }
+
+      .gfloor-review-dirty {
+        border-color: #d2232a !important;
+        background: #fffafa !important;
+      }
+
+      .gfloor-button.is-working {
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .gfloor-reviewer-required-note {
+        color: #66717a;
+        font-size: 11px;
+        margin-top: 5px;
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Basic Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -327,6 +534,10 @@
     message,
     isError
   ) {
+    if (!toast) {
+      return;
+    }
+
     toast.textContent =
       message;
 
@@ -352,7 +563,7 @@
             "is-hidden"
           );
         },
-        3500
+        4000
       );
   }
 
@@ -360,9 +571,9 @@
     message
   ) {
     loginMessage.textContent =
-      message || "";
+      message ||
+      "";
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -371,20 +582,50 @@
   */
 
   async function apiRequest(
-    endpoint
+    endpoint,
+    options
   ) {
+    const requestOptions =
+      options ||
+      {};
+
+    const method =
+      requestOptions.method ||
+      "GET";
+
+    const headers = {
+      "X-Admin-Token":
+        state.adminToken
+    };
+
+    if (
+      requestOptions.body !==
+      undefined
+    ) {
+      headers[
+        "Content-Type"
+      ] =
+        "application/json";
+    }
+
     const response =
       await fetch(
         API_BASE +
         endpoint,
         {
           method:
-            "GET",
+            method,
 
-          headers: {
-            "X-Admin-Token":
-              state.adminToken
-          },
+          headers:
+            headers,
+
+          body:
+            requestOptions.body !==
+            undefined
+              ? JSON.stringify(
+                  requestOptions.body
+                )
+              : undefined,
 
           cache:
             "no-store"
@@ -430,7 +671,6 @@
 
     return data;
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -513,6 +753,9 @@
     state.selectedReviewId =
       null;
 
+    state.selectedReview =
+      null;
+
     dashboard.classList.add(
       "is-hidden"
     );
@@ -530,7 +773,6 @@
 
     tokenInput.focus();
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -567,11 +809,13 @@
           "span:last-child"
         ).textContent =
           "Database connected";
-      } else {
-        throw new Error(
-          "Database connection unavailable."
-        );
+
+        return;
       }
+
+      throw new Error(
+        "Database connection unavailable."
+      );
 
     } catch (
       error
@@ -588,7 +832,6 @@
       throw error;
     }
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -630,7 +873,6 @@
         0
       );
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -682,7 +924,6 @@
       parameters.toString()
     );
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -757,10 +998,9 @@
     }
   }
 
-
   /*
   |--------------------------------------------------------------------------
-  | Render Reviews
+  | Render Review List
   |--------------------------------------------------------------------------
   */
 
@@ -933,7 +1173,6 @@
     );
   }
 
-
   /*
   |--------------------------------------------------------------------------
   | Pagination
@@ -971,10 +1210,9 @@
       state.pages;
   }
 
-
   /*
   |--------------------------------------------------------------------------
-  | Select / Load One Review
+  | Select Review
   |--------------------------------------------------------------------------
   */
 
@@ -997,6 +1235,9 @@
           )
         );
 
+      state.selectedReview =
+        result.review;
+
       renderDetail(
         result.review
       );
@@ -1010,7 +1251,6 @@
       );
     }
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -1094,6 +1334,1371 @@
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Replace Element Helper
+  |--------------------------------------------------------------------------
+  */
+
+  function replaceElement(
+    id,
+    newElement
+  ) {
+    const oldElement =
+      document.getElementById(
+        id
+      );
+
+    if (!oldElement) {
+      return null;
+    }
+
+    newElement.id =
+      id;
+
+    oldElement.replaceWith(
+      newElement
+    );
+
+    return newElement;
+  }
+
+  function createReadonlyDiv(
+    id,
+    value,
+    fallback,
+    longField
+  ) {
+    const div =
+      document.createElement(
+        "div"
+      );
+
+    div.id =
+      id;
+
+    div.className =
+      "gfloor-readonly-field" +
+      (
+        longField
+          ? " gfloor-long-field"
+          : ""
+      );
+
+    div.textContent =
+      cleanText(
+        value
+      ) ||
+      fallback ||
+      "—";
+
+    return div;
+  }
+
+  function createInput(
+    id,
+    value,
+    options
+  ) {
+    const settings =
+      options ||
+      {};
+
+    const input =
+      document.createElement(
+        "input"
+      );
+
+    input.id =
+      id;
+
+    input.type =
+      settings.type ||
+      "text";
+
+    input.className =
+      "gfloor-edit-control";
+
+    input.value =
+      cleanText(
+        value
+      );
+
+    input.placeholder =
+      settings.placeholder ||
+      "";
+
+    input.autocomplete =
+      "off";
+
+    return input;
+  }
+
+  function createTextarea(
+    id,
+    value,
+    className,
+    placeholder
+  ) {
+    const textarea =
+      document.createElement(
+        "textarea"
+      );
+
+    textarea.id =
+      id;
+
+    textarea.className =
+      "gfloor-edit-control " +
+      (
+        className ||
+        ""
+      );
+
+    textarea.value =
+      cleanText(
+        value
+      );
+
+    textarea.placeholder =
+      placeholder ||
+      "";
+
+    return textarea;
+  }
+
+  function createResponseTypeSelect(
+    id,
+    value
+  ) {
+    const select =
+      document.createElement(
+        "select"
+      );
+
+    select.id =
+      id;
+
+    select.className =
+      "gfloor-edit-control";
+
+    [
+      "AUTO",
+      "HUMAN REVIEW",
+      "ALWAYS ESCALATE"
+    ].forEach(
+      function (
+        optionValue
+      ) {
+        const option =
+          document.createElement(
+            "option"
+          );
+
+        option.value =
+          optionValue;
+
+        option.textContent =
+          optionValue;
+
+        if (
+          cleanText(
+            value
+          ).toUpperCase() ===
+          optionValue
+        ) {
+          option.selected =
+            true;
+        }
+
+        select.appendChild(
+          option
+        );
+      }
+    );
+
+    return select;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Pending Review Editor
+  |--------------------------------------------------------------------------
+  */
+
+  function renderPendingEditors(
+    review
+  ) {
+    replaceElement(
+      "gfloor-detail-suggested-question",
+      createTextarea(
+        "gfloor-detail-suggested-question",
+        review.suggested_question,
+        "",
+        "Write the public chatbot question..."
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-suggested-answer",
+      createTextarea(
+        "gfloor-detail-suggested-answer",
+        review.suggested_answer,
+        "gfloor-answer-editor",
+        "Write the approved public chatbot answer..."
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-suggested-category",
+      createInput(
+        "gfloor-detail-suggested-category",
+        review.suggested_category,
+        {
+          placeholder:
+            "Example: Installation"
+        }
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-response-type",
+      createResponseTypeSelect(
+        "gfloor-detail-response-type",
+        review.suggested_response_type ||
+        "AUTO"
+      )
+    );
+
+    const variations =
+      Array.isArray(
+        review.suggested_variations
+      )
+        ? review
+            .suggested_variations
+            .join(
+              "\n"
+            )
+        : "";
+
+    replaceElement(
+      "gfloor-detail-variations",
+      createTextarea(
+        "gfloor-detail-variations",
+        variations,
+        "gfloor-variations-editor",
+        "Enter one alternate customer question per line..."
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-source-url",
+      createInput(
+        "gfloor-detail-source-url",
+        review.suggested_source_url,
+        {
+          type:
+            "url",
+
+          placeholder:
+            "https://gfloor.com/..."
+        }
+      )
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reviewer
+    |--------------------------------------------------------------------------
+    */
+
+    replaceElement(
+      "gfloor-detail-reviewer",
+      createInput(
+        "gfloor-detail-reviewer",
+        review.reviewer_name,
+        {
+          placeholder:
+            "Enter reviewer name"
+        }
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-reviewer-notes",
+      createTextarea(
+        "gfloor-detail-reviewer-notes",
+        review.reviewer_notes,
+        "",
+        "Add approval notes or enter a reason if denying this review..."
+      )
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sensitive Review Checkbox
+    |--------------------------------------------------------------------------
+    */
+
+    const sensitiveOld =
+      document.getElementById(
+        "gfloor-detail-sensitive-completed"
+      );
+
+    if (sensitiveOld) {
+      const wrapper =
+        document.createElement(
+          "div"
+        );
+
+      wrapper.id =
+        "gfloor-detail-sensitive-completed";
+
+      if (
+        review.requires_sensitive_review
+      ) {
+        wrapper.className =
+          "gfloor-sensitive-confirmation";
+
+        const checkbox =
+          document.createElement(
+            "input"
+          );
+
+        checkbox.type =
+          "checkbox";
+
+        checkbox.id =
+          "gfloor-sensitive-review-checkbox";
+
+        checkbox.checked =
+          Boolean(
+            review.sensitive_review_completed
+          );
+
+        const label =
+          document.createElement(
+            "label"
+          );
+
+        label.htmlFor =
+          "gfloor-sensitive-review-checkbox";
+
+        label.innerHTML = `
+          <strong>
+            I reviewed this item for customer-specific information.
+          </strong>
+
+          I confirm that names, email addresses, phone numbers,
+          order numbers, addresses, and other customer-specific
+          information have been removed from the proposed chatbot
+          question and answer.
+        `;
+
+        wrapper.appendChild(
+          checkbox
+        );
+
+        wrapper.appendChild(
+          label
+        );
+
+      } else {
+        wrapper.className =
+          "gfloor-readonly-field";
+
+        wrapper.textContent =
+          "Not required";
+      }
+
+      sensitiveOld.replaceWith(
+        wrapper
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Action Area
+    |--------------------------------------------------------------------------
+    */
+
+    setupPendingActionArea(
+      review
+    );
+
+    bindDirtyTracking();
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Read-Only Detail
+  |--------------------------------------------------------------------------
+  */
+
+  function renderReadonlyFields(
+    review
+  ) {
+    replaceElement(
+      "gfloor-detail-suggested-question",
+      createReadonlyDiv(
+        "gfloor-detail-suggested-question",
+        review.suggested_question,
+        "No suggested question.",
+        false
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-suggested-answer",
+      createReadonlyDiv(
+        "gfloor-detail-suggested-answer",
+        review.suggested_answer,
+        "No suggested answer.",
+        true
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-suggested-category",
+      createReadonlyDiv(
+        "gfloor-detail-suggested-category",
+        review.suggested_category,
+        "Uncategorized",
+        false
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-response-type",
+      createReadonlyDiv(
+        "gfloor-detail-response-type",
+        review.suggested_response_type,
+        "AUTO",
+        false
+      )
+    );
+
+    const variationContainer =
+      document.createElement(
+        "div"
+      );
+
+    variationContainer.id =
+      "gfloor-detail-variations";
+
+    variationContainer.className =
+      "gfloor-variation-list";
+
+    replaceElement(
+      "gfloor-detail-variations",
+      variationContainer
+    );
+
+    renderArray(
+      "gfloor-detail-variations",
+      review.suggested_variations,
+      "No suggested variations."
+    );
+
+    const sourceUrl =
+      createReadonlyDiv(
+        "gfloor-detail-source-url",
+        review.suggested_source_url,
+        "No source URL.",
+        false
+      );
+
+    replaceElement(
+      "gfloor-detail-source-url",
+      sourceUrl
+    );
+
+    replaceElement(
+      "gfloor-detail-reviewer",
+      createReadonlyDiv(
+        "gfloor-detail-reviewer",
+        review.reviewer_name,
+        "Not reviewed",
+        false
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-reviewer-notes",
+      createReadonlyDiv(
+        "gfloor-detail-reviewer-notes",
+        review.reviewer_notes,
+        "No reviewer notes.",
+        true
+      )
+    );
+
+    replaceElement(
+      "gfloor-detail-sensitive-completed",
+      createReadonlyDiv(
+        "gfloor-detail-sensitive-completed",
+        review.sensitive_review_completed
+          ? "Yes"
+          : "No",
+        "No",
+        false
+      )
+    );
+
+    setupReadonlyActionArea(
+      review
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Action Area
+  |--------------------------------------------------------------------------
+  */
+
+  function ensureValidationBox() {
+    let box =
+      document.getElementById(
+        "gfloor-action-validation"
+      );
+
+    if (box) {
+      return box;
+    }
+
+    box =
+      document.createElement(
+        "div"
+      );
+
+    box.id =
+      "gfloor-action-validation";
+
+    box.className =
+      "gfloor-action-validation is-hidden";
+
+    const actionSection =
+      document.querySelector(
+        ".gfloor-detail-actions-section"
+      );
+
+    if (
+      actionSection &&
+      actionNote
+    ) {
+      actionSection.insertBefore(
+        box,
+        actionNote
+      );
+    }
+
+    return box;
+  }
+
+  function showValidation(
+    message
+  ) {
+    const box =
+      ensureValidationBox();
+
+    box.textContent =
+      message;
+
+    box.classList.remove(
+      "is-hidden"
+    );
+
+    box.scrollIntoView({
+      behavior:
+        "smooth",
+
+      block:
+        "nearest"
+    });
+  }
+
+  function clearValidation() {
+    const box =
+      document.getElementById(
+        "gfloor-action-validation"
+      );
+
+    if (!box) {
+      return;
+    }
+
+    box.textContent =
+      "";
+
+    box.classList.add(
+      "is-hidden"
+    );
+  }
+
+  function setupPendingActionArea() {
+    clearValidation();
+
+    if (actionNote) {
+      actionNote.innerHTML = `
+        <strong>
+          Pending Review
+        </strong>
+
+        <span>
+          Edit the proposed chatbot content, enter your reviewer
+          name, then Save, Approve, or Deny this item.
+        </span>
+      `;
+    }
+
+    if (denyButton) {
+      denyButton.disabled =
+        false;
+
+      denyButton.textContent =
+        "Deny";
+    }
+
+    if (saveButton) {
+      saveButton.disabled =
+        false;
+
+      saveButton.textContent =
+        "Save Changes";
+    }
+
+    if (approveButton) {
+      approveButton.disabled =
+        false;
+
+      approveButton.textContent =
+        "Approve";
+    }
+  }
+
+  function setupReadonlyActionArea(
+    review
+  ) {
+    clearValidation();
+
+    if (actionNote) {
+      if (
+        review.status ===
+        "approved"
+      ) {
+        actionNote.innerHTML = `
+          <strong>
+            Approved
+          </strong>
+
+          <span>
+            This review has been approved and copied into
+            approved chatbot knowledge.
+          </span>
+        `;
+
+      } else {
+        actionNote.innerHTML = `
+          <strong>
+            Denied
+          </strong>
+
+          <span>
+            This review was denied and was not added to
+            approved chatbot knowledge.
+          </span>
+        `;
+      }
+    }
+
+    if (denyButton) {
+      denyButton.disabled =
+        true;
+    }
+
+    if (saveButton) {
+      saveButton.disabled =
+        true;
+    }
+
+    if (approveButton) {
+      approveButton.disabled =
+        true;
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Dirty Tracking
+  |--------------------------------------------------------------------------
+  */
+
+  function bindDirtyTracking() {
+    document
+      .querySelectorAll(
+        ".gfloor-edit-control"
+      )
+      .forEach(
+        function (
+          control
+        ) {
+          control.addEventListener(
+            "input",
+            function () {
+              control.classList.add(
+                "gfloor-review-dirty"
+              );
+            }
+          );
+
+          control.addEventListener(
+            "change",
+            function () {
+              control.classList.add(
+                "gfloor-review-dirty"
+              );
+            }
+          );
+        }
+      );
+  }
+
+  function clearDirtyTracking() {
+    document
+      .querySelectorAll(
+        ".gfloor-review-dirty"
+      )
+      .forEach(
+        function (
+          control
+        ) {
+          control.classList.remove(
+            "gfloor-review-dirty"
+          );
+        }
+      );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Gather Editor Values
+  |--------------------------------------------------------------------------
+  */
+
+  function getEditorValue(
+    id
+  ) {
+    const element =
+      document.getElementById(
+        id
+      );
+
+    if (!element) {
+      return "";
+    }
+
+    return cleanText(
+      element.value
+    );
+  }
+
+  function getVariations() {
+    const value =
+      getEditorValue(
+        "gfloor-detail-variations"
+      );
+
+    if (!value) {
+      return [];
+    }
+
+    return value
+      .split(
+        /\r?\n/
+      )
+      .map(
+        function (
+          variation
+        ) {
+          return cleanText(
+            variation
+          );
+        }
+      )
+      .filter(Boolean);
+  }
+
+  function getSensitiveReviewCompleted() {
+    if (
+      !state.selectedReview ||
+      !state.selectedReview
+        .requires_sensitive_review
+    ) {
+      return false;
+    }
+
+    const checkbox =
+      document.getElementById(
+        "gfloor-sensitive-review-checkbox"
+      );
+
+    return Boolean(
+      checkbox &&
+      checkbox.checked
+    );
+  }
+
+  function getFormData() {
+    return {
+      suggestedQuestion:
+        getEditorValue(
+          "gfloor-detail-suggested-question"
+        ),
+
+      suggestedAnswer:
+        getEditorValue(
+          "gfloor-detail-suggested-answer"
+        ),
+
+      suggestedCategory:
+        getEditorValue(
+          "gfloor-detail-suggested-category"
+        ),
+
+      suggestedVariations:
+        getVariations(),
+
+      suggestedSourceUrl:
+        getEditorValue(
+          "gfloor-detail-source-url"
+        ),
+
+      suggestedResponseType:
+        getEditorValue(
+          "gfloor-detail-response-type"
+        ) ||
+        "AUTO",
+
+      sensitiveReviewCompleted:
+        getSensitiveReviewCompleted(),
+
+      reviewerName:
+        getEditorValue(
+          "gfloor-detail-reviewer"
+        ),
+
+      reviewerNotes:
+        getEditorValue(
+          "gfloor-detail-reviewer-notes"
+        )
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Validation
+  |--------------------------------------------------------------------------
+  */
+
+  function validateForSave(
+    form
+  ) {
+    if (
+      !state.selectedReview ||
+      state.selectedReview.status !==
+      "pending-review"
+    ) {
+      return (
+        "Only pending reviews can be edited."
+      );
+    }
+
+    if (
+      !form.suggestedResponseType
+    ) {
+      return (
+        "Select a response type."
+      );
+    }
+
+    return "";
+  }
+
+  function validateForApproval(
+    form
+  ) {
+    if (
+      !form.suggestedQuestion
+    ) {
+      return (
+        "A Suggested Question is required before approval."
+      );
+    }
+
+    if (
+      !form.suggestedAnswer
+    ) {
+      return (
+        "A Suggested Answer is required before approval."
+      );
+    }
+
+    if (
+      !form.suggestedCategory
+    ) {
+      return (
+        "A Category is required before approval."
+      );
+    }
+
+    if (
+      !form.reviewerName
+    ) {
+      return (
+        "Enter your reviewer name before approving this item."
+      );
+    }
+
+    if (
+      state.selectedReview &&
+      state.selectedReview
+        .requires_sensitive_review &&
+      !form
+        .sensitiveReviewCompleted
+    ) {
+      return (
+        "Sensitive information was detected. Complete the sensitive-information review checkbox before approving."
+      );
+    }
+
+    return "";
+  }
+
+  function validateForDenial(
+    form
+  ) {
+    if (
+      !form.reviewerName
+    ) {
+      return (
+        "Enter your reviewer name before denying this item."
+      );
+    }
+
+    if (
+      !form.reviewerNotes
+    ) {
+      return (
+        "Enter a denial reason in Reviewer Notes before denying this item."
+      );
+    }
+
+    return "";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Save Changes
+  |--------------------------------------------------------------------------
+  */
+
+  async function saveChanges(
+    options
+  ) {
+    const settings =
+      options ||
+      {};
+
+    if (
+      state.saving ||
+      !state.selectedReviewId
+    ) {
+      return null;
+    }
+
+    const form =
+      getFormData();
+
+    const validationError =
+      validateForSave(
+        form
+      );
+
+    if (validationError) {
+      showValidation(
+        validationError
+      );
+
+      return null;
+    }
+
+    clearValidation();
+
+    state.saving =
+      true;
+
+    if (saveButton) {
+      saveButton.disabled =
+        true;
+
+      saveButton.classList.add(
+        "is-working"
+      );
+
+      saveButton.textContent =
+        "Saving...";
+    }
+
+    try {
+      const result =
+        await apiRequest(
+          "/reviews/" +
+          encodeURIComponent(
+            state.selectedReviewId
+          ),
+          {
+            method:
+              "PUT",
+
+            body:
+              form
+          }
+        );
+
+      state.selectedReview =
+        result.review;
+
+      clearDirtyTracking();
+
+      if (
+        !settings.silent
+      ) {
+        showToast(
+          "Review changes saved.",
+          false
+        );
+      }
+
+      return result.review;
+
+    } catch (
+      error
+    ) {
+      showValidation(
+        error.message
+      );
+
+      showToast(
+        error.message,
+        true
+      );
+
+      return null;
+
+    } finally {
+      state.saving =
+        false;
+
+      if (saveButton) {
+        saveButton.disabled =
+          false;
+
+        saveButton.classList.remove(
+          "is-working"
+        );
+
+        saveButton.textContent =
+          "Save Changes";
+      }
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Approve
+  |--------------------------------------------------------------------------
+  */
+
+  async function approveReview() {
+    if (
+      state.approving ||
+      !state.selectedReviewId
+    ) {
+      return;
+    }
+
+    const form =
+      getFormData();
+
+    const validationError =
+      validateForApproval(
+        form
+      );
+
+    if (validationError) {
+      showValidation(
+        validationError
+      );
+
+      return;
+    }
+
+    clearValidation();
+
+    const confirmed =
+      window.confirm(
+        "Approve this information for use by the G-Floor chatbot?\n\n" +
+        "The edited Suggested Question and Suggested Answer will become approved chatbot knowledge."
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    state.approving =
+      true;
+
+    setAllActionButtonsDisabled(
+      true
+    );
+
+    if (approveButton) {
+      approveButton.textContent =
+        "Approving...";
+    }
+
+    try {
+      /*
+       * Save the review first.
+       *
+       * This ensures the approval endpoint receives the
+       * reviewer's latest edited chatbot wording.
+       */
+
+      const saved =
+        await saveChanges({
+          silent:
+            true
+        });
+
+      if (!saved) {
+        return;
+      }
+
+      const latestForm =
+        getFormData();
+
+      const result =
+        await apiRequest(
+          "/reviews/" +
+          encodeURIComponent(
+            state.selectedReviewId
+          ) +
+          "/approve",
+          {
+            method:
+              "POST",
+
+            body: {
+              reviewerName:
+                latestForm
+                  .reviewerName,
+
+              reviewerNotes:
+                latestForm
+                  .reviewerNotes
+            }
+          }
+        );
+
+      state.selectedReview =
+        result.review;
+
+      showToast(
+        "Knowledge approved and added to approved chatbot knowledge.",
+        false
+      );
+
+      clearDetail();
+
+      await Promise.all([
+        loadCounts(),
+        loadReviews()
+      ]);
+
+    } catch (
+      error
+    ) {
+      showValidation(
+        error.message
+      );
+
+      showToast(
+        error.message,
+        true
+      );
+
+    } finally {
+      state.approving =
+        false;
+
+      if (approveButton) {
+        approveButton.textContent =
+          "Approve";
+      }
+
+      restoreActionButtons();
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Deny
+  |--------------------------------------------------------------------------
+  */
+
+  async function denyReview() {
+    if (
+      state.denying ||
+      !state.selectedReviewId
+    ) {
+      return;
+    }
+
+    const form =
+      getFormData();
+
+    const validationError =
+      validateForDenial(
+        form
+      );
+
+    if (validationError) {
+      showValidation(
+        validationError
+      );
+
+      return;
+    }
+
+    clearValidation();
+
+    const confirmed =
+      window.confirm(
+        "Deny this review?\n\n" +
+        "This information will NOT be added to approved chatbot knowledge.\n\n" +
+        "Denial reason:\n" +
+        form.reviewerNotes
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    state.denying =
+      true;
+
+    setAllActionButtonsDisabled(
+      true
+    );
+
+    if (denyButton) {
+      denyButton.textContent =
+        "Denying...";
+    }
+
+    try {
+      const result =
+        await apiRequest(
+          "/reviews/" +
+          encodeURIComponent(
+            state.selectedReviewId
+          ) +
+          "/deny",
+          {
+            method:
+              "POST",
+
+            body: {
+              reviewerName:
+                form.reviewerName,
+
+              reviewerNotes:
+                form.reviewerNotes
+            }
+          }
+        );
+
+      state.selectedReview =
+        result.review;
+
+      showToast(
+        "Review denied. It was not added to chatbot knowledge.",
+        false
+      );
+
+      clearDetail();
+
+      await Promise.all([
+        loadCounts(),
+        loadReviews()
+      ]);
+
+    } catch (
+      error
+    ) {
+      showValidation(
+        error.message
+      );
+
+      showToast(
+        error.message,
+        true
+      );
+
+    } finally {
+      state.denying =
+        false;
+
+      if (denyButton) {
+        denyButton.textContent =
+          "Deny";
+      }
+
+      restoreActionButtons();
+    }
+  }
+
+  function setAllActionButtonsDisabled(
+    disabled
+  ) {
+    [
+      denyButton,
+      saveButton,
+      approveButton
+    ].forEach(
+      function (
+        button
+      ) {
+        if (button) {
+          button.disabled =
+            disabled;
+        }
+      }
+    );
+  }
+
+  function restoreActionButtons() {
+    const pending =
+      state.selectedReview &&
+      state.selectedReview
+        .status ===
+      "pending-review";
+
+    setAllActionButtonsDisabled(
+      !pending
+    );
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -1109,6 +2714,9 @@
 
       return;
     }
+
+    state.selectedReview =
+      review;
 
     detailPlaceholder.classList.add(
       "is-hidden"
@@ -1140,7 +2748,6 @@
         review.status
       );
 
-
     /*
     |--------------------------------------------------------------------------
     | Alerts
@@ -1158,12 +2765,12 @@
       sensitiveAlert.classList.remove(
         "is-hidden"
       );
+
     } else {
       sensitiveAlert.classList.add(
         "is-hidden"
       );
     }
-
 
     const duplicateAlert =
       document.getElementById(
@@ -1193,10 +2800,9 @@
       );
     }
 
-
     /*
     |--------------------------------------------------------------------------
-    | Source Information
+    | Source
     |--------------------------------------------------------------------------
     */
 
@@ -1232,7 +2838,6 @@
       "No subject"
     );
 
-
     /*
     |--------------------------------------------------------------------------
     | Original Customer Information
@@ -1251,81 +2856,6 @@
       "No Customer Service response provided."
     );
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Proposed Chatbot Knowledge
-    |--------------------------------------------------------------------------
-    */
-
-    setText(
-      "gfloor-detail-suggested-question",
-      review.suggested_question,
-      "No suggested question."
-    );
-
-    setText(
-      "gfloor-detail-suggested-answer",
-      review.suggested_answer,
-      "No suggested answer."
-    );
-
-    setText(
-      "gfloor-detail-suggested-category",
-      review.suggested_category,
-      "Uncategorized"
-    );
-
-    setText(
-      "gfloor-detail-response-type",
-      review.suggested_response_type,
-      "AUTO"
-    );
-
-    renderArray(
-      "gfloor-detail-variations",
-      review.suggested_variations,
-      "No suggested variations."
-    );
-
-    const sourceUrl =
-      document.getElementById(
-        "gfloor-detail-source-url"
-      );
-
-    sourceUrl.innerHTML =
-      "";
-
-    if (
-      review.suggested_source_url
-    ) {
-      const link =
-        document.createElement(
-          "a"
-        );
-
-      link.href =
-        review.suggested_source_url;
-
-      link.target =
-        "_blank";
-
-      link.rel =
-        "noopener noreferrer";
-
-      link.textContent =
-        review.suggested_source_url;
-
-      sourceUrl.appendChild(
-        link
-      );
-
-    } else {
-      sourceUrl.textContent =
-        "No source URL.";
-    }
-
-
     /*
     |--------------------------------------------------------------------------
     | Safety
@@ -1335,13 +2865,6 @@
     setText(
       "gfloor-detail-sensitive-required",
       review.requires_sensitive_review
-        ? "Yes"
-        : "No"
-    );
-
-    setText(
-      "gfloor-detail-sensitive-completed",
-      review.sensitive_review_completed
         ? "Yes"
         : "No"
     );
@@ -1359,19 +2882,6 @@
       "None detected"
     );
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reviewer
-    |--------------------------------------------------------------------------
-    */
-
-    setText(
-      "gfloor-detail-reviewer",
-      review.reviewer_name,
-      "Not reviewed"
-    );
-
     setText(
       "gfloor-detail-reviewed-date",
       review.reviewed_at
@@ -1381,13 +2891,26 @@
         : "Not reviewed"
     );
 
-    setText(
-      "gfloor-detail-reviewer-notes",
-      review.reviewer_notes,
-      "No reviewer notes."
-    );
-  }
+    /*
+    |--------------------------------------------------------------------------
+    | Pending vs Read-Only
+    |--------------------------------------------------------------------------
+    */
 
+    if (
+      review.status ===
+      "pending-review"
+    ) {
+      renderPendingEditors(
+        review
+      );
+
+    } else {
+      renderReadonlyFields(
+        review
+      );
+    }
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -1399,6 +2922,9 @@
     state.selectedReviewId =
       null;
 
+    state.selectedReview =
+      null;
+
     detailPanel.classList.add(
       "is-hidden"
     );
@@ -1406,8 +2932,9 @@
     detailPlaceholder.classList.remove(
       "is-hidden"
     );
-  }
 
+    clearValidation();
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -1435,6 +2962,9 @@
       1;
 
     state.selectedReviewId =
+      null;
+
+    state.selectedReview =
       null;
 
     updateActiveCountCard();
@@ -1493,7 +3023,6 @@
     }
   }
 
-
   /*
   |--------------------------------------------------------------------------
   | Count Card Filtering
@@ -1535,6 +3064,9 @@
     state.selectedReviewId =
       null;
 
+    state.selectedReview =
+      null;
+
     statusFilter.value =
       status;
 
@@ -1554,7 +3086,6 @@
       );
     }
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -1603,7 +3134,6 @@
         "Refresh";
     }
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -1743,12 +3273,36 @@
       }
     );
 
+  if (saveButton) {
+    saveButton.addEventListener(
+      "click",
+      function () {
+        saveChanges();
+      }
+    );
+  }
+
+  if (approveButton) {
+    approveButton.addEventListener(
+      "click",
+      approveReview
+    );
+  }
+
+  if (denyButton) {
+    denyButton.addEventListener(
+      "click",
+      denyReview
+    );
+  }
 
   /*
   |--------------------------------------------------------------------------
-  | Initial State
+  | Initialization
   |--------------------------------------------------------------------------
   */
+
+  injectStep20DStyles();
 
   updateActiveCountCard();
 
