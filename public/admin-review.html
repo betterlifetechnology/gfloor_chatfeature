@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="robots"
+    content="noindex,nofollow"
+  >
+
+  <title>
+    G-Floor Chat Knowledge Review
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="/admin-review.css?v=20.3"
+  >
+</head>
+
+<body>
+
+  <!-- ================================================================ -->
+  <!-- LOGIN SCREEN                                                     -->
+  <!-- ================================================================ -->
+
+  <div
+    id="gfloor-admin-login"
+    class="gfloor-admin-login"
+  >
+    <div class="gfloor-admin-login-card">
+
+      <div class="gfloor-admin-brand">
+
+        <img
+          src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
+          alt="G-Floor"
+          class="gfloor-admin-logo"
+        >
+
+      </div>
+
+      <h1>
+        Chat Knowledge Review
+      </h1>
+
+      <p class="gfloor-admin-login-intro">
+        Internal approval dashboard for reviewing new
+        Customer Service information before it becomes
+        available to the G-Floor chatbot.
+      </p>
+
+      <div class="gfloor-field">
+
+        <label for="gfloor-admin-token">
+          Admin Access Token
+        </label>
+
+        <input
+          id="gfloor-admin-token"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Enter your ADMIN_TOKEN"
+        >
+
+      </div>
+
+      <button
+        id="gfloor-admin-login-button"
+        class="gfloor-button gfloor-button-primary gfloor-button-full"
+        type="button"
+      >
+        Open Review Dashboard
+      </button>
+
+      <div
+        id="gfloor-admin-login-message"
+        class="gfloor-login-message"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <p class="gfloor-admin-security-note">
+        Your token is used only for the current browser session
+        and is not stored in localStorage.
+      </p>
+
+    </div>
+  </div>
+
+
+  <!-- ================================================================ -->
+  <!-- DASHBOARD                                                        -->
+  <!-- ================================================================ -->
+
+  <div
+    id="gfloor-admin-dashboard"
+    class="gfloor-admin-dashboard is-hidden"
+  >
+
+    <!-- ============================================================ -->
+    <!-- HEADER                                                       -->
+    <!-- ============================================================ -->
+
+    <header class="gfloor-admin-header">
+
+      <div class="gfloor-admin-header-inner">
+
+        <div class="gfloor-admin-header-brand">
+
+          <img
+            src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
+            alt="G-Floor"
+            class="gfloor-admin-header-logo"
+          >
+
+          <div>
+
+            <div class="gfloor-admin-eyebrow">
+              G-FLOOR CUSTOM CHAT
+            </div>
+
+            <h1>
+              Knowledge Approval Dashboard
+            </h1>
+
+          </div>
+
+        </div>
+
+        <div class="gfloor-admin-header-actions">
+
+          <div
+            id="gfloor-admin-db-status"
+            class="gfloor-database-status"
+          >
+            <span class="gfloor-status-dot"></span>
+
+            <span>
+              Checking database...
+            </span>
+          </div>
+
+          <button
+            id="gfloor-admin-refresh"
+            class="gfloor-button gfloor-button-secondary"
+            type="button"
+          >
+            Refresh
+          </button>
+
+          <button
+            id="gfloor-admin-logout"
+            class="gfloor-button gfloor-button-dark"
+            type="button"
+          >
+            Disconnect
+          </button>
+
+        </div>
+
+      </div>
+
+    </header>
+
+
+    <!-- ============================================================ -->
+    <!-- MAIN                                                         -->
+    <!-- ============================================================ -->
+
+    <main class="gfloor-admin-main">
+
+      <!-- ========================================================== -->
+      <!-- DASHBOARD INTRO                                            -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-admin-intro">
+
+        <div>
+
+          <h2>
+            Customer Service Knowledge Review
+          </h2>
+
+          <p>
+            Review new information before it becomes approved
+            chatbot knowledge. Original email content remains
+            separate from the suggested public chatbot response.
+          </p>
+
+        </div>
+
+        <div class="gfloor-admin-version">
+          Step 20C
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- COUNT CARDS                                                -->
+      <!-- ========================================================== -->
+
+      <section
+        class="gfloor-count-grid"
+        aria-label="Review counts"
+      >
+
+        <button
+          class="gfloor-count-card gfloor-count-pending is-active"
+          data-status-filter="pending-review"
+          type="button"
+        >
+
+          <span class="gfloor-count-label">
+            Pending Review
+          </span>
+
+          <strong
+            id="gfloor-count-pending"
+            class="gfloor-count-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-count-description">
+            Waiting for human review
+          </span>
+
+        </button>
+
+
+        <button
+          class="gfloor-count-card gfloor-count-approved"
+          data-status-filter="approved"
+          type="button"
+        >
+
+          <span class="gfloor-count-label">
+            Approved
+          </span>
+
+          <strong
+            id="gfloor-count-approved"
+            class="gfloor-count-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-count-description">
+            Approved chatbot knowledge
+          </span>
+
+        </button>
+
+
+        <button
+          class="gfloor-count-card gfloor-count-denied"
+          data-status-filter="denied"
+          type="button"
+        >
+
+          <span class="gfloor-count-label">
+            Denied
+          </span>
+
+          <strong
+            id="gfloor-count-denied"
+            class="gfloor-count-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-count-description">
+            Rejected information
+          </span>
+
+        </button>
+
+
+        <button
+          class="gfloor-count-card gfloor-count-total"
+          data-status-filter=""
+          type="button"
+        >
+
+          <span class="gfloor-count-label">
+            Total
+          </span>
+
+          <strong
+            id="gfloor-count-total"
+            class="gfloor-count-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-count-description">
+            All review records
+          </span>
+
+        </button>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- FILTERS                                                    -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-filter-panel">
+
+        <div class="gfloor-filter-heading">
+
+          <div>
+
+            <h2>
+              Review Queue
+            </h2>
+
+            <p>
+              Search and filter incoming knowledge suggestions.
+            </p>
+
+          </div>
+
+          <div
+            id="gfloor-review-result-count"
+            class="gfloor-result-count"
+          >
+            0 reviews
+          </div>
+
+        </div>
+
+
+        <div class="gfloor-filter-grid">
+
+          <div class="gfloor-field">
+
+            <label for="gfloor-filter-status">
+              Status
+            </label>
+
+            <select id="gfloor-filter-status">
+
+              <option value="pending-review">
+                Pending Review
+              </option>
+
+              <option value="approved">
+                Approved
+              </option>
+
+              <option value="denied">
+                Denied
+              </option>
+
+              <option value="">
+                All
+              </option>
+
+            </select>
+
+          </div>
+
+
+          <div class="gfloor-field">
+
+            <label for="gfloor-filter-category">
+              Category
+            </label>
+
+            <input
+              id="gfloor-filter-category"
+              type="text"
+              placeholder="Example: Installation"
+            >
+
+          </div>
+
+
+          <div class="gfloor-field gfloor-field-search">
+
+            <label for="gfloor-filter-search">
+              Search
+            </label>
+
+            <input
+              id="gfloor-filter-search"
+              type="search"
+              placeholder="Question, answer, subject..."
+            >
+
+          </div>
+
+
+          <div class="gfloor-filter-actions">
+
+            <button
+              id="gfloor-filter-apply"
+              class="gfloor-button gfloor-button-primary"
+              type="button"
+            >
+              Apply Filters
+            </button>
+
+            <button
+              id="gfloor-filter-clear"
+              class="gfloor-button gfloor-button-secondary"
+              type="button"
+            >
+              Clear
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- TWO-COLUMN REVIEW AREA                                     -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-review-layout">
+
+
+        <!-- ======================================================== -->
+        <!-- REVIEW LIST                                              -->
+        <!-- ======================================================== -->
+
+        <div class="gfloor-review-list-panel">
+
+          <div class="gfloor-panel-heading">
+
+            <h2>
+              Reviews
+            </h2>
+
+          </div>
+
+
+          <div
+            id="gfloor-review-loading"
+            class="gfloor-loading"
+          >
+            Loading reviews...
+          </div>
+
+
+          <div
+            id="gfloor-review-empty"
+            class="gfloor-empty-state is-hidden"
+          >
+
+            <div class="gfloor-empty-icon">
+              ✓
+            </div>
+
+            <h3>
+              No reviews found
+            </h3>
+
+            <p>
+              There are currently no records matching this filter.
+            </p>
+
+          </div>
+
+
+          <div
+            id="gfloor-review-list"
+            class="gfloor-review-list"
+          ></div>
+
+
+          <!-- Pagination -->
+
+          <div
+            id="gfloor-pagination"
+            class="gfloor-pagination is-hidden"
+          >
+
+            <button
+              id="gfloor-page-previous"
+              class="gfloor-button gfloor-button-secondary"
+              type="button"
+            >
+              Previous
+            </button>
+
+            <span id="gfloor-page-label">
+              Page 1 of 1
+            </span>
+
+            <button
+              id="gfloor-page-next"
+              class="gfloor-button gfloor-button-secondary"
+              type="button"
+            >
+              Next
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <!-- ======================================================== -->
+        <!-- REVIEW DETAIL                                            -->
+        <!-- ======================================================== -->
+
+        <aside class="gfloor-review-detail-panel">
+
+          <div
+            id="gfloor-detail-placeholder"
+            class="gfloor-detail-placeholder"
+          >
+
+            <div class="gfloor-detail-placeholder-icon">
+              ←
+            </div>
+
+            <h2>
+              Select a review
+            </h2>
+
+            <p>
+              Select an item from the review queue to inspect
+              the original Customer Service information and the
+              proposed chatbot knowledge.
+            </p>
+
+          </div>
+
+
+          <div
+            id="gfloor-review-detail"
+            class="gfloor-review-detail is-hidden"
+          >
+
+            <!-- Detail header -->
+
+            <div class="gfloor-detail-header">
+
+              <div>
+
+                <div class="gfloor-admin-eyebrow">
+                  KNOWLEDGE REVIEW
+                </div>
+
+                <h2 id="gfloor-detail-title">
+                  Review
+                </h2>
+
+              </div>
+
+              <span
+                id="gfloor-detail-status"
+                class="gfloor-status-badge"
+              >
+                Pending Review
+              </span>
+
+            </div>
+
+
+            <!-- Alerts -->
+
+            <div
+              id="gfloor-sensitive-alert"
+              class="gfloor-alert gfloor-alert-warning is-hidden"
+            >
+
+              <strong>
+                Sensitive information review required
+              </strong>
+
+              <p>
+                Customer-specific information may be present.
+                This item must be reviewed and cleaned before
+                it can be approved.
+              </p>
+
+            </div>
+
+
+            <div
+              id="gfloor-duplicate-alert"
+              class="gfloor-alert gfloor-alert-info is-hidden"
+            >
+
+              <strong>
+                Possible duplicate knowledge entry
+              </strong>
+
+              <p id="gfloor-duplicate-message">
+                This review may match existing approved knowledge.
+              </p>
+
+            </div>
+
+
+            <!-- Source metadata -->
+
+            <section class="gfloor-detail-section">
+
+              <h3>
+                Source Information
+              </h3>
+
+              <div class="gfloor-metadata-grid">
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Source
+                  </span>
+
+                  <strong id="gfloor-detail-source">
+                    —
+                  </strong>
+
+                </div>
+
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Received
+                  </span>
+
+                  <strong id="gfloor-detail-received">
+                    —
+                  </strong>
+
+                </div>
+
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Sender
+                  </span>
+
+                  <strong id="gfloor-detail-sender">
+                    —
+                  </strong>
+
+                </div>
+
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Category
+                  </span>
+
+                  <strong id="gfloor-detail-category">
+                    —
+                  </strong>
+
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Email Subject
+                </label>
+
+                <div
+                  id="gfloor-detail-subject"
+                  class="gfloor-readonly-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <!-- Original email information -->
+
+            <section class="gfloor-detail-section">
+
+              <div class="gfloor-section-title-row">
+
+                <h3>
+                  Original Customer Information
+                </h3>
+
+                <span class="gfloor-original-label">
+                  SOURCE ONLY
+                </span>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Customer Question
+                </label>
+
+                <div
+                  id="gfloor-detail-customer-question"
+                  class="gfloor-readonly-field gfloor-long-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Customer Service Response
+                </label>
+
+                <div
+                  id="gfloor-detail-customer-response"
+                  class="gfloor-readonly-field gfloor-long-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+              <p class="gfloor-section-note">
+                Original email content is preserved for reference.
+                It is not automatically published to the chatbot.
+              </p>
+
+            </section>
+
+
+            <!-- Proposed chatbot knowledge -->
+
+            <section class="gfloor-detail-section">
+
+              <div class="gfloor-section-title-row">
+
+                <h3>
+                  Proposed Chatbot Knowledge
+                </h3>
+
+                <span class="gfloor-proposed-label">
+                  REVIEW BEFORE APPROVAL
+                </span>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Suggested Question
+                </label>
+
+                <div
+                  id="gfloor-detail-suggested-question"
+                  class="gfloor-readonly-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Suggested Answer
+                </label>
+
+                <div
+                  id="gfloor-detail-suggested-answer"
+                  class="gfloor-readonly-field gfloor-long-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-two-column-fields">
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Category
+                  </label>
+
+                  <div
+                    id="gfloor-detail-suggested-category"
+                    class="gfloor-readonly-field"
+                  >
+                    —
+                  </div>
+
+                </div>
+
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Response Type
+                  </label>
+
+                  <div
+                    id="gfloor-detail-response-type"
+                    class="gfloor-readonly-field"
+                  >
+                    —
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Suggested Variations
+                </label>
+
+                <div
+                  id="gfloor-detail-variations"
+                  class="gfloor-variation-list"
+                >
+                  —
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Suggested Source URL
+                </label>
+
+                <div
+                  id="gfloor-detail-source-url"
+                  class="gfloor-readonly-field"
+                >
+                  —
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <!-- Sensitive info -->
+
+            <section class="gfloor-detail-section">
+
+              <h3>
+                Safety Review
+              </h3>
+
+              <div class="gfloor-safety-grid">
+
+                <div class="gfloor-safety-item">
+
+                  <span>
+                    Sensitive Review Required
+                  </span>
+
+                  <strong id="gfloor-detail-sensitive-required">
+                    No
+                  </strong>
+
+                </div>
+
+
+                <div class="gfloor-safety-item">
+
+                  <span>
+                    Sensitive Review Completed
+                  </span>
+
+                  <strong id="gfloor-detail-sensitive-completed">
+                    No
+                  </strong>
+
+                </div>
+
+
+                <div class="gfloor-safety-item">
+
+                  <span>
+                    Possible Duplicate
+                  </span>
+
+                  <strong id="gfloor-detail-duplicate">
+                    No
+                  </strong>
+
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Detected Sensitive Information
+                </label>
+
+                <div
+                  id="gfloor-detail-sensitive-data"
+                  class="gfloor-variation-list"
+                >
+                  None detected
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <!-- Reviewer information -->
+
+            <section class="gfloor-detail-section">
+
+              <h3>
+                Reviewer Information
+              </h3>
+
+
+              <div class="gfloor-two-column-fields">
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Reviewer
+                  </label>
+
+                  <div
+                    id="gfloor-detail-reviewer"
+                    class="gfloor-readonly-field"
+                  >
+                    Not reviewed
+                  </div>
+
+                </div>
+
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Reviewed
+                  </label>
+
+                  <div
+                    id="gfloor-detail-reviewed-date"
+                    class="gfloor-readonly-field"
+                  >
+                    —
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div class="gfloor-field">
+
+                <label>
+                  Reviewer Notes
+                </label>
+
+                <div
+                  id="gfloor-detail-reviewer-notes"
+                  class="gfloor-readonly-field gfloor-long-field"
+                >
+                  No reviewer notes.
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <!-- ==================================================== -->
+            <!-- STEP 20D PREVIEW ACTIONS                              -->
+            <!-- ==================================================== -->
+
+            <section class="gfloor-detail-actions-section">
+
+              <div class="gfloor-detail-action-note">
+
+                <strong>
+                  Step 20D
+                </strong>
+
+                <span>
+                  Editing, approval, and denial controls will be
+                  activated in the next step.
+                </span>
+
+              </div>
+
+
+              <div class="gfloor-detail-actions">
+
+                <button
+                  class="gfloor-button gfloor-button-danger"
+                  type="button"
+                  disabled
+                >
+                  Deny
+                </button>
+
+                <button
+                  class="gfloor-button gfloor-button-secondary"
+                  type="button"
+                  disabled
+                >
+                  Save Changes
+                </button>
+
+                <button
+                  class="gfloor-button gfloor-button-primary"
+                  type="button"
+                  disabled
+                >
+                  Approve
+                </button>
+
+              </div>
+
+            </section>
+
+          </div>
+
+        </aside>
+
+      </section>
+
+    </main>
+
+
+    <!-- ============================================================ -->
+    <!-- GLOBAL MESSAGE                                               -->
+    <!-- ============================================================ -->
+
+    <div
+      id="gfloor-admin-toast"
+      class="gfloor-toast is-hidden"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+  </div>
+
+
+  <script
+    src="/admin-review.js?v=20.3"
+    defer
+  ></script>
+
+</body>
+</html>
