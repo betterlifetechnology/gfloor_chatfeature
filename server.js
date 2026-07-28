@@ -3,6 +3,12 @@
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
+
+const adminReviewsRouter =
+  require(
+    "./routes/admin-reviews"
+  );
+
 require("dotenv").config();
 
 const app = express();
@@ -78,11 +84,14 @@ app.use(
     methods: [
       "GET",
       "POST",
+      "PUT",
       "OPTIONS"
     ],
 
     allowedHeaders: [
-      "Content-Type"
+      "Content-Type",
+      "Authorization",
+      "X-Admin-Token"
     ]
   })
 );
@@ -97,6 +106,17 @@ app.use(
   express.static(
     "public"
   )
+);
+
+/*
+|--------------------------------------------------------------------------
+| STEP 20B: Protected Knowledge Review Admin API
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/admin",
+  adminReviewsRouter
 );
 
 /*
