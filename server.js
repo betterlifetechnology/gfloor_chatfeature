@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const express = require("express");
 const cors = require("cors");
@@ -12,6 +12,9 @@ const adminReviewsRouter =
 const adminReportingRouter =
   require("./routes/admin-reporting");
 
+
+const adminKnowledgeStatusRouter =
+  require("./routes/admin-knowledge-status");
 const approvedKnowledgeRouter =
   require("./routes/approved-knowledge");
 
@@ -274,6 +277,27 @@ app.use(
   adminReportingRouter
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| Protected Approved Knowledge Status Administration API
+|--------------------------------------------------------------------------
+|
+| Routes provided:
+|
+| GET /admin/knowledge/status/health
+| GET /admin/knowledge/status/counts
+| GET /admin/knowledge/:knowledgeId/status
+| PUT /admin/knowledge/:knowledgeId/deactivate
+| PUT /admin/knowledge/:knowledgeId/reactivate
+|
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/admin",
+  adminKnowledgeStatusRouter
+);
 /*
 |--------------------------------------------------------------------------
 | Human-Approved Chat Knowledge
