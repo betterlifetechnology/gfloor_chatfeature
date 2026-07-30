@@ -3,13 +3,15 @@
 
   /*
   |--------------------------------------------------------------------------
-  | G-Floor Approved Knowledge Analytics
+  | G-Floor Approved Knowledge Analytics and PostgreSQL Reporting
   |--------------------------------------------------------------------------
   |
-  | STEP 20H
+  | STEP 20J.2
   |
-  | Tracks when the live chatbot answers from human-approved PostgreSQL
-  | knowledge.
+  | This file performs two functions:
+  |
+  | 1. Pushes approved-knowledge events into window.dataLayer for GTM/GA4.
+  | 2. Sends anonymous approved-knowledge events to PostgreSQL reporting.
   |
   | Events:
   |
@@ -17,9 +19,9 @@
   | gfloor_chat_approved_knowledge_helpful_yes
   | gfloor_chat_approved_knowledge_helpful_no
   |
-  | PRIVACY
+  | Privacy:
   |
-  | This file does NOT send:
+  | This file does not send or store:
   |
   | - raw customer questions
   | - raw chatbot answers
@@ -27,31 +29,52 @@
   | - email addresses
   | - phone numbers
   | - order numbers
+  | - chat transcripts
   |
   |--------------------------------------------------------------------------
   */
 
-  const VERSION =
-    "20.8";
+  const VERSION = "20.10";
+
+  const API_BASE_URL =
+    "https://gfloor-chatfeature.onrender.com";
+
+  const REPORTING_ENDPOINT =
+    API_BASE_URL +
+    "/chat/approved-knowledge/events";
+
+  const ANSWER_EVENT =
+    "gfloor_chat_approved_knowledge_answer";
+
+  const HELPFUL_YES_EVENT =
+    "gfloor_chat_approved_knowledge_helpful_yes";
+
+  const HELPFUL_NO_EVENT =
+    "gfloor_chat_approved_knowledge_helpful_no";
+
+  const APPROVED_STATE_MAX_AGE =
+    30 * 60 * 1000;
 
   const state = {
-    initialized:
-      false,
+    initialized: false,
 
-    lastApprovedKnowledgeId:
-      "",
+    responseObserver: null,
 
-    lastApprovedCategory:
-      "",
+    lastApprovedKnowledgeId: "",
 
-    lastApprovedResponseType:
-      "",
+    lastApprovedCategory: "",
 
-    lastApprovedSignature:
-      "",
+    lastApprovedResponseType: "",
 
-    lastApprovedTimestamp:
-      0
+    lastApprovedSignature: "",
+
+    lastApprovedTimestamp: 0,
+
+    sentClientEventIds:
+      new Set(),
+
+    submittedFeedback:
+      new Set()
   };
 
   /*
@@ -61,70 +84,42 @@
   */
 
   window.dataLayer =
-    window.dataLayer ||
-    [];
-
-  function pushEvent(
-    eventName,
-    parameters
-  ) {
-    const payload =
-      Object.assign(
-        {
-          event:
-            eventName,
-
-          chat_analytics_version:
-            VERSION,
-
-          chat_source:
-            "gfloor_custom_chat",
-
-          knowledge_source:
-            "approved_database",
-
-          page_location:
-            window.location.href,
-
-          page_path:
-            window.location.pathname,
-
-          page_title:
-            document.title
-        },
-        parameters ||
-        {}
-      );
-
-    window.dataLayer.push(
-      payload
-    );
-
-    console.log(
-      "G-Floor approved knowledge analytics:",
-      payload
-    );
-  }
+    window.dataLayer || [];
 
   /*
   |--------------------------------------------------------------------------
-  | Helpers
+  | General Helpers
   |--------------------------------------------------------------------------
   */
 
   function cleanText(
-    value
+    value,
+    maximumLength
   ) {
-    return String(
-      value == null
-        ? ""
-        : value
-    )
-      .replace(
-        /\s+/g,
-        " "
+    const cleaned =
+      String(
+        value == null
+          ? ""
+          : value
       )
-      .trim();
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .trim();
+
+    if (
+      typeof maximumLength ===
+        "number" &&
+      maximumLength > 0
+    ) {
+      return cleaned.slice(
+        0,
+        maximumLength
+      );
+    }
+
+    return cleaned;
   }
 
   function normalizeText(
@@ -161,6 +156,50 @@
       .trim();
   }
 
+  function createRandomId() {
+    if (
+      window.crypto &&
+      typeof window.crypto.randomUUID ===
+        "function"
+    ) {
+      return window.crypto
+        .randomUUID();
+    }
+
+    return (
+      Date.now()
+        .toString(36) +
+      "-" +
+      Math.random()
+        .toString(36)
+        .slice(2) +
+      "-" +
+      Math.random()
+        .toString(36)
+        .slice(2)
+    );
+  }
+
+  function createClientEventId(
+    eventType,
+    approvedKnowledgeId
+  ) {
+    return [
+      "gf",
+      VERSION,
+      eventType,
+      approvedKnowledgeId,
+      Date.now(),
+      createRandomId()
+    ].join("-");
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page Context
+  |--------------------------------------------------------------------------
+  */
+
   function getConversationId() {
     const element =
       document.querySelector(
@@ -169,7 +208,8 @@
 
     return element
       ? cleanText(
-          element.textContent
+          element.textContent,
+          150
         )
       : "";
   }
@@ -180,14 +220,28 @@
         /\/products\/([^/?#]+)/
       );
 
-    return (
-      match &&
-      match[1]
-        ? decodeURIComponent(
-            match[1]
-          )
-        : ""
-    );
+    if (
+      !match ||
+      !match[1]
+    ) {
+      return "";
+    }
+
+    try {
+      return cleanText(
+        decodeURIComponent(
+          match[1]
+        ),
+        300
+      );
+    } catch (
+      error
+    ) {
+      return cleanText(
+        match[1],
+        300
+      );
+    }
   }
 
   function getCollectionHandle() {
@@ -196,27 +250,40 @@
         /\/collections\/([^/?#]+)/
       );
 
-    return (
-      match &&
-      match[1]
-        ? decodeURIComponent(
-            match[1]
-          )
-        : ""
-    );
+    if (
+      !match ||
+      !match[1]
+    ) {
+      return "";
+    }
+
+    try {
+      return cleanText(
+        decodeURIComponent(
+          match[1]
+        ),
+        300
+      );
+    } catch (
+      error
+    ) {
+      return cleanText(
+        match[1],
+        300
+      );
+    }
   }
 
   function getVariantId() {
     try {
-      return (
+      return cleanText(
         new URLSearchParams(
           window.location.search
         ).get(
           "variant"
-        ) ||
-        ""
+        ) || "",
+        100
       );
-
     } catch (
       error
     ) {
@@ -286,6 +353,25 @@
     return "other";
   }
 
+  function getViewportGroup() {
+    const width =
+      window.innerWidth || 0;
+
+    if (
+      width <= 767
+    ) {
+      return "mobile";
+    }
+
+    if (
+      width <= 1024
+    ) {
+      return "tablet";
+    }
+
+    return "desktop";
+  }
+
   function getBaseContext() {
     return {
       conversation_id:
@@ -307,7 +393,324 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Approved Knowledge
+  | GTM / GA4 Event Push
+  |--------------------------------------------------------------------------
+  */
+
+  function pushDataLayerEvent(
+    eventName,
+    parameters
+  ) {
+    const payload =
+      Object.assign(
+        {
+          event:
+            eventName,
+
+          chat_analytics_version:
+            VERSION,
+
+          chat_source:
+            "gfloor_custom_chat",
+
+          knowledge_source:
+            "approved_database",
+
+          response_mode:
+            "approved_database",
+
+          page_location:
+            window.location.href,
+
+          page_path:
+            window.location.pathname,
+
+          page_title:
+            document.title
+        },
+        parameters || {}
+      );
+
+    window.dataLayer.push(
+      payload
+    );
+
+    console.log(
+      "G-Floor approved knowledge analytics:",
+      payload
+    );
+
+    return payload;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | PostgreSQL Reporting Payload
+  |--------------------------------------------------------------------------
+  */
+
+  function createReportingPayload(
+    eventName,
+    parameters
+  ) {
+    const eventType =
+      cleanText(
+        eventName,
+        100
+      ).replace(
+        /^gfloor_chat_/,
+        ""
+      );
+
+    const context =
+      getBaseContext();
+
+    return {
+      client_event_id:
+        createClientEventId(
+          eventType,
+          parameters
+            .approved_knowledge_id
+        ),
+
+      event_type:
+        eventType,
+
+      approved_knowledge_id:
+        cleanText(
+          parameters
+            .approved_knowledge_id,
+          150
+        ),
+
+      approved_knowledge_category:
+        cleanText(
+          parameters
+            .approved_knowledge_category,
+          150
+        ),
+
+      approved_response_type:
+        cleanText(
+          parameters
+            .approved_response_type,
+          50
+        ),
+
+      knowledge_source:
+        "approved_database",
+
+      response_mode:
+        "approved_database",
+
+      conversation_id:
+        context.conversation_id,
+
+      chat_page_type:
+        context.chat_page_type,
+
+      product_handle:
+        context.product_handle,
+
+      collection_handle:
+        context.collection_handle,
+
+      variant_id:
+        context.variant_id,
+
+      occurred_at:
+        new Date()
+          .toISOString(),
+
+      metadata: {
+        analytics_version:
+          VERSION,
+
+        browser_language:
+          cleanText(
+            navigator.language,
+            100
+          ),
+
+        viewport_group:
+          getViewportGroup()
+      }
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | PostgreSQL Event Delivery
+  |--------------------------------------------------------------------------
+  */
+
+  async function sendReportingEvent(
+    eventName,
+    parameters
+  ) {
+    const approvedKnowledgeId =
+      cleanText(
+        parameters &&
+        parameters
+          .approved_knowledge_id,
+        150
+      );
+
+    if (
+      !approvedKnowledgeId
+    ) {
+      console.warn(
+        "Approved reporting event skipped: approved_knowledge_id is missing."
+      );
+
+      return {
+        success: false,
+        skipped: true
+      };
+    }
+
+    const payload =
+      createReportingPayload(
+        eventName,
+        parameters
+      );
+
+    if (
+      state.sentClientEventIds.has(
+        payload.client_event_id
+      )
+    ) {
+      return {
+        success: true,
+        duplicate: true
+      };
+    }
+
+    state.sentClientEventIds.add(
+      payload.client_event_id
+    );
+
+    try {
+      const response =
+        await fetch(
+          REPORTING_ENDPOINT,
+          {
+            method:
+              "POST",
+
+            mode:
+              "cors",
+
+            credentials:
+              "omit",
+
+            cache:
+              "no-store",
+
+            keepalive:
+              true,
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
+      let result = null;
+
+      try {
+        result =
+          await response.json();
+      } catch (
+        error
+      ) {
+        result = null;
+      }
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          result &&
+          result.error
+            ? result.error
+            : "Reporting request failed with HTTP " +
+              response.status
+        );
+      }
+
+      console.log(
+        "G-Floor approved knowledge reporting stored:",
+        {
+          event:
+            eventName,
+
+          approvedKnowledgeId,
+
+          stored:
+            result &&
+            result.stored === true,
+
+          duplicate:
+            result &&
+            result.duplicate === true
+        }
+      );
+
+      return {
+        success: true,
+        result
+      };
+    } catch (
+      error
+    ) {
+      /*
+       * Reporting failure must never interrupt the customer chat.
+       */
+
+      console.warn(
+        "G-Floor approved knowledge reporting could not be stored:",
+        error.message
+      );
+
+      return {
+        success: false,
+        error:
+          error.message
+      };
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Combined Analytics Tracking
+  |--------------------------------------------------------------------------
+  */
+
+  function trackEvent(
+    eventName,
+    parameters
+  ) {
+    pushDataLayerEvent(
+      eventName,
+      parameters
+    );
+
+    sendReportingEvent(
+      eventName,
+      parameters
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Approved Knowledge Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -358,25 +761,42 @@
 
     return category
       ? cleanText(
-          category.textContent
+          category.textContent,
+          150
         )
       : "";
   }
 
+  function getApprovedKnowledgeId(
+    item
+  ) {
+    return cleanText(
+      item &&
+      (
+        item.id ||
+        item.knowledgeId ||
+        item.knowledge_id
+      ),
+      150
+    );
+  }
+
+  function getApprovedResponseType(
+    item
+  ) {
+    return cleanText(
+      item &&
+      (
+        item.responseType ||
+        item.response_type
+      ),
+      50
+    );
+  }
+
   /*
   |--------------------------------------------------------------------------
-  | Match the displayed answer to approved knowledge
-  |--------------------------------------------------------------------------
-  |
-  | The widget displays:
-  |
-  | category
-  | answer
-  | Learn More
-  | helpful prompt
-  |
-  | We match by approved answer first, then category.
-  |
+  | Match Displayed Answer to Approved Knowledge
   |--------------------------------------------------------------------------
   */
 
@@ -385,7 +805,8 @@
       getApprovedKnowledge();
 
     if (
-      !approvedKnowledge.length
+      approvedKnowledge.length ===
+        0
     ) {
       return null;
     }
@@ -406,7 +827,7 @@
 
     /*
      * Strongest match:
-     * approved answer appears inside the displayed response.
+     * approved answer appears in the displayed response.
      */
 
     const answerMatch =
@@ -437,10 +858,12 @@
 
     /*
      * Fallback:
-     * unique approved category matches the displayed category.
+     * only one approved entry uses the displayed category.
      */
 
-    if (responseCategory) {
+    if (
+      responseCategory
+    ) {
       const categoryMatches =
         approvedKnowledge.filter(
           function (
@@ -458,7 +881,7 @@
 
       if (
         categoryMatches.length ===
-        1
+          1
       ) {
         return categoryMatches[0];
       }
@@ -469,7 +892,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Answer Tracking
+  | Approved Answer Tracking
   |--------------------------------------------------------------------------
   */
 
@@ -477,9 +900,14 @@
     const item =
       findDisplayedApprovedKnowledge();
 
+    const approvedKnowledgeId =
+      getApprovedKnowledgeId(
+        item
+      );
+
     if (
       !item ||
-      !item.id
+      !approvedKnowledgeId
     ) {
       return;
     }
@@ -490,7 +918,7 @@
     const signature =
       [
         getConversationId(),
-        item.id,
+        approvedKnowledgeId,
         normalizeText(
           getVisibleResponseText()
         )
@@ -509,40 +937,44 @@
       signature;
 
     state.lastApprovedKnowledgeId =
-      cleanText(
-        item.id
-      );
+      approvedKnowledgeId;
 
     state.lastApprovedCategory =
       cleanText(
         item.category ||
-        responseCategory
+        responseCategory,
+        150
       );
 
     state.lastApprovedResponseType =
-      cleanText(
-        item.responseType
-      );
+      getApprovedResponseType(
+        item
+      ) || "AUTO";
 
     state.lastApprovedTimestamp =
       Date.now();
 
-    pushEvent(
-      "gfloor_chat_approved_knowledge_answer",
+    state.submittedFeedback.clear();
+
+    trackEvent(
+      ANSWER_EVENT,
       Object.assign(
         {},
         getBaseContext(),
         {
           approved_knowledge_id:
-            state.lastApprovedKnowledgeId,
+            state
+              .lastApprovedKnowledgeId,
 
           approved_knowledge_category:
-            state.lastApprovedCategory ||
+            state
+              .lastApprovedCategory ||
             "unknown",
 
           approved_response_type:
-            state.lastApprovedResponseType ||
-            "unknown",
+            state
+              .lastApprovedResponseType ||
+            "AUTO",
 
           answer_status:
             "answered",
@@ -552,7 +984,8 @@
 
           response_category:
             normalizeText(
-              state.lastApprovedCategory
+              state
+                .lastApprovedCategory
             )
               .replace(
                 /\s+/g,
@@ -579,42 +1012,70 @@
       return;
     }
 
-    /*
-     * Prevent old approved-answer state from attaching to feedback much later.
-     */
-
     const age =
       Date.now() -
       state.lastApprovedTimestamp;
 
     if (
       age >
-      30 * 60 * 1000
+      APPROVED_STATE_MAX_AGE
     ) {
       return;
     }
 
-    pushEvent(
+    const eventName =
       helpful
-        ? "gfloor_chat_approved_knowledge_helpful_yes"
-        : "gfloor_chat_approved_knowledge_helpful_no",
+        ? HELPFUL_YES_EVENT
+        : HELPFUL_NO_EVENT;
+
+    const feedbackSignature =
+      [
+        state
+          .lastApprovedSignature,
+        eventName
+      ].join(
+        "|"
+      );
+
+    if (
+      state.submittedFeedback.has(
+        feedbackSignature
+      )
+    ) {
+      return;
+    }
+
+    state.submittedFeedback.add(
+      feedbackSignature
+    );
+
+    trackEvent(
+      eventName,
       Object.assign(
         {},
         getBaseContext(),
         {
           approved_knowledge_id:
-            state.lastApprovedKnowledgeId,
+            state
+              .lastApprovedKnowledgeId,
 
           approved_knowledge_category:
-            state.lastApprovedCategory ||
+            state
+              .lastApprovedCategory ||
             "unknown",
 
           approved_response_type:
-            state.lastApprovedResponseType ||
-            "unknown",
+            state
+              .lastApprovedResponseType ||
+            "AUTO",
 
           response_mode:
-            "approved_database"
+            "approved_database",
+
+          helpful_response:
+            helpful
+              ? "yes"
+              : "no"
         }
       )
     );
@@ -634,17 +1095,23 @@
       return false;
     }
 
-    const observer =
+    if (
+      state.responseObserver
+    ) {
+      return true;
+    }
+
+    state.responseObserver =
       new MutationObserver(
         function () {
           window.setTimeout(
             trackApprovedAnswer,
-            50
+            75
           );
         }
       );
 
-    observer.observe(
+    state.responseObserver.observe(
       responseBox,
       {
         attributes:
@@ -684,7 +1151,8 @@
 
       if (
         !target ||
-        !target.closest
+        typeof target.closest !==
+          "function"
       ) {
         return;
       }
@@ -716,7 +1184,12 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Approved Knowledge Load Event
+  | Approved Knowledge Loaded Event
+  |--------------------------------------------------------------------------
+  |
+  | This event remains GTM-only because it does not represent an approved
+  | answer being shown to a customer.
+  |
   |--------------------------------------------------------------------------
   */
 
@@ -735,7 +1208,7 @@
           : getApprovedKnowledge()
               .length;
 
-      pushEvent(
+      pushDataLayerEvent(
         "gfloor_chat_approved_knowledge_loaded",
         Object.assign(
           {},
@@ -762,11 +1235,8 @@
       return;
     }
 
-    const responseObserverReady =
-      observeResponses();
-
     if (
-      !responseObserverReady
+      !observeResponses()
     ) {
       return;
     }
@@ -774,7 +1244,7 @@
     state.initialized =
       true;
 
-    pushEvent(
+    pushDataLayerEvent(
       "gfloor_chat_approved_analytics_loaded",
       Object.assign(
         {},
@@ -782,44 +1252,40 @@
         {
           approved_knowledge_count:
             getApprovedKnowledge()
-              .length
+              .length,
+
+          reporting_endpoint_enabled:
+            true
         }
       )
     );
 
-    /*
-     * Check whether an approved answer was already visible.
-     */
-
     trackApprovedAnswer();
 
     console.log(
-      "G-Floor approved knowledge analytics loaded:",
+      "G-Floor approved knowledge analytics and reporting loaded:",
       VERSION
     );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Retry until widget exists
+  | Retry Until Widget Exists
   |--------------------------------------------------------------------------
   */
 
-  let attempts =
-    0;
+  let attempts = 0;
 
   const initializationTimer =
     window.setInterval(
       function () {
-        attempts +=
-          1;
+        attempts += 1;
 
         initialize();
 
         if (
           state.initialized ||
-          attempts >=
-            60
+          attempts >= 60
         ) {
           window.clearInterval(
             initializationTimer
@@ -828,5 +1294,4 @@
       },
       250
     );
-
 })();
