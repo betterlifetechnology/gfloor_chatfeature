@@ -6,42 +6,55 @@
   | G-Floor Approved Knowledge PostgreSQL Reporting
   |--------------------------------------------------------------------------
   |
-  | STEP 20J.3
+  | STEP 20J.3B
   |
-  | This module listens for approved-knowledge events that are already pushed
-  | into window.dataLayer by the working analytics module.
+  | Safe standalone reporting module.
   |
-  | It does not:
+  | This file:
   |
-  | - control chatbot answers
-  | - observe the chatbot response DOM
-  | - intercept question submission
-  | - alter widget state
-  | - send raw customer questions
-  | - send chatbot answer text
+  | - does not intercept question submission
+  | - does not stop click propagation
+  | - does not alter widget.js
+  | - does not alter mascot processing
+  | - does not wrap window.dataLayer.push
+  | - does not store raw customer questions
+  | - does not store chatbot answer text
   |
   |--------------------------------------------------------------------------
   */
 
-  const VERSION = "20.11";
+  const VERSION = "20.13";
 
   const REPORTING_ENDPOINT =
     "https://gfloor-chatfeature.onrender.com/chat/approved-knowledge/events";
 
-  const SUPPORTED_EVENTS = new Set([
-    "gfloor_chat_approved_knowledge_answer",
-    "gfloor_chat_approved_knowledge_helpful_yes",
-    "gfloor_chat_approved_knowledge_helpful_no"
-  ]);
+  const ANSWER_EVENT =
+    "approved_knowledge_answer";
 
-  const processedObjects = new WeakSet();
-  const processedSignatures = new Set();
+  const HELPFUL_YES_EVENT =
+    "approved_knowledge_helpful_yes";
 
-  window.dataLayer = window.dataLayer || [];
+  const HELPFUL_NO_EVENT =
+    "approved_knowledge_helpful_no";
+
+  const RESPONSE_POLL_INTERVAL_MS = 200;
+  const RESPONSE_POLL_MAX_ATTEMPTS = 75;
+  const APPROVED_STATE_MAX_AGE_MS = 30 * 60 * 1000;
+
+  const state = {
+    initialized: false,
+    activeKnowledgeId: "",
+    activeCategory: "",
+    activeResponseType: "",
+    activeAnswerSignature: "",
+    activeAnswerTimestamp: 0,
+    recordedAnswerSignatures: new Set(),
+    recordedFeedbackSignatures: new Set()
+  };
 
   /*
   |--------------------------------------------------------------------------
-  | Helpers
+  | Text Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -64,6 +77,17 @@
     return text;
   }
 
+  function normalizeText(value) {
+    return cleanText(value)
+      .toLowerCase()
+      .replace(/g-floor/g, "gfloor")
+      .replace(/g floor/g, "gfloor")
+      .replace(/[®™]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function createRandomId() {
     if (
       window.crypto &&
@@ -79,20 +103,141 @@
     ].join("-");
   }
 
-  function getConversationId() {
-    const element = document.querySelector(
-      ".gfloor-conversation-id"
-    );
+  /*
+  |--------------------------------------------------------------------------
+  | Approved Knowledge Helpers
+  |--------------------------------------------------------------------------
+  */
 
-    return element
-      ? cleanText(element.textContent, 150)
+  function getApprovedKnowledge() {
+    return Array.isArray(
+      window.GFloorApprovedKnowledge
+    )
+      ? window.GFloorApprovedKnowledge
+      : [];
+  }
+
+  function getKnowledgeId(item) {
+    return cleanText(
+      item &&
+        (
+          item.id ||
+          item.knowledgeId ||
+          item.knowledge_id
+        ),
+      150
+    );
+  }
+
+  function getKnowledgeAnswer(item) {
+    return cleanText(
+      item && item.answer,
+      10000
+    );
+  }
+
+  function getKnowledgeCategory(item) {
+    return cleanText(
+      item && item.category,
+      150
+    );
+  }
+
+  function getKnowledgeResponseType(item) {
+    return cleanText(
+      item &&
+        (
+          item.responseType ||
+          item.response_type
+        ),
+      50
+    ) || "AUTO";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Widget DOM Helpers
+  |--------------------------------------------------------------------------
+  */
+
+  function getResponseBox() {
+    return document.querySelector(
+      "#gfloor-response-box"
+    );
+  }
+
+  function responseBoxIsVisible(responseBox) {
+    if (!responseBox) {
+      return false;
+    }
+
+    return (
+      responseBox.classList.contains("show") ||
+      responseBox.offsetParent !== null
+    );
+  }
+
+  function getVisibleResponseText() {
+    const responseBox = getResponseBox();
+
+    if (
+      !responseBox ||
+      !responseBoxIsVisible(responseBox)
+    ) {
+      return "";
+    }
+
+    return cleanText(
+      responseBox.textContent,
+      15000
+    );
+  }
+
+  function getVisibleResponseCategory() {
+    const responseBox = getResponseBox();
+
+    if (!responseBox) {
+      return "";
+    }
+
+    const categoryElement =
+      responseBox.querySelector(
+        ".gfloor-response-category"
+      );
+
+    return categoryElement
+      ? cleanText(
+          categoryElement.textContent,
+          150
+        )
       : "";
   }
 
+  function getConversationId() {
+    const element =
+      document.querySelector(
+        ".gfloor-conversation-id"
+      );
+
+    return element
+      ? cleanText(
+          element.textContent,
+          150
+        )
+      : "";
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page Context
+  |--------------------------------------------------------------------------
+  */
+
   function getProductHandle() {
-    const match = window.location.pathname.match(
-      /\/products\/([^/?#]+)/
-    );
+    const match =
+      window.location.pathname.match(
+        /\/products\/([^/?#]+)/
+      );
 
     if (!match || !match[1]) {
       return "";
@@ -104,14 +249,18 @@
         300
       );
     } catch (error) {
-      return cleanText(match[1], 300);
+      return cleanText(
+        match[1],
+        300
+      );
     }
   }
 
   function getCollectionHandle() {
-    const match = window.location.pathname.match(
-      /\/collections\/([^/?#]+)/
-    );
+    const match =
+      window.location.pathname.match(
+        /\/collections\/([^/?#]+)/
+      );
 
     if (!match || !match[1]) {
       return "";
@@ -123,7 +272,10 @@
         300
       );
     } catch (error) {
-      return cleanText(match[1], 300);
+      return cleanText(
+        match[1],
+        300
+      );
     }
   }
 
@@ -141,7 +293,8 @@
   }
 
   function getPageType() {
-    const path = window.location.pathname;
+    const path =
+      window.location.pathname;
 
     if (path === "/" || path === "") {
       return "home";
@@ -175,7 +328,8 @@
   }
 
   function getViewportGroup() {
-    const width = window.innerWidth || 0;
+    const width =
+      window.innerWidth || 0;
 
     if (width <= 767) {
       return "mobile";
@@ -188,73 +342,108 @@
     return "desktop";
   }
 
-  function normalizeEventType(eventName) {
-    return cleanText(eventName, 100).replace(
-      /^gfloor_chat_/,
-      ""
-    );
+  /*
+  |--------------------------------------------------------------------------
+  | Match Rendered Answer
+  |--------------------------------------------------------------------------
+  */
+
+  function findRenderedApprovedKnowledge() {
+    const approvedKnowledge =
+      getApprovedKnowledge();
+
+    if (approvedKnowledge.length === 0) {
+      return null;
+    }
+
+    const visibleResponseText =
+      normalizeText(
+        getVisibleResponseText()
+      );
+
+    if (!visibleResponseText) {
+      return null;
+    }
+
+    const exactAnswerMatch =
+      approvedKnowledge.find(
+        function (item) {
+          const approvedAnswer =
+            normalizeText(
+              getKnowledgeAnswer(item)
+            );
+
+          return (
+            approvedAnswer.length >= 10 &&
+            visibleResponseText.includes(
+              approvedAnswer
+            )
+          );
+        }
+      );
+
+    if (exactAnswerMatch) {
+      return exactAnswerMatch;
+    }
+
+    const visibleCategory =
+      normalizeText(
+        getVisibleResponseCategory()
+      );
+
+    if (!visibleCategory) {
+      return null;
+    }
+
+    const categoryMatches =
+      approvedKnowledge.filter(
+        function (item) {
+          return (
+            normalizeText(
+              getKnowledgeCategory(item)
+            ) === visibleCategory
+          );
+        }
+      );
+
+    return categoryMatches.length === 1
+      ? categoryMatches[0]
+      : null;
   }
 
-  function createSignature(eventObject) {
-    return [
-      cleanText(eventObject.event, 100),
-      cleanText(
-        eventObject.approved_knowledge_id,
-        150
-      ),
-      cleanText(
-        eventObject.conversation_id ||
-          getConversationId(),
-        150
-      ),
-      cleanText(
-        eventObject.helpful_response,
-        20
-      ),
-      Date.now()
-    ].join("|");
-  }
+  /*
+  |--------------------------------------------------------------------------
+  | Reporting Payload
+  |--------------------------------------------------------------------------
+  */
 
-  function createPayload(eventObject) {
-    const eventName = cleanText(
-      eventObject.event,
-      100
-    );
-
-    const eventType = normalizeEventType(
-      eventName
-    );
-
-    const approvedKnowledgeId = cleanText(
-      eventObject.approved_knowledge_id,
-      150
-    );
+  function createPayload(
+    eventType,
+    item
+  ) {
+    const knowledgeId =
+      getKnowledgeId(item);
 
     return {
       client_event_id: [
         "gfloor",
         VERSION,
         eventType,
-        approvedKnowledgeId,
+        knowledgeId,
         createRandomId()
       ].join("-"),
 
-      event_type: eventType,
+      event_type:
+        eventType,
 
       approved_knowledge_id:
-        approvedKnowledgeId,
+        knowledgeId,
 
       approved_knowledge_category:
-        cleanText(
-          eventObject.approved_knowledge_category,
-          150
-        ),
+        getKnowledgeCategory(item),
 
       approved_response_type:
-        cleanText(
-          eventObject.approved_response_type,
-          50
-        ),
+        getKnowledgeResponseType(item),
 
       knowledge_source:
         "approved_database",
@@ -263,40 +452,19 @@
         "approved_database",
 
       conversation_id:
-        cleanText(
-          eventObject.conversation_id ||
-            getConversationId(),
-          150
-        ),
+        getConversationId(),
 
       chat_page_type:
-        cleanText(
-          eventObject.chat_page_type ||
-            eventObject.page_type ||
-            getPageType(),
-          100
-        ),
+        getPageType(),
 
       product_handle:
-        cleanText(
-          eventObject.product_handle ||
-            getProductHandle(),
-          300
-        ),
+        getProductHandle(),
 
       collection_handle:
-        cleanText(
-          eventObject.collection_handle ||
-            getCollectionHandle(),
-          300
-        ),
+        getCollectionHandle(),
 
       variant_id:
-        cleanText(
-          eventObject.variant_id ||
-            getVariantId(),
-          100
-        ),
+        getVariantId(),
 
       occurred_at:
         new Date().toISOString(),
@@ -323,66 +491,49 @@
   |--------------------------------------------------------------------------
   */
 
-  async function sendReportingEvent(eventObject) {
-    const eventName = cleanText(
-      eventObject && eventObject.event,
-      100
-    );
+  async function sendReportingEvent(
+    eventType,
+    item
+  ) {
+    const knowledgeId =
+      getKnowledgeId(item);
 
-    if (!SUPPORTED_EVENTS.has(eventName)) {
+    if (!knowledgeId) {
       return;
     }
 
-    const approvedKnowledgeId = cleanText(
-      eventObject.approved_knowledge_id,
-      150
-    );
-
-    if (!approvedKnowledgeId) {
-      console.warn(
-        "G-Floor reporting skipped because approved_knowledge_id is missing."
+    const payload =
+      createPayload(
+        eventType,
+        item
       );
-
-      return;
-    }
-
-    const signature = createSignature(
-      eventObject
-    );
-
-    if (processedSignatures.has(signature)) {
-      return;
-    }
-
-    processedSignatures.add(signature);
-
-    const payload = createPayload(
-      eventObject
-    );
 
     try {
-      const response = await fetch(
-        REPORTING_ENDPOINT,
-        {
-          method: "POST",
-          mode: "cors",
-          credentials: "omit",
-          cache: "no-store",
-          keepalive: true,
+      const response =
+        await fetch(
+          REPORTING_ENDPOINT,
+          {
+            method: "POST",
+            mode: "cors",
+            credentials: "omit",
+            cache: "no-store",
+            keepalive: true,
 
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
 
-          body: JSON.stringify(payload)
-        }
-      );
+            body:
+              JSON.stringify(payload)
+          }
+        );
 
       let result = null;
 
       try {
-        result = await response.json();
+        result =
+          await response.json();
       } catch (error) {
         result = null;
       }
@@ -391,30 +542,32 @@
         throw new Error(
           result && result.error
             ? result.error
-            : `Reporting request failed with HTTP ${response.status}.`
+            : "HTTP " + response.status
         );
       }
 
       console.log(
-        "G-Floor PostgreSQL reporting event stored:",
+        "G-Floor approved reporting stored:",
         {
-          event: eventName,
-          approvedKnowledgeId,
+          eventType,
+          knowledgeId,
           stored:
-            result &&
-            result.stored === true,
+            Boolean(
+              result && result.stored
+            ),
           duplicate:
-            result &&
-            result.duplicate === true
+            Boolean(
+              result && result.duplicate
+            )
         }
       );
     } catch (error) {
       /*
-       * Analytics failure must never affect the chatbot.
+       * Reporting must never interrupt the chatbot.
        */
 
       console.warn(
-        "G-Floor PostgreSQL reporting event failed:",
+        "G-Floor approved reporting failed:",
         error.message
       );
     }
@@ -422,81 +575,275 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Existing Events
+  | Record Approved Answer
   |--------------------------------------------------------------------------
   */
 
-  function processExistingEvents() {
-    window.dataLayer.forEach(
+  function recordRenderedApprovedAnswer() {
+    const item =
+      findRenderedApprovedKnowledge();
+
+    if (!item) {
+      return false;
+    }
+
+    const knowledgeId =
+      getKnowledgeId(item);
+
+    const answerSignature = [
+      getConversationId(),
+      knowledgeId,
+      normalizeText(
+        getVisibleResponseText()
+      )
+    ].join("|");
+
+    state.activeKnowledgeId =
+      knowledgeId;
+
+    state.activeCategory =
+      getKnowledgeCategory(item);
+
+    state.activeResponseType =
+      getKnowledgeResponseType(item);
+
+    state.activeAnswerSignature =
+      answerSignature;
+
+    state.activeAnswerTimestamp =
+      Date.now();
+
+    if (
+      state.recordedAnswerSignatures.has(
+        answerSignature
+      )
+    ) {
+      return true;
+    }
+
+    state.recordedAnswerSignatures.add(
+      answerSignature
+    );
+
+    sendReportingEvent(
+      ANSWER_EVENT,
+      item
+    );
+
+    return true;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Poll After Question Submission
+  |--------------------------------------------------------------------------
+  */
+
+  function waitForRenderedAnswer() {
+    let attempts = 0;
+
+    const timer =
+      window.setInterval(
+        function () {
+          attempts += 1;
+
+          const recorded =
+            recordRenderedApprovedAnswer();
+
+          if (
+            recorded ||
+            attempts >=
+              RESPONSE_POLL_MAX_ATTEMPTS
+          ) {
+            window.clearInterval(
+              timer
+            );
+          }
+        },
+        RESPONSE_POLL_INTERVAL_MS
+      );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Locate Active Knowledge Record
+  |--------------------------------------------------------------------------
+  */
+
+  function getActiveKnowledgeItem() {
+    const approvedKnowledge =
+      getApprovedKnowledge();
+
+    return approvedKnowledge.find(
       function (item) {
-        if (
-          !item ||
-          typeof item !== "object"
-        ) {
-          return;
-        }
-
-        if (processedObjects.has(item)) {
-          return;
-        }
-
-        processedObjects.add(item);
-
-        sendReportingEvent(item);
+        return (
+          getKnowledgeId(item) ===
+          state.activeKnowledgeId
+        );
       }
+    ) || null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Record Helpful Feedback
+  |--------------------------------------------------------------------------
+  */
+
+  function recordHelpfulFeedback(
+    helpful
+  ) {
+    if (!state.activeKnowledgeId) {
+      recordRenderedApprovedAnswer();
+    }
+
+    if (!state.activeKnowledgeId) {
+      return;
+    }
+
+    const stateAge =
+      Date.now() -
+      state.activeAnswerTimestamp;
+
+    if (
+      stateAge >
+      APPROVED_STATE_MAX_AGE_MS
+    ) {
+      return;
+    }
+
+    const item =
+      getActiveKnowledgeItem();
+
+    if (!item) {
+      return;
+    }
+
+    const eventType =
+      helpful
+        ? HELPFUL_YES_EVENT
+        : HELPFUL_NO_EVENT;
+
+    const feedbackSignature = [
+      state.activeAnswerSignature,
+      eventType
+    ].join("|");
+
+    if (
+      state.recordedFeedbackSignatures.has(
+        feedbackSignature
+      )
+    ) {
+      return;
+    }
+
+    state.recordedFeedbackSignatures.add(
+      feedbackSignature
+    );
+
+    sendReportingEvent(
+      eventType,
+      item
     );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Future Events
+  | Passive Click Listener
+  |--------------------------------------------------------------------------
+  |
+  | This listener does not call:
+  |
+  | - preventDefault
+  | - stopPropagation
+  | - stopImmediatePropagation
+  |
   |--------------------------------------------------------------------------
   */
 
-  const originalPush =
-    window.dataLayer.push.bind(
-      window.dataLayer
-    );
+  document.addEventListener(
+    "click",
+    function (event) {
+      const target =
+        event.target;
 
-  window.dataLayer.push =
-    function () {
-      const items =
-        Array.prototype.slice.call(
-          arguments
-        );
+      if (
+        !target ||
+        typeof target.closest !==
+          "function"
+      ) {
+        return;
+      }
 
-      const result =
-        originalPush.apply(
-          window.dataLayer,
-          items
-        );
+      if (
+        target.closest(
+          "#gfloor-question-submit"
+        )
+      ) {
+        waitForRenderedAnswer();
+        return;
+      }
 
-      items.forEach(
-        function (item) {
-          if (
-            !item ||
-            typeof item !== "object"
-          ) {
-            return;
-          }
+      if (
+        target.closest(
+          "#gfloor-helpful-yes"
+        )
+      ) {
+        recordHelpfulFeedback(true);
+        return;
+      }
 
-          if (processedObjects.has(item)) {
-            return;
-          }
+      if (
+        target.closest(
+          "#gfloor-helpful-no"
+        )
+      ) {
+        recordHelpfulFeedback(false);
+      }
+    },
+    false
+  );
 
-          processedObjects.add(item);
+  /*
+  |--------------------------------------------------------------------------
+  | Enter-Key Submission Support
+  |--------------------------------------------------------------------------
+  */
 
-          sendReportingEvent(item);
-        }
-      );
+  document.addEventListener(
+    "keydown",
+    function (event) {
+      const target =
+        event.target;
 
-      return result;
-    };
+      if (
+        !target ||
+        target.id !==
+          "gfloor-chat-question"
+      ) {
+        return;
+      }
 
-  processExistingEvents();
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
+        waitForRenderedAnswer();
+      }
+    },
+    false
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initialization
+  |--------------------------------------------------------------------------
+  */
+
+  state.initialized = true;
 
   console.log(
-    "G-Floor approved knowledge PostgreSQL reporting loaded:",
+    "G-Floor safe approved knowledge reporting loaded:",
     VERSION
   );
 })();
