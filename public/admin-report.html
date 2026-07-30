@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="robots"
+    content="noindex,nofollow,noarchive,nosnippet,noimageindex"
+  >
+
+  <meta
+    name="referrer"
+    content="no-referrer"
+  >
+
+  <meta
+    http-equiv="Cache-Control"
+    content="no-store, no-cache, must-revalidate, max-age=0"
+  >
+
+  <meta
+    http-equiv="Pragma"
+    content="no-cache"
+  >
+
+  <meta
+    http-equiv="Expires"
+    content="0"
+  >
+
+  <title>
+    G-Floor Approved Knowledge Reporting
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="/admin-report.css?v=20.15"
+  >
+</head>
+
+<body>
+
+  <!-- ================================================================ -->
+  <!-- LOGIN                                                            -->
+  <!-- ================================================================ -->
+
+  <div
+    id="gfloor-report-login"
+    class="gfloor-report-login"
+  >
+    <div class="gfloor-report-login-card">
+
+      <img
+        src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
+        alt="G-Floor"
+        class="gfloor-report-login-logo"
+      >
+
+      <h1>
+        Approved Knowledge Reporting
+      </h1>
+
+      <p>
+        Internal reporting dashboard for measuring how human-approved
+        G-Floor chatbot knowledge is being used.
+      </p>
+
+      <div class="gfloor-report-field">
+
+        <label for="gfloor-report-token">
+          Admin Access Token
+        </label>
+
+        <input
+          id="gfloor-report-token"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Enter your ADMIN_TOKEN"
+        >
+
+      </div>
+
+      <button
+        id="gfloor-report-login-button"
+        class="gfloor-report-button gfloor-report-button-primary gfloor-report-button-full"
+        type="button"
+      >
+        Open Reporting Dashboard
+      </button>
+
+      <div
+        id="gfloor-report-login-message"
+        class="gfloor-report-login-message"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <p class="gfloor-report-security-note">
+        The token is stored only for the current browser tab.
+      </p>
+
+    </div>
+  </div>
+
+
+  <!-- ================================================================ -->
+  <!-- DASHBOARD                                                        -->
+  <!-- ================================================================ -->
+
+  <div
+    id="gfloor-report-dashboard"
+    class="gfloor-report-dashboard is-hidden"
+  >
+
+    <!-- ============================================================ -->
+    <!-- HEADER                                                       -->
+    <!-- ============================================================ -->
+
+    <header class="gfloor-report-header">
+
+      <div class="gfloor-report-header-inner">
+
+        <div class="gfloor-report-brand">
+
+          <img
+            src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
+            alt="G-Floor"
+            class="gfloor-report-header-logo"
+          >
+
+          <div>
+
+            <div class="gfloor-report-eyebrow">
+              G-FLOOR CUSTOM CHAT
+            </div>
+
+            <h1>
+              Approved Knowledge Reporting
+            </h1>
+
+          </div>
+
+        </div>
+
+        <div class="gfloor-report-header-actions">
+
+          <div
+            id="gfloor-report-api-status"
+            class="gfloor-report-status"
+          >
+            <span class="gfloor-report-status-dot"></span>
+
+            <span>
+              Checking reporting database...
+            </span>
+          </div>
+
+          <a
+            href="/admin-review.html"
+            class="gfloor-report-button gfloor-report-button-secondary"
+          >
+            Knowledge Review
+          </a>
+
+          <button
+            id="gfloor-report-refresh"
+            class="gfloor-report-button gfloor-report-button-secondary"
+            type="button"
+          >
+            Refresh
+          </button>
+
+          <button
+            id="gfloor-report-disconnect"
+            class="gfloor-report-button gfloor-report-button-dark"
+            type="button"
+          >
+            Disconnect
+          </button>
+
+        </div>
+
+      </div>
+
+    </header>
+
+
+    <!-- ============================================================ -->
+    <!-- MAIN                                                         -->
+    <!-- ============================================================ -->
+
+    <main class="gfloor-report-main">
+
+      <!-- ========================================================== -->
+      <!-- INTRO                                                      -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-intro">
+
+        <div>
+
+          <h2>
+            Chatbot Knowledge Performance
+          </h2>
+
+          <p>
+            Review approved-answer usage, customer feedback,
+            knowledge categories, and daily reporting activity.
+          </p>
+
+        </div>
+
+        <div
+          id="gfloor-report-last-updated"
+          class="gfloor-report-last-updated"
+        >
+          Not loaded
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- DATE FILTERS                                               -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-filter-panel">
+
+        <div class="gfloor-report-filter-grid">
+
+          <div class="gfloor-report-field">
+
+            <label for="gfloor-report-start-date">
+              Start Date
+            </label>
+
+            <input
+              id="gfloor-report-start-date"
+              type="date"
+            >
+
+          </div>
+
+          <div class="gfloor-report-field">
+
+            <label for="gfloor-report-end-date">
+              End Date
+            </label>
+
+            <input
+              id="gfloor-report-end-date"
+              type="date"
+            >
+
+          </div>
+
+          <div class="gfloor-report-field">
+
+            <label for="gfloor-report-category-filter">
+              Category
+            </label>
+
+            <select id="gfloor-report-category-filter">
+
+              <option value="">
+                All Categories
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="gfloor-report-field gfloor-report-search-field">
+
+            <label for="gfloor-report-search">
+              Search Approved Knowledge
+            </label>
+
+            <input
+              id="gfloor-report-search"
+              type="search"
+              placeholder="Question, category, or knowledge ID..."
+            >
+
+          </div>
+
+          <div class="gfloor-report-filter-actions">
+
+            <button
+              id="gfloor-report-apply"
+              class="gfloor-report-button gfloor-report-button-primary"
+              type="button"
+            >
+              Apply Filters
+            </button>
+
+            <button
+              id="gfloor-report-reset"
+              class="gfloor-report-button gfloor-report-button-secondary"
+              type="button"
+            >
+              Reset
+            </button>
+
+            <button
+              id="gfloor-report-export"
+              class="gfloor-report-button gfloor-report-button-dark"
+              type="button"
+            >
+              Export CSV
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- GLOBAL MESSAGE                                             -->
+      <!-- ========================================================== -->
+
+      <div
+        id="gfloor-report-message"
+        class="gfloor-report-message is-hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+
+      <!-- ========================================================== -->
+      <!-- SUMMARY CARDS                                              -->
+      <!-- ========================================================== -->
+
+      <section
+        class="gfloor-report-card-grid"
+        aria-label="Approved knowledge reporting summary"
+      >
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Approved Answers Served
+          </span>
+
+          <strong
+            id="gfloor-report-total-answers"
+            class="gfloor-report-card-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Answers displayed from approved PostgreSQL knowledge
+          </span>
+
+        </article>
+
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Helpful Yes
+          </span>
+
+          <strong
+            id="gfloor-report-helpful-yes"
+            class="gfloor-report-card-number gfloor-report-number-positive"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Customers who marked an answer helpful
+          </span>
+
+        </article>
+
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Helpful No
+          </span>
+
+          <strong
+            id="gfloor-report-helpful-no"
+            class="gfloor-report-card-number gfloor-report-number-negative"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Customers who marked an answer unhelpful
+          </span>
+
+        </article>
+
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Helpful Rate
+          </span>
+
+          <strong
+            id="gfloor-report-helpful-rate"
+            class="gfloor-report-card-number"
+          >
+            —
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Helpful Yes divided by all feedback
+          </span>
+
+        </article>
+
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Knowledge Entries Used
+          </span>
+
+          <strong
+            id="gfloor-report-entries-used"
+            class="gfloor-report-card-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Unique approved knowledge records served
+          </span>
+
+        </article>
+
+
+        <article class="gfloor-report-card">
+
+          <span class="gfloor-report-card-label">
+            Conversations
+          </span>
+
+          <strong
+            id="gfloor-report-conversations"
+            class="gfloor-report-card-number"
+          >
+            0
+          </strong>
+
+          <span class="gfloor-report-card-description">
+            Unique chat conversations with reporting events
+          </span>
+
+        </article>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- DAILY ACTIVITY                                             -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-panel">
+
+        <div class="gfloor-report-panel-heading">
+
+          <div>
+
+            <h2>
+              Daily Activity
+            </h2>
+
+            <p>
+              Approved answers and customer feedback by day.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div
+          id="gfloor-report-daily-chart"
+          class="gfloor-report-daily-chart"
+        ></div>
+
+        <div
+          id="gfloor-report-daily-empty"
+          class="gfloor-report-empty is-hidden"
+        >
+          No daily reporting activity was found for this date range.
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- CATEGORY REPORTING                                         -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-panel">
+
+        <div class="gfloor-report-panel-heading">
+
+          <div>
+
+            <h2>
+              Category Performance
+            </h2>
+
+            <p>
+              Approved answer usage and helpfulness by category.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div class="gfloor-report-table-wrapper">
+
+          <table class="gfloor-report-table">
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Category
+                </th>
+
+                <th>
+                  Answers
+                </th>
+
+                <th>
+                  Helpful Yes
+                </th>
+
+                <th>
+                  Helpful No
+                </th>
+
+                <th>
+                  Feedback
+                </th>
+
+                <th>
+                  Helpful Rate
+                </th>
+
+              </tr>
+
+            </thead>
+
+            <tbody id="gfloor-report-category-body"></tbody>
+
+          </table>
+
+        </div>
+
+        <div
+          id="gfloor-report-category-empty"
+          class="gfloor-report-empty is-hidden"
+        >
+          No category reporting data was found.
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- KNOWLEDGE PERFORMANCE                                      -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-panel">
+
+        <div class="gfloor-report-panel-heading">
+
+          <div>
+
+            <h2>
+              Approved Knowledge Performance
+            </h2>
+
+            <p>
+              Usage and feedback for each approved knowledge record.
+            </p>
+
+          </div>
+
+          <div
+            id="gfloor-report-knowledge-count"
+            class="gfloor-report-result-count"
+          >
+            0 records
+          </div>
+
+        </div>
+
+        <div class="gfloor-report-table-wrapper">
+
+          <table class="gfloor-report-table gfloor-report-knowledge-table">
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Approved Question
+                </th>
+
+                <th>
+                  Category
+                </th>
+
+                <th>
+                  Response Type
+                </th>
+
+                <th>
+                  Answers
+                </th>
+
+                <th>
+                  Helpful Yes
+                </th>
+
+                <th>
+                  Helpful No
+                </th>
+
+                <th>
+                  Helpful Rate
+                </th>
+
+                <th>
+                  Last Used
+                </th>
+
+              </tr>
+
+            </thead>
+
+            <tbody id="gfloor-report-knowledge-body"></tbody>
+
+          </table>
+
+        </div>
+
+        <div
+          id="gfloor-report-knowledge-empty"
+          class="gfloor-report-empty is-hidden"
+        >
+          No approved knowledge reporting records matched these filters.
+        </div>
+
+        <div
+          id="gfloor-report-pagination"
+          class="gfloor-report-pagination is-hidden"
+        >
+
+          <button
+            id="gfloor-report-previous"
+            class="gfloor-report-button gfloor-report-button-secondary"
+            type="button"
+          >
+            Previous
+          </button>
+
+          <span id="gfloor-report-page-label">
+            Page 1 of 1
+          </span>
+
+          <button
+            id="gfloor-report-next"
+            class="gfloor-report-button gfloor-report-button-secondary"
+            type="button"
+          >
+            Next
+          </button>
+
+        </div>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- RECENT EVENTS                                              -->
+      <!-- ========================================================== -->
+
+      <section class="gfloor-report-panel">
+
+        <div class="gfloor-report-panel-heading">
+
+          <div>
+
+            <h2>
+              Recent Reporting Events
+            </h2>
+
+            <p>
+              Most recent approved-answer and feedback events.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div class="gfloor-report-table-wrapper">
+
+          <table class="gfloor-report-table">
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Event
+                </th>
+
+                <th>
+                  Category
+                </th>
+
+                <th>
+                  Knowledge ID
+                </th>
+
+                <th>
+                  Page Type
+                </th>
+
+                <th>
+                  Product
+                </th>
+
+                <th>
+                  Occurred
+                </th>
+
+              </tr>
+
+            </thead>
+
+            <tbody id="gfloor-report-events-body"></tbody>
+
+          </table>
+
+        </div>
+
+        <div
+          id="gfloor-report-events-empty"
+          class="gfloor-report-empty is-hidden"
+        >
+          No recent approved-knowledge reporting events were found.
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script
+    src="/admin-report.js?v=20.15"
+    defer
+  ></script>
+
+</body>
+</html>
