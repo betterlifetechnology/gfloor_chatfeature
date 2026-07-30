@@ -1,779 +1,731 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <meta
-    name="robots"
-    content="noindex,nofollow,noarchive,nosnippet,noimageindex"
-  >
-
-  <meta
-    name="referrer"
-    content="no-referrer"
-  >
-
-  <meta
-    http-equiv="Cache-Control"
-    content="no-store, no-cache, must-revalidate, max-age=0"
-  >
-
-  <meta
-    http-equiv="Pragma"
-    content="no-cache"
-  >
-
-  <meta
-    http-equiv="Expires"
-    content="0"
-  >
-
-  <title>
-    G-Floor Approved Knowledge Reporting
-  </title>
-
-  <link
-    rel="stylesheet"
-    href="/admin-report.css?v=20.15"
-  >
-</head>
-
-<body>
-
-  <!-- ================================================================ -->
-  <!-- LOGIN                                                            -->
-  <!-- ================================================================ -->
-
-  <div
-    id="gfloor-report-login"
-    class="gfloor-report-login"
-  >
-    <div class="gfloor-report-login-card">
-
-      <img
-        src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
-        alt="G-Floor"
-        class="gfloor-report-login-logo"
-      >
-
-      <h1>
-        Approved Knowledge Reporting
-      </h1>
-
-      <p>
-        Internal reporting dashboard for measuring how human-approved
-        G-Floor chatbot knowledge is being used.
-      </p>
-
-      <div class="gfloor-report-field">
-
-        <label for="gfloor-report-token">
-          Admin Access Token
-        </label>
-
-        <input
-          id="gfloor-report-token"
-          type="password"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Enter your ADMIN_TOKEN"
-        >
-
-      </div>
-
-      <button
-        id="gfloor-report-login-button"
-        class="gfloor-report-button gfloor-report-button-primary gfloor-report-button-full"
-        type="button"
-      >
-        Open Reporting Dashboard
-      </button>
-
-      <div
-        id="gfloor-report-login-message"
-        class="gfloor-report-login-message"
-        role="status"
-        aria-live="polite"
-      ></div>
-
-      <p class="gfloor-report-security-note">
-        The token is stored only for the current browser tab.
-      </p>
-
-    </div>
-  </div>
-
-
-  <!-- ================================================================ -->
-  <!-- DASHBOARD                                                        -->
-  <!-- ================================================================ -->
-
-  <div
-    id="gfloor-report-dashboard"
-    class="gfloor-report-dashboard is-hidden"
-  >
-
-    <!-- ============================================================ -->
-    <!-- HEADER                                                       -->
-    <!-- ============================================================ -->
-
-    <header class="gfloor-report-header">
-
-      <div class="gfloor-report-header-inner">
-
-        <div class="gfloor-report-brand">
-
-          <img
-            src="https://cdn.shopify.com/s/files/1/0015/9390/1123/files/GFloor_Full_Color_396cba4c-ab16-43f9-8975-965e5a48b5f2.png?v=1781717893"
-            alt="G-Floor"
-            class="gfloor-report-header-logo"
-          >
-
-          <div>
-
-            <div class="gfloor-report-eyebrow">
-              G-FLOOR CUSTOM CHAT
-            </div>
-
-            <h1>
-              Approved Knowledge Reporting
-            </h1>
-
-          </div>
-
-        </div>
-
-        <div class="gfloor-report-header-actions">
-
-          <div
-            id="gfloor-report-api-status"
-            class="gfloor-report-status"
-          >
-            <span class="gfloor-report-status-dot"></span>
-
-            <span>
-              Checking reporting database...
-            </span>
-          </div>
-
-          <a
-            href="/admin-review.html"
-            class="gfloor-report-button gfloor-report-button-secondary"
-          >
-            Knowledge Review
-          </a>
-
-          <button
-            id="gfloor-report-refresh"
-            class="gfloor-report-button gfloor-report-button-secondary"
-            type="button"
-          >
-            Refresh
-          </button>
-
-          <button
-            id="gfloor-report-disconnect"
-            class="gfloor-report-button gfloor-report-button-dark"
-            type="button"
-          >
-            Disconnect
-          </button>
-
-        </div>
-
-      </div>
-
-    </header>
-
-
-    <!-- ============================================================ -->
-    <!-- MAIN                                                         -->
-    <!-- ============================================================ -->
-
-    <main class="gfloor-report-main">
-
-      <!-- ========================================================== -->
-      <!-- INTRO                                                      -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-intro">
-
-        <div>
-
-          <h2>
-            Chatbot Knowledge Performance
-          </h2>
-
-          <p>
-            Review approved-answer usage, customer feedback,
-            knowledge categories, and daily reporting activity.
-          </p>
-
-        </div>
-
-        <div
-          id="gfloor-report-last-updated"
-          class="gfloor-report-last-updated"
-        >
-          Not loaded
-        </div>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- DATE FILTERS                                               -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-filter-panel">
-
-        <div class="gfloor-report-filter-grid">
-
-          <div class="gfloor-report-field">
-
-            <label for="gfloor-report-start-date">
-              Start Date
-            </label>
-
-            <input
-              id="gfloor-report-start-date"
-              type="date"
-            >
-
-          </div>
-
-          <div class="gfloor-report-field">
-
-            <label for="gfloor-report-end-date">
-              End Date
-            </label>
-
-            <input
-              id="gfloor-report-end-date"
-              type="date"
-            >
-
-          </div>
-
-          <div class="gfloor-report-field">
-
-            <label for="gfloor-report-category-filter">
-              Category
-            </label>
-
-            <select id="gfloor-report-category-filter">
-
-              <option value="">
-                All Categories
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="gfloor-report-field gfloor-report-search-field">
-
-            <label for="gfloor-report-search">
-              Search Approved Knowledge
-            </label>
-
-            <input
-              id="gfloor-report-search"
-              type="search"
-              placeholder="Question, category, or knowledge ID..."
-            >
-
-          </div>
-
-          <div class="gfloor-report-filter-actions">
-
-            <button
-              id="gfloor-report-apply"
-              class="gfloor-report-button gfloor-report-button-primary"
-              type="button"
-            >
-              Apply Filters
-            </button>
-
-            <button
-              id="gfloor-report-reset"
-              class="gfloor-report-button gfloor-report-button-secondary"
-              type="button"
-            >
-              Reset
-            </button>
-
-            <button
-              id="gfloor-report-export"
-              class="gfloor-report-button gfloor-report-button-dark"
-              type="button"
-            >
-              Export CSV
-            </button>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- GLOBAL MESSAGE                                             -->
-      <!-- ========================================================== -->
-
-      <div
-        id="gfloor-report-message"
-        class="gfloor-report-message is-hidden"
-        role="status"
-        aria-live="polite"
-      ></div>
-
-
-      <!-- ========================================================== -->
-      <!-- SUMMARY CARDS                                              -->
-      <!-- ========================================================== -->
-
-      <section
-        class="gfloor-report-card-grid"
-        aria-label="Approved knowledge reporting summary"
-      >
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Approved Answers Served
-          </span>
-
-          <strong
-            id="gfloor-report-total-answers"
-            class="gfloor-report-card-number"
-          >
-            0
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Answers displayed from approved PostgreSQL knowledge
-          </span>
-
-        </article>
-
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Helpful Yes
-          </span>
-
-          <strong
-            id="gfloor-report-helpful-yes"
-            class="gfloor-report-card-number gfloor-report-number-positive"
-          >
-            0
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Customers who marked an answer helpful
-          </span>
-
-        </article>
-
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Helpful No
-          </span>
-
-          <strong
-            id="gfloor-report-helpful-no"
-            class="gfloor-report-card-number gfloor-report-number-negative"
-          >
-            0
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Customers who marked an answer unhelpful
-          </span>
-
-        </article>
-
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Helpful Rate
-          </span>
-
-          <strong
-            id="gfloor-report-helpful-rate"
-            class="gfloor-report-card-number"
-          >
-            —
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Helpful Yes divided by all feedback
-          </span>
-
-        </article>
-
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Knowledge Entries Used
-          </span>
-
-          <strong
-            id="gfloor-report-entries-used"
-            class="gfloor-report-card-number"
-          >
-            0
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Unique approved knowledge records served
-          </span>
-
-        </article>
-
-
-        <article class="gfloor-report-card">
-
-          <span class="gfloor-report-card-label">
-            Conversations
-          </span>
-
-          <strong
-            id="gfloor-report-conversations"
-            class="gfloor-report-card-number"
-          >
-            0
-          </strong>
-
-          <span class="gfloor-report-card-description">
-            Unique chat conversations with reporting events
-          </span>
-
-        </article>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- DAILY ACTIVITY                                             -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-panel">
-
-        <div class="gfloor-report-panel-heading">
-
-          <div>
-
-            <h2>
-              Daily Activity
-            </h2>
-
-            <p>
-              Approved answers and customer feedback by day.
-            </p>
-
-          </div>
-
-        </div>
-
-        <div
-          id="gfloor-report-daily-chart"
-          class="gfloor-report-daily-chart"
-        ></div>
-
-        <div
-          id="gfloor-report-daily-empty"
-          class="gfloor-report-empty is-hidden"
-        >
-          No daily reporting activity was found for this date range.
-        </div>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- CATEGORY REPORTING                                         -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-panel">
-
-        <div class="gfloor-report-panel-heading">
-
-          <div>
-
-            <h2>
-              Category Performance
-            </h2>
-
-            <p>
-              Approved answer usage and helpfulness by category.
-            </p>
-
-          </div>
-
-        </div>
-
-        <div class="gfloor-report-table-wrapper">
-
-          <table class="gfloor-report-table">
-
-            <thead>
-
-              <tr>
-
-                <th>
-                  Category
-                </th>
-
-                <th>
-                  Answers
-                </th>
-
-                <th>
-                  Helpful Yes
-                </th>
-
-                <th>
-                  Helpful No
-                </th>
-
-                <th>
-                  Feedback
-                </th>
-
-                <th>
-                  Helpful Rate
-                </th>
-
-              </tr>
-
-            </thead>
-
-            <tbody id="gfloor-report-category-body"></tbody>
-
-          </table>
-
-        </div>
-
-        <div
-          id="gfloor-report-category-empty"
-          class="gfloor-report-empty is-hidden"
-        >
-          No category reporting data was found.
-        </div>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- KNOWLEDGE PERFORMANCE                                      -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-panel">
-
-        <div class="gfloor-report-panel-heading">
-
-          <div>
-
-            <h2>
-              Approved Knowledge Performance
-            </h2>
-
-            <p>
-              Usage and feedback for each approved knowledge record.
-            </p>
-
-          </div>
-
-          <div
-            id="gfloor-report-knowledge-count"
-            class="gfloor-report-result-count"
-          >
-            0 records
-          </div>
-
-        </div>
-
-        <div class="gfloor-report-table-wrapper">
-
-          <table class="gfloor-report-table gfloor-report-knowledge-table">
-
-            <thead>
-
-              <tr>
-
-                <th>
-                  Approved Question
-                </th>
-
-                <th>
-                  Category
-                </th>
-
-                <th>
-                  Response Type
-                </th>
-
-                <th>
-                  Answers
-                </th>
-
-                <th>
-                  Helpful Yes
-                </th>
-
-                <th>
-                  Helpful No
-                </th>
-
-                <th>
-                  Helpful Rate
-                </th>
-
-                <th>
-                  Last Used
-                </th>
-
-              </tr>
-
-            </thead>
-
-            <tbody id="gfloor-report-knowledge-body"></tbody>
-
-          </table>
-
-        </div>
-
-        <div
-          id="gfloor-report-knowledge-empty"
-          class="gfloor-report-empty is-hidden"
-        >
-          No approved knowledge reporting records matched these filters.
-        </div>
-
-        <div
-          id="gfloor-report-pagination"
-          class="gfloor-report-pagination is-hidden"
-        >
-
-          <button
-            id="gfloor-report-previous"
-            class="gfloor-report-button gfloor-report-button-secondary"
-            type="button"
-          >
-            Previous
-          </button>
-
-          <span id="gfloor-report-page-label">
-            Page 1 of 1
-          </span>
-
-          <button
-            id="gfloor-report-next"
-            class="gfloor-report-button gfloor-report-button-secondary"
-            type="button"
-          >
-            Next
-          </button>
-
-        </div>
-
-      </section>
-
-
-      <!-- ========================================================== -->
-      <!-- RECENT EVENTS                                              -->
-      <!-- ========================================================== -->
-
-      <section class="gfloor-report-panel">
-
-        <div class="gfloor-report-panel-heading">
-
-          <div>
-
-            <h2>
-              Recent Reporting Events
-            </h2>
-
-            <p>
-              Most recent approved-answer and feedback events.
-            </p>
-
-          </div>
-
-        </div>
-
-        <div class="gfloor-report-table-wrapper">
-
-          <table class="gfloor-report-table">
-
-            <thead>
-
-              <tr>
-
-                <th>
-                  Event
-                </th>
-
-                <th>
-                  Category
-                </th>
-
-                <th>
-                  Knowledge ID
-                </th>
-
-                <th>
-                  Page Type
-                </th>
-
-                <th>
-                  Product
-                </th>
-
-                <th>
-                  Occurred
-                </th>
-
-              </tr>
-
-            </thead>
-
-            <tbody id="gfloor-report-events-body"></tbody>
-
-          </table>
-
-        </div>
-
-        <div
-          id="gfloor-report-events-empty"
-          class="gfloor-report-empty is-hidden"
-        >
-          No recent approved-knowledge reporting events were found.
-        </div>
-
-      </section>
-
-    </main>
-
-  </div>
-
-  <script
-    src="/admin-report.js?v=20.15"
-    defer
-  ></script>
-
-</body>
-</html>
+:root {
+  --gfloor-red: #d2232a;
+  --gfloor-red-dark: #b91f25;
+  --gfloor-navy: #2f404d;
+  --gfloor-navy-dark: #24343f;
+  --gfloor-text: #243746;
+  --gfloor-muted: #607386;
+  --gfloor-border: #d6dde3;
+  --gfloor-background: #f4f6f8;
+  --gfloor-white: #ffffff;
+  --gfloor-green: #16844b;
+  --gfloor-green-light: #e7f6ed;
+  --gfloor-yellow: #a66a00;
+  --gfloor-yellow-light: #fff3d6;
+  --gfloor-red-light: #fdebed;
+  --gfloor-shadow: 0 12px 30px rgba(36, 52, 63, 0.09);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--gfloor-background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--gfloor-text);
+  background: var(--gfloor-background);
+}
+
+button,
+input,
+select,
+a {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+/* ========================================================================== */
+/* LOGIN                                                                      */
+/* ========================================================================== */
+
+.gfloor-report-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: var(--gfloor-navy);
+  border-top: 5px solid #76d0d2;
+}
+
+.gfloor-report-login-card {
+  width: min(480px, 100%);
+  padding: 38px;
+  text-align: center;
+  background: var(--gfloor-white);
+  border-radius: 14px;
+  box-shadow: var(--gfloor-shadow);
+}
+
+.gfloor-report-login-logo {
+  display: block;
+  width: 190px;
+  max-width: 70%;
+  height: auto;
+  margin: 0 auto 20px;
+}
+
+.gfloor-report-login-card h1 {
+  margin: 0 0 12px;
+  font-size: 29px;
+  line-height: 1.2;
+}
+
+.gfloor-report-login-card > p {
+  margin: 0 0 26px;
+  color: var(--gfloor-muted);
+  line-height: 1.55;
+}
+
+.gfloor-report-security-note {
+  margin: 18px 0 0 !important;
+  font-size: 12px;
+}
+
+.gfloor-report-login-message {
+  min-height: 22px;
+  margin-top: 14px;
+  color: var(--gfloor-red);
+  font-weight: 700;
+}
+
+/* ========================================================================== */
+/* HEADER                                                                     */
+/* ========================================================================== */
+
+.gfloor-report-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--gfloor-navy);
+  color: var(--gfloor-white);
+  border-top: 4px solid #76d0d2;
+  box-shadow: 0 4px 12px rgba(20, 33, 42, 0.18);
+}
+
+.gfloor-report-header-inner {
+  width: min(1440px, calc(100% - 40px));
+  min-height: 100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.gfloor-report-brand {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.gfloor-report-header-logo {
+  width: 118px;
+  height: 94px;
+  object-fit: contain;
+  padding: 5px;
+  background: var(--gfloor-white);
+  border-radius: 4px;
+}
+
+.gfloor-report-eyebrow {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #d9e1e6;
+}
+
+.gfloor-report-brand h1 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--gfloor-white);
+}
+
+.gfloor-report-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gfloor-report-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gfloor-report-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f0ad4e;
+}
+
+.gfloor-report-status.is-connected .gfloor-report-status-dot {
+  background: #45cc78;
+}
+
+.gfloor-report-status.is-error .gfloor-report-status-dot {
+  background: var(--gfloor-red);
+}
+
+/* ========================================================================== */
+/* MAIN                                                                       */
+/* ========================================================================== */
+
+.gfloor-report-main {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 34px 0 60px;
+}
+
+.gfloor-report-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 30px;
+  margin-bottom: 24px;
+}
+
+.gfloor-report-intro h2 {
+  margin: 0 0 8px;
+  font-size: 27px;
+}
+
+.gfloor-report-intro p {
+  margin: 0;
+  color: var(--gfloor-muted);
+  line-height: 1.55;
+}
+
+.gfloor-report-last-updated {
+  padding-top: 8px;
+  color: var(--gfloor-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ========================================================================== */
+/* BUTTONS                                                                    */
+/* ========================================================================== */
+
+.gfloor-report-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 17px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.gfloor-report-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.gfloor-report-button-primary {
+  color: var(--gfloor-white);
+  background: var(--gfloor-red);
+  border-color: var(--gfloor-red);
+}
+
+.gfloor-report-button-primary:hover:not(:disabled) {
+  background: var(--gfloor-red-dark);
+  border-color: var(--gfloor-red-dark);
+}
+
+.gfloor-report-button-secondary {
+  color: var(--gfloor-text);
+  background: var(--gfloor-white);
+  border-color: #b9c5ce;
+}
+
+.gfloor-report-button-secondary:hover:not(:disabled) {
+  border-color: var(--gfloor-navy);
+}
+
+.gfloor-report-button-dark {
+  color: var(--gfloor-white);
+  background: var(--gfloor-navy-dark);
+  border-color: #71808b;
+}
+
+.gfloor-report-button-dark:hover:not(:disabled) {
+  background: #17252e;
+}
+
+.gfloor-report-button-full {
+  width: 100%;
+}
+
+/* ========================================================================== */
+/* FORMS                                                                      */
+/* ========================================================================== */
+
+.gfloor-report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.gfloor-report-field label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gfloor-report-field input,
+.gfloor-report-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--gfloor-text);
+  background: var(--gfloor-white);
+  border: 1px solid #bdc8d1;
+  border-radius: 4px;
+}
+
+.gfloor-report-field input:focus,
+.gfloor-report-field select:focus {
+  outline: 2px solid rgba(210, 35, 42, 0.18);
+  border-color: var(--gfloor-red);
+}
+
+.gfloor-report-filter-panel {
+  padding: 20px;
+  margin-bottom: 22px;
+  background: var(--gfloor-white);
+  border: 1px solid var(--gfloor-border);
+  border-radius: 8px;
+  box-shadow: var(--gfloor-shadow);
+}
+
+.gfloor-report-filter-grid {
+  display: grid;
+  grid-template-columns: 170px 170px 220px minmax(280px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.gfloor-report-filter-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+/* ========================================================================== */
+/* MESSAGE                                                                    */
+/* ========================================================================== */
+
+.gfloor-report-message {
+  padding: 13px 15px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--gfloor-red);
+  color: #8f1820;
+  background: var(--gfloor-red-light);
+  border-radius: 4px;
+}
+
+.gfloor-report-message.is-success {
+  color: #0b6739;
+  background: var(--gfloor-green-light);
+  border-left-color: var(--gfloor-green);
+}
+
+/* ========================================================================== */
+/* SUMMARY CARDS                                                              */
+/* ========================================================================== */
+
+.gfloor-report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.gfloor-report-card {
+  min-height: 162px;
+  display: flex;
+  flex-direction: column;
+  padding: 21px;
+  background: var(--gfloor-white);
+  border: 1px solid var(--gfloor-border);
+  border-radius: 8px;
+  box-shadow: var(--gfloor-shadow);
+}
+
+.gfloor-report-card-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gfloor-report-card-number {
+  margin: 10px 0;
+  font-size: 35px;
+  line-height: 1;
+  color: var(--gfloor-text);
+}
+
+.gfloor-report-number-positive {
+  color: var(--gfloor-green);
+}
+
+.gfloor-report-number-negative {
+  color: var(--gfloor-red);
+}
+
+.gfloor-report-card-description {
+  margin-top: auto;
+  color: var(--gfloor-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* ========================================================================== */
+/* PANELS                                                                     */
+/* ========================================================================== */
+
+.gfloor-report-panel {
+  margin-bottom: 22px;
+  background: var(--gfloor-white);
+  border: 1px solid var(--gfloor-border);
+  border-radius: 8px;
+  box-shadow: var(--gfloor-shadow);
+  overflow: hidden;
+}
+
+.gfloor-report-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 21px 22px;
+  border-bottom: 1px solid var(--gfloor-border);
+}
+
+.gfloor-report-panel-heading h2 {
+  margin: 0 0 6px;
+  font-size: 19px;
+}
+
+.gfloor-report-panel-heading p {
+  margin: 0;
+  color: var(--gfloor-muted);
+  font-size: 13px;
+}
+
+.gfloor-report-result-count {
+  padding-top: 4px;
+  color: var(--gfloor-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ========================================================================== */
+/* TABLES                                                                     */
+/* ========================================================================== */
+
+.gfloor-report-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.gfloor-report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.gfloor-report-table th,
+.gfloor-report-table td {
+  padding: 14px 16px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #e1e6ea;
+}
+
+.gfloor-report-table th {
+  color: #485d6d;
+  background: #f7f9fa;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  white-space: nowrap;
+}
+
+.gfloor-report-table td {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.gfloor-report-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.gfloor-report-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.gfloor-report-question {
+  min-width: 260px;
+  font-weight: 700;
+}
+
+.gfloor-report-id {
+  max-width: 300px;
+  word-break: break-word;
+  color: var(--gfloor-muted);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 11px;
+}
+
+.gfloor-report-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #475968;
+  background: #edf1f4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.gfloor-report-rate {
+  min-width: 76px;
+  font-weight: 700;
+}
+
+.gfloor-report-rate.is-good {
+  color: var(--gfloor-green);
+}
+
+.gfloor-report-rate.is-warning {
+  color: var(--gfloor-yellow);
+}
+
+.gfloor-report-rate.is-poor {
+  color: var(--gfloor-red);
+}
+
+.gfloor-report-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--gfloor-muted);
+}
+
+/* ========================================================================== */
+/* DAILY CHART                                                                */
+/* ========================================================================== */
+
+.gfloor-report-daily-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-height: 280px;
+  padding: 28px 24px 22px;
+  overflow-x: auto;
+}
+
+.gfloor-report-day {
+  min-width: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.gfloor-report-day-bars {
+  height: 190px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 5px;
+  border-bottom: 1px solid #cad3da;
+}
+
+.gfloor-report-bar {
+  width: 16px;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+}
+
+.gfloor-report-bar-answers {
+  background: var(--gfloor-navy);
+}
+
+.gfloor-report-bar-yes {
+  background: var(--gfloor-green);
+}
+
+.gfloor-report-bar-no {
+  background: var(--gfloor-red);
+}
+
+.gfloor-report-day-label {
+  text-align: center;
+  color: var(--gfloor-muted);
+  font-size: 11px;
+}
+
+.gfloor-report-day-total {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.gfloor-report-chart-legend {
+  display: flex;
+  gap: 16px;
+  padding: 0 24px 20px;
+  color: var(--gfloor-muted);
+  font-size: 12px;
+}
+
+.gfloor-report-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gfloor-report-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* ========================================================================== */
+/* PAGINATION                                                                 */
+/* ========================================================================== */
+
+.gfloor-report-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-top: 1px solid var(--gfloor-border);
+}
+
+.gfloor-report-pagination span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ========================================================================== */
+/* RESPONSIVE                                                                 */
+/* ========================================================================== */
+
+@media (max-width: 1250px) {
+  .gfloor-report-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gfloor-report-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gfloor-report-search-field {
+    grid-column: 1 / -1;
+  }
+
+  .gfloor-report-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 850px) {
+  .gfloor-report-header-inner {
+    width: calc(100% - 24px);
+    padding: 12px 0;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gfloor-report-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .gfloor-report-main {
+    width: calc(100% - 24px);
+    padding-top: 24px;
+  }
+
+  .gfloor-report-intro {
+    flex-direction: column;
+  }
+
+  .gfloor-report-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .gfloor-report-login {
+    padding: 16px;
+  }
+
+  .gfloor-report-login-card {
+    padding: 26px 20px;
+  }
+
+  .gfloor-report-brand {
+    align-items: flex-start;
+  }
+
+  .gfloor-report-header-logo {
+    width: 88px;
+    height: 72px;
+  }
+
+  .gfloor-report-brand h1 {
+    font-size: 19px;
+  }
+
+  .gfloor-report-card-grid,
+  .gfloor-report-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gfloor-report-search-field,
+  .gfloor-report-filter-actions {
+    grid-column: auto;
+  }
+
+  .gfloor-report-filter-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gfloor-report-card {
+    min-height: 140px;
+  }
+}
