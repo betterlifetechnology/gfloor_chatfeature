@@ -39,7 +39,7 @@
 
   <link
     rel="stylesheet"
-    href="/admin-review.css?v=20.9"
+    href="/admin-review.css?v=20.16"
   >
 </head>
 
@@ -70,9 +70,8 @@
       </h1>
 
       <p class="gfloor-admin-login-intro">
-        Internal approval dashboard for reviewing new
-        Customer Service information before it becomes
-        available to the G-Floor chatbot.
+        Internal approval dashboard for reviewing new Customer Service
+        information before it becomes available to the G-Floor chatbot.
       </p>
 
       <div class="gfloor-field">
@@ -107,8 +106,8 @@
       ></div>
 
       <p class="gfloor-admin-security-note">
-        Your token is used only for the current browser session
-        and is not stored in localStorage.
+        Your token is used only for the current browser session and is not
+        stored in localStorage.
       </p>
 
     </div>
@@ -167,6 +166,13 @@
             </span>
           </div>
 
+          <a
+            href="/admin-report.html"
+            class="gfloor-button gfloor-button-secondary"
+          >
+            Reporting
+          </a>
+
           <button
             id="gfloor-admin-refresh"
             class="gfloor-button gfloor-button-secondary"
@@ -209,12 +215,16 @@
           </h2>
 
           <p>
-            Review new information before it becomes approved
-            chatbot knowledge. Original email content remains
-            separate from the suggested public chatbot response.
+            Review new information before it becomes approved chatbot
+            knowledge. Original email content remains separate from the
+            suggested public chatbot response.
           </p>
 
         </div>
+
+        <span class="gfloor-step-label">
+          Step 20J.6
+        </span>
 
       </section>
 
@@ -322,6 +332,55 @@
           </span>
 
         </button>
+
+      </section>
+
+
+      <!-- ========================================================== -->
+      <!-- APPROVED KNOWLEDGE STATUS COUNTS                            -->
+      <!-- ========================================================== -->
+
+      <section
+        id="gfloor-knowledge-status-counts"
+        class="gfloor-knowledge-status-counts"
+        aria-label="Approved knowledge activation counts"
+      >
+
+        <div class="gfloor-knowledge-count-item">
+
+          <span>
+            Active Knowledge
+          </span>
+
+          <strong id="gfloor-knowledge-count-active">
+            0
+          </strong>
+
+        </div>
+
+        <div class="gfloor-knowledge-count-item">
+
+          <span>
+            Inactive Knowledge
+          </span>
+
+          <strong id="gfloor-knowledge-count-inactive">
+            0
+          </strong>
+
+        </div>
+
+        <div class="gfloor-knowledge-count-item">
+
+          <span>
+            Total Approved Knowledge
+          </span>
+
+          <strong id="gfloor-knowledge-count-total">
+            0
+          </strong>
+
+        </div>
 
       </section>
 
@@ -448,7 +507,6 @@
 
       <section class="gfloor-review-layout">
 
-
         <!-- ======================================================== -->
         <!-- REVIEW LIST                                              -->
         <!-- ======================================================== -->
@@ -463,14 +521,12 @@
 
           </div>
 
-
           <div
             id="gfloor-review-loading"
             class="gfloor-loading"
           >
             Loading reviews...
           </div>
-
 
           <div
             id="gfloor-review-empty"
@@ -491,14 +547,10 @@
 
           </div>
 
-
           <div
             id="gfloor-review-list"
             class="gfloor-review-list"
           ></div>
-
-
-          <!-- Pagination -->
 
           <div
             id="gfloor-pagination"
@@ -550,9 +602,9 @@
             </h2>
 
             <p>
-              Select an item from the review queue to inspect
-              the original Customer Service information and the
-              proposed chatbot knowledge.
+              Select an item from the review queue to inspect the original
+              Customer Service information and the proposed chatbot
+              knowledge.
             </p>
 
           </div>
@@ -601,9 +653,8 @@
               </strong>
 
               <p>
-                Customer-specific information may be present.
-                This item must be reviewed and cleaned before
-                it can be approved.
+                Customer-specific information may be present. This item must
+                be reviewed and cleaned before it can be approved.
               </p>
 
             </div>
@@ -647,7 +698,6 @@
 
                 </div>
 
-
                 <div class="gfloor-metadata-item">
 
                   <span>
@@ -660,7 +710,6 @@
 
                 </div>
 
-
                 <div class="gfloor-metadata-item">
 
                   <span>
@@ -672,7 +721,6 @@
                   </strong>
 
                 </div>
-
 
                 <div class="gfloor-metadata-item">
 
@@ -687,7 +735,6 @@
                 </div>
 
               </div>
-
 
               <div class="gfloor-field">
 
@@ -707,7 +754,7 @@
             </section>
 
 
-            <!-- Original email information -->
+            <!-- Original information -->
 
             <section class="gfloor-detail-section">
 
@@ -723,7 +770,6 @@
 
               </div>
 
-
               <div class="gfloor-field">
 
                 <label>
@@ -738,7 +784,6 @@
                 </div>
 
               </div>
-
 
               <div class="gfloor-field">
 
@@ -756,8 +801,8 @@
               </div>
 
               <p class="gfloor-section-note">
-                Original email content is preserved for reference.
-                It is not automatically published to the chatbot.
+                Original email content is preserved for reference. It is not
+                automatically published to the chatbot.
               </p>
 
             </section>
@@ -774,115 +819,119 @@
                 </h3>
 
                 <span class="gfloor-proposed-label">
-                  REVIEW BEFORE APPROVAL
+                  PUBLIC RESPONSE
                 </span>
 
               </div>
 
-
               <div class="gfloor-field">
 
-                <label>
+                <label for="gfloor-detail-suggested-question">
                   Suggested Question
                 </label>
 
-                <div
+                <textarea
                   id="gfloor-detail-suggested-question"
-                  class="gfloor-readonly-field"
-                >
-                  —
-                </div>
+                  rows="3"
+                  maxlength="5000"
+                ></textarea>
 
               </div>
-
 
               <div class="gfloor-field">
 
-                <label>
-                  Suggested Answer
+                <label for="gfloor-detail-suggested-variations">
+                  Question Variations
                 </label>
 
-                <div
-                  id="gfloor-detail-suggested-answer"
-                  class="gfloor-readonly-field gfloor-long-field"
-                >
-                  —
-                </div>
+                <textarea
+                  id="gfloor-detail-suggested-variations"
+                  rows="4"
+                  maxlength="10000"
+                  placeholder="Enter one question variation per line."
+                ></textarea>
+
+                <p class="gfloor-field-help">
+                  Enter one variation per line.
+                </p>
 
               </div>
 
+              <div class="gfloor-field">
+
+                <label for="gfloor-detail-suggested-answer">
+                  Suggested Answer
+                </label>
+
+                <textarea
+                  id="gfloor-detail-suggested-answer"
+                  rows="8"
+                  maxlength="20000"
+                ></textarea>
+
+              </div>
 
               <div class="gfloor-two-column-fields">
 
                 <div class="gfloor-field">
 
-                  <label>
-                    Category
+                  <label for="gfloor-detail-suggested-category">
+                    Suggested Category
                   </label>
 
-                  <div
+                  <input
                     id="gfloor-detail-suggested-category"
-                    class="gfloor-readonly-field"
+                    type="text"
+                    maxlength="150"
                   >
-                    —
-                  </div>
 
                 </div>
-
 
                 <div class="gfloor-field">
 
-                  <label>
+                  <label for="gfloor-detail-suggested-response-type">
                     Response Type
                   </label>
 
-                  <div
-                    id="gfloor-detail-response-type"
-                    class="gfloor-readonly-field"
-                  >
-                    —
-                  </div>
+                  <select id="gfloor-detail-suggested-response-type">
+
+                    <option value="AUTO">
+                      AUTO ANSWER
+                    </option>
+
+                    <option value="HUMAN REVIEW">
+                      HUMAN REVIEW
+                    </option>
+
+                    <option value="ALWAYS ESCALATE">
+                      ALWAYS ESCALATE
+                    </option>
+
+                  </select>
 
                 </div>
 
               </div>
 
-
               <div class="gfloor-field">
 
-                <label>
-                  Suggested Variations
+                <label for="gfloor-detail-suggested-source-url">
+                  Source URL
                 </label>
 
-                <div
-                  id="gfloor-detail-variations"
-                  class="gfloor-variation-list"
+                <input
+                  id="gfloor-detail-suggested-source-url"
+                  type="url"
+                  maxlength="2000"
+                  placeholder="https://gfloor.com/"
                 >
-                  —
-                </div>
-
-              </div>
-
-
-              <div class="gfloor-field">
-
-                <label>
-                  Suggested Source URL
-                </label>
-
-                <div
-                  id="gfloor-detail-source-url"
-                  class="gfloor-readonly-field"
-                >
-                  —
-                </div>
 
               </div>
 
             </section>
 
 
-            <!-- Sensitive info -->
+            <!-- Safety review -->
 
             <section class="gfloor-detail-section">
 
@@ -892,46 +941,70 @@
 
               <div class="gfloor-safety-grid">
 
-                <div class="gfloor-safety-item">
+                <div class="gfloor-safety-card">
 
                   <span>
                     Sensitive Review Required
                   </span>
 
-                  <strong id="gfloor-detail-sensitive-required">
+                  <strong id="gfloor-sensitive-required">
                     No
                   </strong>
 
                 </div>
 
-
-                <div class="gfloor-safety-item">
+                <div class="gfloor-safety-card">
 
                   <span>
                     Sensitive Review Completed
                   </span>
 
-                  <strong id="gfloor-detail-sensitive-completed">
-                    No
-                  </strong>
+                  <div
+                    id="gfloor-sensitive-review-control"
+                    class="gfloor-sensitive-review-control"
+                  >
+
+                    <label
+                      id="gfloor-sensitive-review-label"
+                      class="gfloor-checkbox-label"
+                      for="gfloor-sensitive-review-completed"
+                    >
+
+                      <input
+                        id="gfloor-sensitive-review-completed"
+                        type="checkbox"
+                      >
+
+                      <span>
+                        I reviewed this item for customer-specific information.
+                      </span>
+
+                    </label>
+
+                  </div>
+
+                  <div
+                    id="gfloor-sensitive-not-required"
+                    class="gfloor-readonly-field is-hidden"
+                  >
+                    Not required
+                  </div>
 
                 </div>
 
-
-                <div class="gfloor-safety-item">
+                <div class="gfloor-safety-card">
 
                   <span>
                     Possible Duplicate
                   </span>
 
-                  <strong id="gfloor-detail-duplicate">
+                  <strong id="gfloor-possible-duplicate">
                     No
                   </strong>
 
                 </div>
 
               </div>
-
 
               <div class="gfloor-field">
 
@@ -940,8 +1013,8 @@
                 </label>
 
                 <div
-                  id="gfloor-detail-sensitive-data"
-                  class="gfloor-variation-list"
+                  id="gfloor-detected-sensitive-information"
+                  class="gfloor-readonly-field"
                 >
                   None detected
                 </div>
@@ -959,24 +1032,22 @@
                 Reviewer Information
               </h3>
 
-
               <div class="gfloor-two-column-fields">
 
                 <div class="gfloor-field">
 
-                  <label>
+                  <label for="gfloor-reviewer-name">
                     Reviewer
                   </label>
 
-                  <div
-                    id="gfloor-detail-reviewer"
-                    class="gfloor-readonly-field"
+                  <input
+                    id="gfloor-reviewer-name"
+                    type="text"
+                    maxlength="200"
+                    placeholder="Example: BLT Marketing"
                   >
-                    Not reviewed
-                  </div>
 
                 </div>
-
 
                 <div class="gfloor-field">
 
@@ -985,7 +1056,168 @@
                   </label>
 
                   <div
-                    id="gfloor-detail-reviewed-date"
+                    id="gfloor-reviewed-at"
+                    class="gfloor-readonly-field"
+                  >
+                    Not reviewed
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div class="gfloor-field">
+
+                <label for="gfloor-reviewer-notes">
+                  Reviewer Notes
+                </label>
+
+                <textarea
+                  id="gfloor-reviewer-notes"
+                  rows="5"
+                  maxlength="10000"
+                  placeholder="Add approval notes or enter a reason if denying this review..."
+                ></textarea>
+
+              </div>
+
+            </section>
+
+
+            <!-- ==================================================== -->
+            <!-- APPROVED KNOWLEDGE ACTIVATION STATUS                  -->
+            <!-- ==================================================== -->
+
+            <section
+              id="gfloor-knowledge-status-panel"
+              class="gfloor-detail-section gfloor-knowledge-status-panel is-hidden"
+            >
+
+              <div class="gfloor-section-title-row">
+
+                <div>
+
+                  <h3>
+                    Approved Knowledge Status
+                  </h3>
+
+                  <p class="gfloor-section-note">
+                    Deactivation removes this answer from the live chatbot
+                    without deleting its reporting history.
+                  </p>
+
+                </div>
+
+                <span
+                  id="gfloor-knowledge-status-badge"
+                  class="gfloor-activation-badge"
+                >
+                  Active
+                </span>
+
+              </div>
+
+
+              <div class="gfloor-metadata-grid">
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Knowledge ID
+                  </span>
+
+                  <strong id="gfloor-knowledge-id">
+                    —
+                  </strong>
+
+                </div>
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Approved By
+                  </span>
+
+                  <strong id="gfloor-knowledge-approved-by">
+                    —
+                  </strong>
+
+                </div>
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Approved
+                  </span>
+
+                  <strong id="gfloor-knowledge-approved-at">
+                    —
+                  </strong>
+
+                </div>
+
+                <div class="gfloor-metadata-item">
+
+                  <span>
+                    Status Updated
+                  </span>
+
+                  <strong id="gfloor-knowledge-status-updated-at">
+                    —
+                  </strong>
+
+                </div>
+
+              </div>
+
+
+              <!-- Deactivation audit -->
+
+              <div
+                id="gfloor-knowledge-deactivation-audit"
+                class="gfloor-status-audit is-hidden"
+              >
+
+                <h4>
+                  Deactivation History
+                </h4>
+
+                <div class="gfloor-metadata-grid">
+
+                  <div class="gfloor-metadata-item">
+
+                    <span>
+                      Deactivated By
+                    </span>
+
+                    <strong id="gfloor-knowledge-deactivated-by">
+                      —
+                    </strong>
+
+                  </div>
+
+                  <div class="gfloor-metadata-item">
+
+                    <span>
+                      Deactivated
+                    </span>
+
+                    <strong id="gfloor-knowledge-deactivated-at">
+                      —
+                    </strong>
+
+                  </div>
+
+                </div>
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Deactivation Reason
+                  </label>
+
+                  <div
+                    id="gfloor-knowledge-deactivation-reason"
                     class="gfloor-readonly-field"
                   >
                     —
@@ -996,17 +1228,130 @@
               </div>
 
 
-              <div class="gfloor-field">
+              <!-- Reactivation audit -->
 
-                <label>
-                  Reviewer Notes
-                </label>
+              <div
+                id="gfloor-knowledge-reactivation-audit"
+                class="gfloor-status-audit is-hidden"
+              >
+
+                <h4>
+                  Reactivation History
+                </h4>
+
+                <div class="gfloor-metadata-grid">
+
+                  <div class="gfloor-metadata-item">
+
+                    <span>
+                      Reactivated By
+                    </span>
+
+                    <strong id="gfloor-knowledge-reactivated-by">
+                      —
+                    </strong>
+
+                  </div>
+
+                  <div class="gfloor-metadata-item">
+
+                    <span>
+                      Reactivated
+                    </span>
+
+                    <strong id="gfloor-knowledge-reactivated-at">
+                      —
+                    </strong>
+
+                  </div>
+
+                </div>
+
+                <div class="gfloor-field">
+
+                  <label>
+                    Reactivation Reason
+                  </label>
+
+                  <div
+                    id="gfloor-knowledge-reactivation-reason"
+                    class="gfloor-readonly-field"
+                  >
+                    —
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <!-- Status action form -->
+
+              <div class="gfloor-status-action-form">
+
+                <h4 id="gfloor-status-action-title">
+                  Change Approved Knowledge Status
+                </h4>
+
+                <div class="gfloor-two-column-fields">
+
+                  <div class="gfloor-field">
+
+                    <label for="gfloor-status-reviewer-name">
+                      Reviewer
+                    </label>
+
+                    <input
+                      id="gfloor-status-reviewer-name"
+                      type="text"
+                      maxlength="200"
+                      placeholder="Example: BLT Marketing"
+                    >
+
+                  </div>
+
+                  <div class="gfloor-field">
+
+                    <label for="gfloor-status-reason">
+                      Reason
+                    </label>
+
+                    <textarea
+                      id="gfloor-status-reason"
+                      rows="4"
+                      maxlength="5000"
+                      placeholder="Explain why this approved knowledge should be deactivated or reactivated."
+                    ></textarea>
+
+                  </div>
+
+                </div>
 
                 <div
-                  id="gfloor-detail-reviewer-notes"
-                  class="gfloor-readonly-field gfloor-long-field"
-                >
-                  No reviewer notes.
+                  id="gfloor-status-message"
+                  class="gfloor-review-message is-hidden"
+                  role="status"
+                  aria-live="polite"
+                ></div>
+
+                <div class="gfloor-status-action-buttons">
+
+                  <button
+                    id="gfloor-deactivate-knowledge-button"
+                    class="gfloor-button gfloor-button-danger is-hidden"
+                    type="button"
+                  >
+                    Deactivate Approved Knowledge
+                  </button>
+
+                  <button
+                    id="gfloor-reactivate-knowledge-button"
+                    class="gfloor-button gfloor-button-success is-hidden"
+                    type="button"
+                  >
+                    Reactivate Approved Knowledge
+                  </button>
+
                 </div>
 
               </div>
@@ -1014,55 +1359,64 @@
             </section>
 
 
-            <!-- ==================================================== -->
-            <!-- STEP 20D PREVIEW ACTIONS                              -->
-            <!-- ==================================================== -->
+            <!-- Review message -->
 
-            <section class="gfloor-detail-actions-section">
-
-              <div class="gfloor-detail-action-note">
-
-                <strong>
-                  Step 20D
-                </strong>
-
-                <span>
-                  Editing, approval, and denial controls will be
-                  activated in the next step.
-                </span>
-
-              </div>
+            <div
+              id="gfloor-review-message"
+              class="gfloor-review-message is-hidden"
+              role="status"
+              aria-live="polite"
+            ></div>
 
 
-              <div class="gfloor-detail-actions">
+            <!-- Review status explanation -->
 
-                <button
-                  class="gfloor-button gfloor-button-danger"
-                  type="button"
-                  disabled
-                >
-                  Deny
-                </button>
+            <div
+              id="gfloor-review-state-message"
+              class="gfloor-review-state-message"
+            >
 
-                <button
-                  class="gfloor-button gfloor-button-secondary"
-                  type="button"
-                  disabled
-                >
-                  Save Changes
-                </button>
+              <strong>
+                Pending Review
+              </strong>
 
-                <button
-                  class="gfloor-button gfloor-button-primary"
-                  type="button"
-                  disabled
-                >
-                  Approve
-                </button>
+              <span>
+                Edit the proposed chatbot content, enter your reviewer name,
+                then Save, Approve, or Deny this item.
+              </span>
 
-              </div>
+            </div>
 
-            </section>
+
+            <!-- Main review action buttons -->
+
+            <div class="gfloor-review-actions">
+
+              <button
+                id="gfloor-deny-button"
+                class="gfloor-button gfloor-button-danger"
+                type="button"
+              >
+                Deny
+              </button>
+
+              <button
+                id="gfloor-save-button"
+                class="gfloor-button gfloor-button-secondary"
+                type="button"
+              >
+                Save Changes
+              </button>
+
+              <button
+                id="gfloor-approve-button"
+                class="gfloor-button gfloor-button-primary"
+                type="button"
+              >
+                Approve
+              </button>
+
+            </div>
 
           </div>
 
@@ -1072,23 +1426,70 @@
 
     </main>
 
-
-    <!-- ============================================================ -->
-    <!-- GLOBAL MESSAGE                                               -->
-    <!-- ============================================================ -->
-
-    <div
-      id="gfloor-admin-toast"
-      class="gfloor-toast is-hidden"
-      role="status"
-      aria-live="polite"
-    ></div>
-
   </div>
 
 
+  <!-- ================================================================ -->
+  <!-- STATUS CONFIRMATION DIALOG                                       -->
+  <!-- ================================================================ -->
+
+  <dialog
+    id="gfloor-status-confirm-dialog"
+    class="gfloor-confirm-dialog"
+  >
+
+    <form method="dialog">
+
+      <h2 id="gfloor-status-confirm-title">
+        Confirm Status Change
+      </h2>
+
+      <p id="gfloor-status-confirm-message">
+        Confirm this approved knowledge status change.
+      </p>
+
+      <div class="gfloor-confirm-warning">
+
+        <strong>
+          Reporting history will be preserved.
+        </strong>
+
+        <span>
+          Deactivation affects only whether the approved answer is available
+          to the live chatbot.
+        </span>
+
+      </div>
+
+      <div class="gfloor-confirm-actions">
+
+        <button
+          id="gfloor-status-confirm-cancel"
+          class="gfloor-button gfloor-button-secondary"
+          type="submit"
+          value="cancel"
+        >
+          Cancel
+        </button>
+
+        <button
+          id="gfloor-status-confirm-submit"
+          class="gfloor-button gfloor-button-danger"
+          type="submit"
+          value="confirm"
+        >
+          Confirm
+        </button>
+
+      </div>
+
+    </form>
+
+  </dialog>
+
+
   <script
-    src="/admin-review.js?v=20.9"
+    src="/admin-review.js?v=20.16"
     defer
   ></script>
 
