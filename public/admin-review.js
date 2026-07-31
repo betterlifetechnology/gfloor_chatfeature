@@ -3,439 +3,348 @@
 
   /*
   |--------------------------------------------------------------------------
-  | G-Floor Chat Knowledge Review Dashboard
+  | G-Floor Knowledge Approval Dashboard
   |--------------------------------------------------------------------------
   |
-  | STEP 20D
+  | STEP 20J.6F2
   |
-  | Features:
+  | Includes:
   |
   | - ADMIN_TOKEN authentication
-  | - database health
-  | - review counts
-  | - pending / approved / denied filtering
-  | - review detail
-  | - editable pending reviews
+  | - review health and counts
+  | - pending / approved / denied filters
+  | - review detail and editing
   | - Save Changes
   | - Approve
   | - Deny
-  | - required reviewer identity
-  | - required denial reason
-  | - sensitive-information approval lock
-  | - duplicate warnings
+  | - sensitive-information confirmation
+  | - approved-knowledge activation counts
+  | - approved-knowledge status lookup
+  | - Deactivate Approved Knowledge
+  | - Reactivate Approved Knowledge
+  | - required status reviewer and reason
+  | - confirmation dialog
   |
   |--------------------------------------------------------------------------
   */
 
-  const VERSION =
-    "20.4";
-
-  const API_BASE =
-    "/admin";
-
-  /*
-  |--------------------------------------------------------------------------
-  | State
-  |--------------------------------------------------------------------------
-  */
+  const VERSION = "20.16";
+  const API_BASE = "/admin";
+  const SESSION_TOKEN_KEY = "gfloor_admin_review_token";
 
   const state = {
-    adminToken:
-      "",
+    adminToken: "",
+    reviews: [],
+    selectedReviewId: null,
+    selectedReview: null,
+    selectedKnowledge: null,
 
-    reviews:
-      [],
+    page: 1,
+    pages: 1,
+    limit: 25,
+    total: 0,
 
-    selectedReviewId:
-      null,
+    status: "pending-review",
+    category: "",
+    search: "",
 
-    selectedReview:
-      null,
+    loading: false,
+    saving: false,
+    approving: false,
+    denying: false,
+    changingKnowledgeStatus: false,
 
-    page:
-      1,
-
-    pages:
-      1,
-
-    limit:
-      25,
-
-    total:
-      0,
-
-    status:
-      "pending-review",
-
-    category:
-      "",
-
-    search:
-      "",
-
-    saving:
-      false,
-
-    approving:
-      false,
-
-    denying:
-      false
+    pendingStatusAction: ""
   };
 
-  /*
-  |--------------------------------------------------------------------------
-  | DOM
-  |--------------------------------------------------------------------------
-  */
-
-  const loginScreen =
-    document.getElementById(
-      "gfloor-admin-login"
-    );
-
-  const dashboard =
-    document.getElementById(
-      "gfloor-admin-dashboard"
-    );
-
-  const tokenInput =
-    document.getElementById(
-      "gfloor-admin-token"
-    );
-
-  const loginButton =
-    document.getElementById(
-      "gfloor-admin-login-button"
-    );
-
-  const loginMessage =
-    document.getElementById(
-      "gfloor-admin-login-message"
-    );
-
-  const logoutButton =
-    document.getElementById(
-      "gfloor-admin-logout"
-    );
-
-  const refreshButton =
-    document.getElementById(
-      "gfloor-admin-refresh"
-    );
-
-  const dbStatus =
-    document.getElementById(
-      "gfloor-admin-db-status"
-    );
-
-  const pendingCount =
-    document.getElementById(
-      "gfloor-count-pending"
-    );
-
-  const approvedCount =
-    document.getElementById(
-      "gfloor-count-approved"
-    );
-
-  const deniedCount =
-    document.getElementById(
-      "gfloor-count-denied"
-    );
-
-  const totalCount =
-    document.getElementById(
-      "gfloor-count-total"
-    );
-
-  const statusFilter =
-    document.getElementById(
-      "gfloor-filter-status"
-    );
-
-  const categoryFilter =
-    document.getElementById(
-      "gfloor-filter-category"
-    );
-
-  const searchFilter =
-    document.getElementById(
-      "gfloor-filter-search"
-    );
-
-  const applyFiltersButton =
-    document.getElementById(
-      "gfloor-filter-apply"
-    );
-
-  const clearFiltersButton =
-    document.getElementById(
-      "gfloor-filter-clear"
-    );
-
-  const reviewList =
-    document.getElementById(
-      "gfloor-review-list"
-    );
-
-  const reviewLoading =
-    document.getElementById(
-      "gfloor-review-loading"
-    );
-
-  const reviewEmpty =
-    document.getElementById(
-      "gfloor-review-empty"
-    );
-
-  const resultCount =
-    document.getElementById(
-      "gfloor-review-result-count"
-    );
-
-  const pagination =
-    document.getElementById(
-      "gfloor-pagination"
-    );
-
-  const previousButton =
-    document.getElementById(
-      "gfloor-page-previous"
-    );
-
-  const nextButton =
-    document.getElementById(
-      "gfloor-page-next"
-    );
-
-  const pageLabel =
-    document.getElementById(
-      "gfloor-page-label"
-    );
-
-  const detailPlaceholder =
-    document.getElementById(
-      "gfloor-detail-placeholder"
-    );
-
-  const detailPanel =
-    document.getElementById(
-      "gfloor-review-detail"
-    );
-
-  const toast =
-    document.getElementById(
-      "gfloor-admin-toast"
-    );
+  const elements = {};
 
   /*
   |--------------------------------------------------------------------------
-  | Action Buttons
+  | Element Cache
   |--------------------------------------------------------------------------
   */
 
-  const actionButtons =
-    document.querySelectorAll(
-      ".gfloor-detail-actions button"
-    );
-
-  const denyButton =
-    actionButtons[0] ||
-    null;
-
-  const saveButton =
-    actionButtons[1] ||
-    null;
-
-  const approveButton =
-    actionButtons[2] ||
-    null;
-
-  const actionNote =
-    document.querySelector(
-      ".gfloor-detail-action-note"
-    );
-
-  if (denyButton) {
-    denyButton.id =
-      "gfloor-review-deny";
+  function getElement(id) {
+    return document.getElementById(id);
   }
 
-  if (saveButton) {
-    saveButton.id =
-      "gfloor-review-save";
-  }
+  function cacheElements() {
+    elements.login =
+      getElement("gfloor-admin-login");
 
-  if (approveButton) {
-    approveButton.id =
-      "gfloor-review-approve";
-  }
+    elements.dashboard =
+      getElement("gfloor-admin-dashboard");
 
-  /*
-  |--------------------------------------------------------------------------
-  | Inject Step 20D Styles
-  |--------------------------------------------------------------------------
-  |
-  | This keeps admin-review.css unchanged.
-  |
-  |--------------------------------------------------------------------------
-  */
+    elements.token =
+      getElement("gfloor-admin-token");
 
-  function injectStep20DStyles() {
-    const style =
-      document.createElement(
-        "style"
-      );
+    elements.loginButton =
+      getElement("gfloor-admin-login-button");
 
-    style.id =
-      "gfloor-step-20d-styles";
+    elements.loginMessage =
+      getElement("gfloor-admin-login-message");
 
-    style.textContent = `
-      .gfloor-edit-control {
-        width: 100%;
-        min-height: 42px;
-        padding: 10px 11px;
-        border: 1px solid #bfc5ca;
-        border-radius: 5px;
-        background: #ffffff;
-        color: #252b30;
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 14px;
-        line-height: 1.5;
-        outline: none;
-      }
+    elements.logoutButton =
+      getElement("gfloor-admin-logout");
 
-      .gfloor-edit-control:focus {
-        border-color: #d2232a;
-        box-shadow: 0 0 0 2px rgba(210, 35, 42, 0.08);
-      }
+    elements.refreshButton =
+      getElement("gfloor-admin-refresh");
 
-      textarea.gfloor-edit-control {
-        min-height: 115px;
-        resize: vertical;
-      }
+    elements.dbStatus =
+      getElement("gfloor-admin-db-status");
 
-      textarea.gfloor-edit-control.gfloor-answer-editor {
-        min-height: 180px;
-      }
+    elements.pendingCount =
+      getElement("gfloor-count-pending");
 
-      textarea.gfloor-edit-control.gfloor-variations-editor {
-        min-height: 105px;
-      }
+    elements.approvedCount =
+      getElement("gfloor-count-approved");
 
-      .gfloor-field-help {
-        display: block;
-        margin-top: 5px;
-        color: #66717a;
-        font-size: 11px;
-      }
+    elements.deniedCount =
+      getElement("gfloor-count-denied");
 
-      .gfloor-required {
-        color: #d2232a;
-      }
+    elements.totalCount =
+      getElement("gfloor-count-total");
 
-      .gfloor-sensitive-confirmation {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        margin-top: 12px;
-        padding: 14px;
-        border: 1px solid #e3c36a;
-        border-radius: 5px;
-        background: #fff5d6;
-      }
+    elements.knowledgeActiveCount =
+      getElement("gfloor-knowledge-count-active");
 
-      .gfloor-sensitive-confirmation input {
-        width: 18px;
-        height: 18px;
-        margin-top: 2px;
-        flex: 0 0 auto;
-        accent-color: #d2232a;
-      }
+    elements.knowledgeInactiveCount =
+      getElement("gfloor-knowledge-count-inactive");
 
-      .gfloor-sensitive-confirmation label {
-        margin: 0;
-        color: #6f5000;
-        font-size: 12px;
-        line-height: 1.5;
-        cursor: pointer;
-      }
+    elements.knowledgeTotalCount =
+      getElement("gfloor-knowledge-count-total");
 
-      .gfloor-sensitive-confirmation strong {
-        display: block;
-        margin-bottom: 3px;
-        color: #5f4300;
-      }
+    elements.statusFilter =
+      getElement("gfloor-filter-status");
 
-      .gfloor-action-validation {
-        margin-bottom: 14px;
-        padding: 11px 13px;
-        border-left: 4px solid #d2232a;
-        border-radius: 4px;
-        background: #fdeced;
-        color: #8d1e23;
-        font-size: 12px;
-      }
+    elements.categoryFilter =
+      getElement("gfloor-filter-category");
 
-      .gfloor-action-validation.is-hidden {
-        display: none;
-      }
+    elements.searchFilter =
+      getElement("gfloor-filter-search");
 
-      .gfloor-action-success {
-        margin-bottom: 14px;
-        padding: 11px 13px;
-        border-left: 4px solid #1c7c44;
-        border-radius: 4px;
-        background: #e9f6ee;
-        color: #145c32;
-        font-size: 12px;
-      }
+    elements.applyFiltersButton =
+      getElement("gfloor-filter-apply");
 
-      .gfloor-action-success.is-hidden {
-        display: none;
-      }
+    elements.clearFiltersButton =
+      getElement("gfloor-filter-clear");
 
-      .gfloor-readonly-status-message {
-        margin-bottom: 15px;
-        padding: 12px;
-        border-radius: 5px;
-        background: #f1f3f4;
-        color: #59636b;
-        font-size: 12px;
-      }
+    elements.reviewLoading =
+      getElement("gfloor-review-loading");
 
-      .gfloor-review-dirty {
-        border-color: #d2232a !important;
-        background: #fffafa !important;
-      }
+    elements.reviewEmpty =
+      getElement("gfloor-review-empty");
 
-      .gfloor-button.is-working {
-        opacity: 0.7;
-        pointer-events: none;
-      }
+    elements.reviewList =
+      getElement("gfloor-review-list");
 
-      .gfloor-reviewer-required-note {
-        color: #66717a;
-        font-size: 11px;
-        margin-top: 5px;
-      }
-    `;
+    elements.resultCount =
+      getElement("gfloor-review-result-count");
 
-    document.head.appendChild(
-      style
-    );
+    elements.pagination =
+      getElement("gfloor-pagination");
+
+    elements.previousButton =
+      getElement("gfloor-page-previous");
+
+    elements.nextButton =
+      getElement("gfloor-page-next");
+
+    elements.pageLabel =
+      getElement("gfloor-page-label");
+
+    elements.detailPlaceholder =
+      getElement("gfloor-detail-placeholder");
+
+    elements.detail =
+      getElement("gfloor-review-detail");
+
+    elements.detailTitle =
+      getElement("gfloor-detail-title");
+
+    elements.detailStatus =
+      getElement("gfloor-detail-status");
+
+    elements.sensitiveAlert =
+      getElement("gfloor-sensitive-alert");
+
+    elements.duplicateAlert =
+      getElement("gfloor-duplicate-alert");
+
+    elements.duplicateMessage =
+      getElement("gfloor-duplicate-message");
+
+    elements.detailSource =
+      getElement("gfloor-detail-source");
+
+    elements.detailReceived =
+      getElement("gfloor-detail-received");
+
+    elements.detailSender =
+      getElement("gfloor-detail-sender");
+
+    elements.detailCategory =
+      getElement("gfloor-detail-category");
+
+    elements.detailSubject =
+      getElement("gfloor-detail-subject");
+
+    elements.customerQuestion =
+      getElement("gfloor-detail-customer-question");
+
+    elements.customerResponse =
+      getElement("gfloor-detail-customer-response");
+
+    elements.suggestedQuestion =
+      getElement("gfloor-detail-suggested-question");
+
+    elements.suggestedVariations =
+      getElement("gfloor-detail-suggested-variations");
+
+    elements.suggestedAnswer =
+      getElement("gfloor-detail-suggested-answer");
+
+    elements.suggestedCategory =
+      getElement("gfloor-detail-suggested-category");
+
+    elements.suggestedResponseType =
+      getElement("gfloor-detail-suggested-response-type");
+
+    elements.suggestedSourceUrl =
+      getElement("gfloor-detail-suggested-source-url");
+
+    elements.sensitiveRequired =
+      getElement("gfloor-sensitive-required");
+
+    elements.sensitiveControl =
+      getElement("gfloor-sensitive-review-control");
+
+    elements.sensitiveNotRequired =
+      getElement("gfloor-sensitive-not-required");
+
+    elements.sensitiveCompleted =
+      getElement("gfloor-sensitive-review-completed");
+
+    elements.possibleDuplicate =
+      getElement("gfloor-possible-duplicate");
+
+    elements.detectedSensitive =
+      getElement("gfloor-detected-sensitive-information");
+
+    elements.reviewerName =
+      getElement("gfloor-reviewer-name");
+
+    elements.reviewedAt =
+      getElement("gfloor-reviewed-at");
+
+    elements.reviewerNotes =
+      getElement("gfloor-reviewer-notes");
+
+    elements.reviewMessage =
+      getElement("gfloor-review-message");
+
+    elements.reviewStateMessage =
+      getElement("gfloor-review-state-message");
+
+    elements.denyButton =
+      getElement("gfloor-deny-button");
+
+    elements.saveButton =
+      getElement("gfloor-save-button");
+
+    elements.approveButton =
+      getElement("gfloor-approve-button");
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approved Knowledge Status Elements
+    |--------------------------------------------------------------------------
+    */
+
+    elements.knowledgeStatusPanel =
+      getElement("gfloor-knowledge-status-panel");
+
+    elements.knowledgeStatusBadge =
+      getElement("gfloor-knowledge-status-badge");
+
+    elements.knowledgeId =
+      getElement("gfloor-knowledge-id");
+
+    elements.knowledgeApprovedBy =
+      getElement("gfloor-knowledge-approved-by");
+
+    elements.knowledgeApprovedAt =
+      getElement("gfloor-knowledge-approved-at");
+
+    elements.knowledgeStatusUpdatedAt =
+      getElement("gfloor-knowledge-status-updated-at");
+
+    elements.deactivationAudit =
+      getElement("gfloor-knowledge-deactivation-audit");
+
+    elements.deactivatedBy =
+      getElement("gfloor-knowledge-deactivated-by");
+
+    elements.deactivatedAt =
+      getElement("gfloor-knowledge-deactivated-at");
+
+    elements.deactivationReason =
+      getElement("gfloor-knowledge-deactivation-reason");
+
+    elements.reactivationAudit =
+      getElement("gfloor-knowledge-reactivation-audit");
+
+    elements.reactivatedBy =
+      getElement("gfloor-knowledge-reactivated-by");
+
+    elements.reactivatedAt =
+      getElement("gfloor-knowledge-reactivated-at");
+
+    elements.reactivationReason =
+      getElement("gfloor-knowledge-reactivation-reason");
+
+    elements.statusActionTitle =
+      getElement("gfloor-status-action-title");
+
+    elements.statusReviewerName =
+      getElement("gfloor-status-reviewer-name");
+
+    elements.statusReason =
+      getElement("gfloor-status-reason");
+
+    elements.statusMessage =
+      getElement("gfloor-status-message");
+
+    elements.deactivateButton =
+      getElement("gfloor-deactivate-knowledge-button");
+
+    elements.reactivateButton =
+      getElement("gfloor-reactivate-knowledge-button");
+
+    elements.confirmDialog =
+      getElement("gfloor-status-confirm-dialog");
+
+    elements.confirmTitle =
+      getElement("gfloor-status-confirm-title");
+
+    elements.confirmMessage =
+      getElement("gfloor-status-confirm-message");
+
+    elements.confirmCancel =
+      getElement("gfloor-status-confirm-cancel");
+
+    elements.confirmSubmit =
+      getElement("gfloor-status-confirm-submit");
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Basic Helpers
+  | General Helpers
   |--------------------------------------------------------------------------
   */
 
-  function cleanText(
-    value
-  ) {
+  function cleanText(value) {
     if (
       value === null ||
       value === undefined
@@ -443,38 +352,60 @@
       return "";
     }
 
-    return String(
-      value
-    ).trim();
+    return String(value)
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
-  function escapeHtml(
-    value
-  ) {
-    const div =
-      document.createElement(
-        "div"
+  function getValue(object) {
+    const keys =
+      Array.prototype.slice.call(
+        arguments,
+        1
       );
 
-    div.textContent =
-      cleanText(
-        value
-      );
+    if (!object) {
+      return undefined;
+    }
 
-    return div.innerHTML;
+    for (
+      let index = 0;
+      index < keys.length;
+      index += 1
+    ) {
+      const key = keys[index];
+
+      if (
+        Object.prototype.hasOwnProperty.call(
+          object,
+          key
+        ) &&
+        object[key] !== undefined
+      ) {
+        return object[key];
+      }
+    }
+
+    return undefined;
   }
 
-  function formatDate(
-    value
-  ) {
+  function escapeHtml(value) {
+    const temporary =
+      document.createElement("div");
+
+    temporary.textContent =
+      cleanText(value);
+
+    return temporary.innerHTML;
+  }
+
+  function formatDate(value) {
     if (!value) {
       return "—";
     }
 
     const date =
-      new Date(
-        value
-      );
+      new Date(value);
 
     if (
       Number.isNaN(
@@ -508,17 +439,20 @@
         timeZoneName:
           "short"
       }
-    ).format(
-      date
-    );
+    ).format(date);
   }
 
-  function statusLabel(
-    status
-  ) {
-    switch (
-      status
-    ) {
+  function numberValue(value) {
+    const number =
+      Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : 0;
+  }
+
+  function statusLabel(status) {
+    switch (status) {
       case "approved":
         return "Approved";
 
@@ -530,49 +464,104 @@
     }
   }
 
-  function showToast(
-    message,
-    isError
+  function setText(
+    element,
+    value,
+    fallback
   ) {
-    if (!toast) {
+    if (!element) {
       return;
     }
 
-    toast.textContent =
-      message;
+    const text =
+      cleanText(value);
 
-    toast.classList.remove(
-      "is-hidden",
-      "error"
-    );
-
-    if (isError) {
-      toast.classList.add(
-        "error"
-      );
-    }
-
-    window.clearTimeout(
-      showToast.timeout
-    );
-
-    showToast.timeout =
-      window.setTimeout(
-        function () {
-          toast.classList.add(
-            "is-hidden"
-          );
-        },
-        4000
-      );
+    element.textContent =
+      text ||
+      fallback ||
+      "—";
   }
 
-  function setLoginMessage(
-    message
+  function toggleHidden(
+    element,
+    hidden
   ) {
-    loginMessage.textContent =
-      message ||
-      "";
+    if (!element) {
+      return;
+    }
+
+    element.classList.toggle(
+      "is-hidden",
+      Boolean(hidden)
+    );
+  }
+
+  function showReviewMessage(
+    message,
+    success
+  ) {
+    if (!elements.reviewMessage) {
+      return;
+    }
+
+    elements.reviewMessage.textContent =
+      message;
+
+    elements.reviewMessage.classList.remove(
+      "is-hidden",
+      "is-success"
+    );
+
+    if (success) {
+      elements.reviewMessage.classList.add(
+        "is-success"
+      );
+    }
+  }
+
+  function hideReviewMessage() {
+    toggleHidden(
+      elements.reviewMessage,
+      true
+    );
+  }
+
+  function showStatusMessage(
+    message,
+    success
+  ) {
+    if (!elements.statusMessage) {
+      return;
+    }
+
+    elements.statusMessage.textContent =
+      message;
+
+    elements.statusMessage.classList.remove(
+      "is-hidden",
+      "is-success"
+    );
+
+    if (success) {
+      elements.statusMessage.classList.add(
+        "is-success"
+      );
+    }
+  }
+
+  function hideStatusMessage() {
+    toggleHidden(
+      elements.statusMessage,
+      true
+    );
+  }
+
+  function setLoginMessage(message) {
+    setText(
+      elements.loginMessage,
+      message,
+      ""
+    );
   }
 
   /*
@@ -585,83 +574,77 @@
     endpoint,
     options
   ) {
-    const requestOptions =
-      options ||
-      {};
-
-    const method =
-      requestOptions.method ||
-      "GET";
+    const settings =
+      options || {};
 
     const headers = {
       "X-Admin-Token":
-        state.adminToken
+        state.adminToken,
+
+      Accept:
+        "application/json"
     };
 
     if (
-      requestOptions.body !==
-      undefined
+      settings.body !== undefined
     ) {
-      headers[
-        "Content-Type"
-      ] =
+      headers["Content-Type"] =
         "application/json";
     }
 
     const response =
       await fetch(
-        API_BASE +
-        endpoint,
+        API_BASE + endpoint,
         {
           method:
-            method,
+            settings.method ||
+            "GET",
 
-          headers:
-            headers,
-
-          body:
-            requestOptions.body !==
-            undefined
-              ? JSON.stringify(
-                  requestOptions.body
-                )
-              : undefined,
+          headers,
 
           cache:
-            "no-store"
+            "no-store",
+
+          credentials:
+            "omit",
+
+          body:
+            settings.body !== undefined
+              ? JSON.stringify(
+                  settings.body
+                )
+              : undefined
         }
       );
 
-    let data;
+    let data = null;
 
     try {
       data =
         await response.json();
-    } catch (
-      error
-    ) {
-      data = {
-        success:
-          false,
-
-        error:
-          "The server returned an invalid response."
-      };
+    } catch (error) {
+      data = null;
     }
 
     if (
-      response.status ===
-      401
+      response.status === 401
     ) {
       throw new Error(
         "The admin token is not authorized."
       );
     }
 
+    if (!response.ok) {
+      throw new Error(
+        data && data.error
+          ? data.error
+          : "The server request failed."
+      );
+    }
+
     if (
-      !response.ok ||
-      data.success ===
-        false
+      data &&
+      data.success === false
     ) {
       throw new Error(
         data.error ||
@@ -669,7 +652,7 @@
       );
     }
 
-    return data;
+    return data || {};
   }
 
   /*
@@ -681,7 +664,7 @@
   async function login() {
     const token =
       cleanText(
-        tokenInput.value
+        elements.token.value
       );
 
     if (!token) {
@@ -689,89 +672,107 @@
         "Enter your ADMIN_TOKEN."
       );
 
-      tokenInput.focus();
-
+      elements.token.focus();
       return;
     }
 
-    loginButton.disabled =
+    elements.loginButton.disabled =
       true;
 
-    loginButton.textContent =
+    elements.loginButton.textContent =
       "Connecting...";
-
-    setLoginMessage(
-      ""
-    );
 
     state.adminToken =
       token;
+
+    setLoginMessage("");
 
     try {
       await apiRequest(
         "/reviews/health"
       );
 
-      loginScreen.classList.add(
-        "is-hidden"
+      sessionStorage.setItem(
+        SESSION_TOKEN_KEY,
+        token
       );
 
-      dashboard.classList.remove(
-        "is-hidden"
+      toggleHidden(
+        elements.login,
+        true
       );
 
-      tokenInput.value =
-        "";
+      toggleHidden(
+        elements.dashboard,
+        false
+      );
+
+      elements.token.value = "";
 
       await refreshDashboard();
+    } catch (error) {
+      state.adminToken = "";
 
-    } catch (
-      error
-    ) {
-      state.adminToken =
-        "";
+      sessionStorage.removeItem(
+        SESSION_TOKEN_KEY
+      );
 
       setLoginMessage(
         error.message
       );
     } finally {
-      loginButton.disabled =
+      elements.loginButton.disabled =
         false;
 
-      loginButton.textContent =
+      elements.loginButton.textContent =
         "Open Review Dashboard";
     }
   }
 
   function logout() {
-    state.adminToken =
-      "";
+    state.adminToken = "";
+    state.reviews = [];
+    state.selectedReviewId = null;
+    state.selectedReview = null;
+    state.selectedKnowledge = null;
 
-    state.reviews =
-      [];
-
-    state.selectedReviewId =
-      null;
-
-    state.selectedReview =
-      null;
-
-    dashboard.classList.add(
-      "is-hidden"
+    sessionStorage.removeItem(
+      SESSION_TOKEN_KEY
     );
 
-    loginScreen.classList.remove(
-      "is-hidden"
+    toggleHidden(
+      elements.dashboard,
+      true
     );
 
-    tokenInput.value =
-      "";
-
-    setLoginMessage(
-      ""
+    toggleHidden(
+      elements.login,
+      false
     );
 
-    tokenInput.focus();
+    elements.token.value = "";
+
+    clearDetail();
+
+    elements.token.focus();
+  }
+
+  async function restoreSession() {
+    const storedToken =
+      cleanText(
+        sessionStorage.getItem(
+          SESSION_TOKEN_KEY
+        )
+      );
+
+    if (!storedToken) {
+      return;
+    }
+
+    elements.token.value =
+      storedToken;
+
+    await login();
   }
 
   /*
@@ -780,54 +781,57 @@
   |--------------------------------------------------------------------------
   */
 
-  async function loadHealth() {
-    dbStatus.classList.remove(
+  function setDatabaseStatus(
+    connected,
+    message
+  ) {
+    elements.dbStatus.classList.remove(
       "is-connected",
       "is-error"
     );
 
-    dbStatus.querySelector(
-      "span:last-child"
-    ).textContent =
-      "Checking database...";
+    elements.dbStatus.classList.add(
+      connected
+        ? "is-connected"
+        : "is-error"
+    );
 
+    const text =
+      elements.dbStatus.querySelector(
+        "span:last-child"
+      );
+
+    if (text) {
+      text.textContent =
+        message;
+    }
+  }
+
+  async function loadHealth() {
     try {
       const result =
         await apiRequest(
           "/reviews/health"
         );
 
-      if (
-        result.database &&
-        result.database.connected
-      ) {
-        dbStatus.classList.add(
-          "is-connected"
-        );
+      const connected =
+        Boolean(
+          result.database &&
+          result.database.connected
+        ) ||
+        result.success === true;
 
-        dbStatus.querySelector(
-          "span:last-child"
-        ).textContent =
-          "Database connected";
-
-        return;
-      }
-
-      throw new Error(
-        "Database connection unavailable."
+      setDatabaseStatus(
+        connected,
+        connected
+          ? "Database connected"
+          : "Database unavailable"
       );
-
-    } catch (
-      error
-    ) {
-      dbStatus.classList.add(
-        "is-error"
+    } catch (error) {
+      setDatabaseStatus(
+        false,
+        "Database connection failed"
       );
-
-      dbStatus.querySelector(
-        "span:last-child"
-      ).textContent =
-        "Database unavailable";
 
       throw error;
     }
@@ -839,7 +843,7 @@
   |--------------------------------------------------------------------------
   */
 
-  async function loadCounts() {
+  async function loadReviewCounts() {
     const result =
       await apiRequest(
         "/reviews/counts"
@@ -847,36 +851,108 @@
 
     const counts =
       result.counts ||
-      {};
+      result;
 
-    pendingCount.textContent =
-      Number(
-        counts.pending_review ||
-        0
+    setText(
+      elements.pendingCount,
+      numberValue(
+        getValue(
+          counts,
+          "pending",
+          "pending_review",
+          "pendingReview"
+        )
+      ),
+      "0"
+    );
+
+    setText(
+      elements.approvedCount,
+      numberValue(
+        getValue(
+          counts,
+          "approved"
+        )
+      ),
+      "0"
+    );
+
+    setText(
+      elements.deniedCount,
+      numberValue(
+        getValue(
+          counts,
+          "denied"
+        )
+      ),
+      "0"
+    );
+
+    setText(
+      elements.totalCount,
+      numberValue(
+        getValue(
+          counts,
+          "total"
+        )
+      ),
+      "0"
+    );
+  }
+
+  async function loadKnowledgeStatusCounts() {
+    try {
+      const result =
+        await apiRequest(
+          "/knowledge/status/counts"
+        );
+
+      const counts =
+        result.counts || {};
+
+      setText(
+        elements.knowledgeActiveCount,
+        numberValue(counts.active),
+        "0"
       );
 
-    approvedCount.textContent =
-      Number(
-        counts.approved ||
-        0
+      setText(
+        elements.knowledgeInactiveCount,
+        numberValue(counts.inactive),
+        "0"
       );
 
-    deniedCount.textContent =
-      Number(
-        counts.denied ||
-        0
+      setText(
+        elements.knowledgeTotalCount,
+        numberValue(counts.total),
+        "0"
+      );
+    } catch (error) {
+      setText(
+        elements.knowledgeActiveCount,
+        "—"
       );
 
-    totalCount.textContent =
-      Number(
-        counts.total ||
-        0
+      setText(
+        elements.knowledgeInactiveCount,
+        "—"
       );
+
+      setText(
+        elements.knowledgeTotalCount,
+        "—"
+      );
+
+      console.warn(
+        "Approved knowledge status counts failed:",
+        error.message
+      );
+    }
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Build Review Query
+  | Review List
   |--------------------------------------------------------------------------
   */
 
@@ -907,1593 +983,959 @@
 
     parameters.set(
       "page",
-      String(
-        state.page
-      )
+      String(state.page)
     );
 
     parameters.set(
       "limit",
-      String(
-        state.limit
-      )
+      String(state.limit)
     );
 
-    return (
-      "/reviews?" +
-      parameters.toString()
-    );
+    return "?" +
+      parameters.toString();
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Load Reviews
-  |--------------------------------------------------------------------------
-  */
-
   async function loadReviews() {
-    reviewLoading.classList.remove(
-      "is-hidden"
+    state.loading = true;
+
+    toggleHidden(
+      elements.reviewLoading,
+      false
     );
 
-    reviewEmpty.classList.add(
-      "is-hidden"
+    toggleHidden(
+      elements.reviewEmpty,
+      true
     );
 
-    reviewList.innerHTML =
-      "";
+    elements.reviewList.innerHTML = "";
 
     try {
       const result =
         await apiRequest(
+          "/reviews" +
           buildReviewQuery()
         );
 
       state.reviews =
-        Array.isArray(
-          result.reviews
-        )
+        Array.isArray(result.reviews)
           ? result.reviews
-          : [];
+          : Array.isArray(result.items)
+            ? result.items
+            : [];
 
-      const paginationData =
-        result.pagination ||
-        {};
+      const pagination =
+        result.pagination || {};
 
       state.page =
-        Number(
-          paginationData.page ||
-          1
-        );
+        numberValue(
+          pagination.page
+        ) || state.page;
 
       state.pages =
-        Number(
-          paginationData.pages ||
-          1
-        );
+        numberValue(
+          pagination.pages
+        ) || 1;
 
       state.total =
-        Number(
-          paginationData.total ||
-          0
+        numberValue(
+          pagination.total !== undefined
+            ? pagination.total
+            : result.total
         );
 
-      renderReviews();
-
+      renderReviewList();
       renderPagination();
-
-      resultCount.textContent =
-        state.total ===
-        1
-          ? "1 review"
-          : (
-              state.total +
-              " reviews"
-            );
-
     } finally {
-      reviewLoading.classList.add(
-        "is-hidden"
+      state.loading = false;
+
+      toggleHidden(
+        elements.reviewLoading,
+        true
       );
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Render Review List
-  |--------------------------------------------------------------------------
-  */
+  function reviewId(review) {
+    return numberValue(
+      getValue(
+        review,
+        "id",
+        "reviewId",
+        "review_id"
+      )
+    );
+  }
 
-  function renderReviews() {
-    reviewList.innerHTML =
-      "";
+  function reviewStatus(review) {
+    return cleanText(
+      getValue(
+        review,
+        "status"
+      )
+    ) || "pending-review";
+  }
 
-    if (
-      !state.reviews.length
-    ) {
-      reviewEmpty.classList.remove(
-        "is-hidden"
+  function reviewQuestion(review) {
+    return cleanText(
+      getValue(
+        review,
+        "suggested_question",
+        "suggestedQuestion",
+        "customer_question",
+        "customerQuestion",
+        "subject"
+      )
+    ) || "Untitled review";
+  }
+
+  function reviewAnswer(review) {
+    return cleanText(
+      getValue(
+        review,
+        "suggested_answer",
+        "suggestedAnswer",
+        "customer_service_response",
+        "customerServiceResponse"
+      )
+    );
+  }
+
+  function reviewCategory(review) {
+    return cleanText(
+      getValue(
+        review,
+        "suggested_category",
+        "suggestedCategory",
+        "category"
+      )
+    ) || "Uncategorized";
+  }
+
+  function renderReviewList() {
+    elements.reviewList.innerHTML = "";
+
+    const hasReviews =
+      state.reviews.length > 0;
+
+    toggleHidden(
+      elements.reviewEmpty,
+      hasReviews
+    );
+
+    const total =
+      state.total ||
+      state.reviews.length;
+
+    elements.resultCount.textContent =
+      total +
+      (
+        total === 1
+          ? " review"
+          : " reviews"
       );
 
+    if (!hasReviews) {
       clearDetail();
-
       return;
     }
 
-    reviewEmpty.classList.add(
-      "is-hidden"
-    );
-
     state.reviews.forEach(
-      function (
-        review
-      ) {
-        const button =
+      function (review) {
+        const id =
+          reviewId(review);
+
+        const status =
+          reviewStatus(review);
+
+        const card =
           document.createElement(
             "button"
           );
 
-        button.type =
-          "button";
+        card.type = "button";
 
-        button.className =
-          "gfloor-review-item";
-
-        button.dataset.reviewId =
-          String(
-            review.id
-          );
+        card.className =
+          "gfloor-review-card";
 
         if (
-          Number(
-            state.selectedReviewId
-          ) ===
-          Number(
-            review.id
-          )
+          id ===
+          state.selectedReviewId
         ) {
-          button.classList.add(
+          card.classList.add(
             "is-selected"
           );
         }
 
-        const question =
-          cleanText(
-            review.suggested_question
-          ) ||
-          cleanText(
-            review.customer_question
-          ) ||
-          "Untitled review";
+        const sensitive =
+          Boolean(
+            getValue(
+              review,
+              "requires_sensitive_review",
+              "requiresSensitiveReview"
+            )
+          );
 
-        const preview =
-          cleanText(
-            review.suggested_answer
-          ) ||
-          cleanText(
-            review.customer_service_response
-          ) ||
-          "No answer available.";
+        const duplicate =
+          Boolean(
+            getValue(
+              review,
+              "possible_duplicate",
+              "possibleDuplicate"
+            )
+          );
 
-        let badges =
-          "";
-
-        if (
-          review.suggested_category
-        ) {
-          badges += `
-            <span class="gfloor-mini-badge">
-              ${escapeHtml(
-                review.suggested_category
-              )}
-            </span>
-          `;
-        }
-
-        if (
-          review.requires_sensitive_review
-        ) {
-          badges += `
-            <span class="gfloor-mini-badge warning">
-              Sensitive Review
-            </span>
-          `;
-        }
-
-        if (
-          review.possible_duplicate
-        ) {
-          badges += `
-            <span class="gfloor-mini-badge duplicate">
-              Possible Duplicate
-            </span>
-          `;
-        }
-
-        button.innerHTML = `
-          <div class="gfloor-review-item-top">
-
-            <span class="gfloor-review-id">
-              REVIEW #${escapeHtml(
-                review.id
-              )}
+        card.innerHTML = `
+          <div class="gfloor-review-card-top">
+            <span>
+              REVIEW #${escapeHtml(id)}
             </span>
 
-            <span class="gfloor-status-badge ${escapeHtml(
-              review.status
-            )}">
-              ${escapeHtml(
-                statusLabel(
-                  review.status
-                )
-              )}
+            <span class="gfloor-status-badge status-${escapeHtml(status)}">
+              ${escapeHtml(statusLabel(status))}
             </span>
-
           </div>
 
-          <div class="gfloor-review-question">
-            ${escapeHtml(
-              question
-            )}
-          </div>
+          <h3>
+            ${escapeHtml(reviewQuestion(review))}
+          </h3>
 
-          <p class="gfloor-review-preview">
-            ${escapeHtml(
-              preview
-            )}
+          <p>
+            ${escapeHtml(reviewAnswer(review).slice(0, 190))}
           </p>
 
-          <div class="gfloor-review-meta">
-            ${badges}
+          <div class="gfloor-review-card-meta">
+            <span class="gfloor-review-tag">
+              ${escapeHtml(reviewCategory(review))}
+            </span>
 
-            <span class="gfloor-mini-badge">
+            ${
+              sensitive
+                ? '<span class="gfloor-review-tag gfloor-tag-warning">Sensitive Review</span>'
+                : ""
+            }
+
+            ${
+              duplicate
+                ? '<span class="gfloor-review-tag gfloor-tag-info">Possible Duplicate</span>'
+                : ""
+            }
+
+            <span class="gfloor-review-tag">
               ${escapeHtml(
                 formatDate(
-                  review.source_received_at ||
-                  review.created_at
+                  getValue(
+                    review,
+                    "received_at",
+                    "receivedAt",
+                    "created_at",
+                    "createdAt"
+                  )
                 )
               )}
             </span>
           </div>
         `;
 
-        button.addEventListener(
+        card.addEventListener(
           "click",
           function () {
-            selectReview(
-              review.id
-            );
+            selectReview(id);
           }
         );
 
-        reviewList.appendChild(
-          button
+        elements.reviewList.appendChild(
+          card
         );
       }
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Pagination
-  |--------------------------------------------------------------------------
-  */
-
   function renderPagination() {
-    if (
-      state.total <=
-      state.limit
-    ) {
-      pagination.classList.add(
-        "is-hidden"
-      );
+    const visible =
+      state.pages > 1;
 
-      return;
-    }
-
-    pagination.classList.remove(
-      "is-hidden"
+    toggleHidden(
+      elements.pagination,
+      !visible
     );
 
-    pageLabel.textContent =
+    elements.pageLabel.textContent =
       "Page " +
       state.page +
       " of " +
       state.pages;
 
-    previousButton.disabled =
-      state.page <=
-      1;
+    elements.previousButton.disabled =
+      state.loading ||
+      state.page <= 1;
 
-    nextButton.disabled =
-      state.page >=
-      state.pages;
+    elements.nextButton.disabled =
+      state.loading ||
+      state.page >= state.pages;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Select Review
+  | Review Detail
   |--------------------------------------------------------------------------
   */
 
-  async function selectReview(
-    reviewId
-  ) {
+  async function selectReview(id) {
     state.selectedReviewId =
-      Number(
-        reviewId
-      );
+      id;
 
-    renderReviews();
+    state.selectedKnowledge =
+      null;
+
+    hideReviewMessage();
+    hideStatusMessage();
+
+    renderReviewList();
 
     try {
       const result =
         await apiRequest(
-          "/reviews/" +
-          encodeURIComponent(
-            reviewId
-          )
+          "/reviews/" + id
         );
 
       state.selectedReview =
-        result.review;
+        result.review ||
+        result;
 
-      renderDetail(
-        result.review
-      );
+      renderReviewDetail();
 
-    } catch (
-      error
-    ) {
-      showToast(
+      if (
+        reviewStatus(
+          state.selectedReview
+        ) === "approved"
+      ) {
+        await loadSelectedKnowledgeStatus();
+      }
+    } catch (error) {
+      showReviewMessage(
         error.message,
-        true
+        false
       );
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Detail Helpers
-  |--------------------------------------------------------------------------
-  */
+  function clearDetail() {
+    state.selectedReviewId = null;
+    state.selectedReview = null;
+    state.selectedKnowledge = null;
 
-  function setText(
-    id,
-    value,
-    fallback
-  ) {
-    const element =
-      document.getElementById(
-        id
-      );
+    toggleHidden(
+      elements.detail,
+      true
+    );
 
-    if (!element) {
+    toggleHidden(
+      elements.detailPlaceholder,
+      false
+    );
+
+    toggleHidden(
+      elements.knowledgeStatusPanel,
+      true
+    );
+  }
+
+  function renderReviewDetail() {
+    const review =
+      state.selectedReview;
+
+    if (!review) {
+      clearDetail();
       return;
     }
 
-    element.textContent =
-      cleanText(
-        value
-      ) ||
-      fallback ||
-      "—";
-  }
-
-  function renderArray(
-    id,
-    values,
-    emptyText
-  ) {
-    const container =
-      document.getElementById(
-        id
-      );
-
-    if (!container) {
-      return;
-    }
-
-    container.innerHTML =
-      "";
-
-    if (
-      !Array.isArray(
-        values
-      ) ||
-      !values.length
-    ) {
-      container.textContent =
-        emptyText ||
-        "None";
-
-      return;
-    }
-
-    values.forEach(
-      function (
-        value
-      ) {
-        const item =
-          document.createElement(
-            "span"
-          );
-
-        item.className =
-          "gfloor-variation";
-
-        item.textContent =
-          cleanText(
-            value
-          );
-
-        container.appendChild(
-          item
-        );
-      }
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Replace Element Helper
-  |--------------------------------------------------------------------------
-  */
-
-  function replaceElement(
-    id,
-    newElement
-  ) {
-    const oldElement =
-      document.getElementById(
-        id
-      );
-
-    if (!oldElement) {
-      return null;
-    }
-
-    newElement.id =
-      id;
-
-    oldElement.replaceWith(
-      newElement
+    toggleHidden(
+      elements.detailPlaceholder,
+      true
     );
 
-    return newElement;
-  }
-
-  function createReadonlyDiv(
-    id,
-    value,
-    fallback,
-    longField
-  ) {
-    const div =
-      document.createElement(
-        "div"
-      );
-
-    div.id =
-      id;
-
-    div.className =
-      "gfloor-readonly-field" +
-      (
-        longField
-          ? " gfloor-long-field"
-          : ""
-      );
-
-    div.textContent =
-      cleanText(
-        value
-      ) ||
-      fallback ||
-      "—";
-
-    return div;
-  }
-
-  function createInput(
-    id,
-    value,
-    options
-  ) {
-    const settings =
-      options ||
-      {};
-
-    const input =
-      document.createElement(
-        "input"
-      );
-
-    input.id =
-      id;
-
-    input.type =
-      settings.type ||
-      "text";
-
-    input.className =
-      "gfloor-edit-control";
-
-    input.value =
-      cleanText(
-        value
-      );
-
-    input.placeholder =
-      settings.placeholder ||
-      "";
-
-    input.autocomplete =
-      "off";
-
-    return input;
-  }
-
-  function createTextarea(
-    id,
-    value,
-    className,
-    placeholder
-  ) {
-    const textarea =
-      document.createElement(
-        "textarea"
-      );
-
-    textarea.id =
-      id;
-
-    textarea.className =
-      "gfloor-edit-control " +
-      (
-        className ||
-        ""
-      );
-
-    textarea.value =
-      cleanText(
-        value
-      );
-
-    textarea.placeholder =
-      placeholder ||
-      "";
-
-    return textarea;
-  }
-
-  function createResponseTypeSelect(
-    id,
-    value
-  ) {
-    const select =
-      document.createElement(
-        "select"
-      );
-
-    select.id =
-      id;
-
-    select.className =
-      "gfloor-edit-control";
-
-    [
-      "AUTO",
-      "HUMAN REVIEW",
-      "ALWAYS ESCALATE"
-    ].forEach(
-      function (
-        optionValue
-      ) {
-        const option =
-          document.createElement(
-            "option"
-          );
-
-        option.value =
-          optionValue;
-
-        option.textContent =
-          optionValue;
-
-        if (
-          cleanText(
-            value
-          ).toUpperCase() ===
-          optionValue
-        ) {
-          option.selected =
-            true;
-        }
-
-        select.appendChild(
-          option
-        );
-      }
+    toggleHidden(
+      elements.detail,
+      false
     );
 
-    return select;
-  }
+    const id =
+      reviewId(review);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Pending Review Editor
-  |--------------------------------------------------------------------------
-  */
+    const status =
+      reviewStatus(review);
 
-  function renderPendingEditors(
-    review
-  ) {
-    replaceElement(
-      "gfloor-detail-suggested-question",
-      createTextarea(
-        "gfloor-detail-suggested-question",
-        review.suggested_question,
-        "",
-        "Write the public chatbot question..."
+    setText(
+      elements.detailTitle,
+      "Review #" + id
+    );
+
+    setText(
+      elements.detailStatus,
+      statusLabel(status)
+    );
+
+    elements.detailStatus.className =
+      "gfloor-status-badge status-" +
+      status;
+
+    const sensitiveRequired =
+      Boolean(
+        getValue(
+          review,
+          "requires_sensitive_review",
+          "requiresSensitiveReview"
+        )
+      );
+
+    const sensitiveCompleted =
+      Boolean(
+        getValue(
+          review,
+          "sensitive_review_completed",
+          "sensitiveReviewCompleted"
+        )
+      );
+
+    const possibleDuplicate =
+      Boolean(
+        getValue(
+          review,
+          "possible_duplicate",
+          "possibleDuplicate"
+        )
+      );
+
+    toggleHidden(
+      elements.sensitiveAlert,
+      !sensitiveRequired
+    );
+
+    toggleHidden(
+      elements.duplicateAlert,
+      !possibleDuplicate
+    );
+
+    setText(
+      elements.duplicateMessage,
+      getValue(
+        review,
+        "duplicate_message",
+        "duplicateMessage"
+      ),
+      "This review may match existing approved knowledge."
+    );
+
+    setText(
+      elements.detailSource,
+      getValue(
+        review,
+        "source",
+        "source_type",
+        "sourceType"
       )
     );
 
-    replaceElement(
-      "gfloor-detail-suggested-answer",
-      createTextarea(
-        "gfloor-detail-suggested-answer",
-        review.suggested_answer,
-        "gfloor-answer-editor",
-        "Write the approved public chatbot answer..."
+    setText(
+      elements.detailReceived,
+      formatDate(
+        getValue(
+          review,
+          "received_at",
+          "receivedAt",
+          "created_at",
+          "createdAt"
+        )
       )
     );
 
-    replaceElement(
-      "gfloor-detail-suggested-category",
-      createInput(
-        "gfloor-detail-suggested-category",
-        review.suggested_category,
-        {
-          placeholder:
-            "Example: Installation"
-        }
+    setText(
+      elements.detailSender,
+      getValue(
+        review,
+        "sender_email",
+        "senderEmail",
+        "sender"
       )
     );
 
-    replaceElement(
-      "gfloor-detail-response-type",
-      createResponseTypeSelect(
-        "gfloor-detail-response-type",
-        review.suggested_response_type ||
-        "AUTO"
+    setText(
+      elements.detailCategory,
+      reviewCategory(review)
+    );
+
+    setText(
+      elements.detailSubject,
+      getValue(
+        review,
+        "email_subject",
+        "emailSubject",
+        "subject"
       )
     );
+
+    setText(
+      elements.customerQuestion,
+      getValue(
+        review,
+        "customer_question",
+        "customerQuestion",
+        "original_question",
+        "originalQuestion"
+      )
+    );
+
+    setText(
+      elements.customerResponse,
+      getValue(
+        review,
+        "customer_service_response",
+        "customerServiceResponse",
+        "original_answer",
+        "originalAnswer"
+      )
+    );
+
+    elements.suggestedQuestion.value =
+      cleanText(
+        getValue(
+          review,
+          "suggested_question",
+          "suggestedQuestion"
+        )
+      );
 
     const variations =
-      Array.isArray(
-        review.suggested_variations
-      )
-        ? review
-            .suggested_variations
-            .join(
-              "\n"
-            )
-        : "";
-
-    replaceElement(
-      "gfloor-detail-variations",
-      createTextarea(
-        "gfloor-detail-variations",
-        variations,
-        "gfloor-variations-editor",
-        "Enter one alternate customer question per line..."
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-source-url",
-      createInput(
-        "gfloor-detail-source-url",
-        review.suggested_source_url,
-        {
-          type:
-            "url",
-
-          placeholder:
-            "https://gfloor.com/..."
-        }
-      )
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reviewer
-    |--------------------------------------------------------------------------
-    */
-
-    replaceElement(
-      "gfloor-detail-reviewer",
-      createInput(
-        "gfloor-detail-reviewer",
-        review.reviewer_name,
-        {
-          placeholder:
-            "Enter reviewer name"
-        }
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-reviewer-notes",
-      createTextarea(
-        "gfloor-detail-reviewer-notes",
-        review.reviewer_notes,
-        "",
-        "Add approval notes or enter a reason if denying this review..."
-      )
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Sensitive Review Checkbox
-    |--------------------------------------------------------------------------
-    */
-
-    const sensitiveOld =
-      document.getElementById(
-        "gfloor-detail-sensitive-completed"
+      getValue(
+        review,
+        "suggested_variations",
+        "suggestedVariations"
       );
 
-    if (sensitiveOld) {
-      const wrapper =
-        document.createElement(
-          "div"
-        );
+    elements.suggestedVariations.value =
+      Array.isArray(variations)
+        ? variations.join("\n")
+        : cleanText(variations);
 
-      wrapper.id =
-        "gfloor-detail-sensitive-completed";
+    elements.suggestedAnswer.value =
+      cleanText(
+        getValue(
+          review,
+          "suggested_answer",
+          "suggestedAnswer"
+        )
+      );
 
-      if (
-        review.requires_sensitive_review
-      ) {
-        wrapper.className =
-          "gfloor-sensitive-confirmation";
+    elements.suggestedCategory.value =
+      reviewCategory(review);
 
-        const checkbox =
-          document.createElement(
-            "input"
-          );
+    elements.suggestedResponseType.value =
+      cleanText(
+        getValue(
+          review,
+          "suggested_response_type",
+          "suggestedResponseType",
+          "response_type",
+          "responseType"
+        )
+      ).toUpperCase() ||
+      "AUTO";
 
-        checkbox.type =
-          "checkbox";
+    elements.suggestedSourceUrl.value =
+      cleanText(
+        getValue(
+          review,
+          "suggested_source_url",
+          "suggestedSourceUrl",
+          "source_url",
+          "sourceUrl"
+        )
+      );
 
-        checkbox.id =
-          "gfloor-sensitive-review-checkbox";
+    setText(
+      elements.sensitiveRequired,
+      sensitiveRequired
+        ? "Yes"
+        : "No"
+    );
 
-        checkbox.checked =
-          Boolean(
-            review.sensitive_review_completed
-          );
+    elements.sensitiveCompleted.checked =
+      sensitiveCompleted;
 
-        const label =
-          document.createElement(
-            "label"
-          );
+    toggleHidden(
+      elements.sensitiveControl,
+      !sensitiveRequired
+    );
 
-        label.htmlFor =
-          "gfloor-sensitive-review-checkbox";
+    toggleHidden(
+      elements.sensitiveNotRequired,
+      sensitiveRequired
+    );
 
-        label.innerHTML = `
-          <strong>
-            I reviewed this item for customer-specific information.
-          </strong>
+    setText(
+      elements.possibleDuplicate,
+      possibleDuplicate
+        ? "Yes"
+        : "No"
+    );
 
-          I confirm that names, email addresses, phone numbers,
-          order numbers, addresses, and other customer-specific
-          information have been removed from the proposed chatbot
-          question and answer.
-        `;
+    const sensitiveInformation =
+      getValue(
+        review,
+        "detected_sensitive_information",
+        "detectedSensitiveInformation"
+      );
 
-        wrapper.appendChild(
-          checkbox
-        );
+    setText(
+      elements.detectedSensitive,
+      Array.isArray(sensitiveInformation)
+        ? sensitiveInformation.join(", ")
+        : sensitiveInformation,
+      "None detected"
+    );
 
-        wrapper.appendChild(
-          label
-        );
+    elements.reviewerName.value =
+      cleanText(
+        getValue(
+          review,
+          "reviewer_name",
+          "reviewerName"
+        )
+      );
 
-      } else {
-        wrapper.className =
-          "gfloor-readonly-field";
+    setText(
+      elements.reviewedAt,
+      formatDate(
+        getValue(
+          review,
+          "reviewed_at",
+          "reviewedAt"
+        )
+      ),
+      "Not reviewed"
+    );
 
-        wrapper.textContent =
-          "Not required";
+    elements.reviewerNotes.value =
+      cleanText(
+        getValue(
+          review,
+          "reviewer_notes",
+          "reviewerNotes"
+        )
+      );
+
+    const pending =
+      status === "pending-review";
+
+    setReviewEditingState(
+      pending
+    );
+
+    renderReviewStateMessage(
+      status
+    );
+
+    toggleHidden(
+      elements.knowledgeStatusPanel,
+      status !== "approved"
+    );
+  }
+
+  function setReviewEditingState(editable) {
+    [
+      elements.suggestedQuestion,
+      elements.suggestedVariations,
+      elements.suggestedAnswer,
+      elements.suggestedCategory,
+      elements.suggestedResponseType,
+      elements.suggestedSourceUrl,
+      elements.sensitiveCompleted,
+      elements.reviewerName,
+      elements.reviewerNotes
+    ].forEach(
+      function (control) {
+        if (control) {
+          control.disabled =
+            !editable;
+        }
       }
-
-      sensitiveOld.replaceWith(
-        wrapper
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Action Area
-    |--------------------------------------------------------------------------
-    */
-
-    setupPendingActionArea(
-      review
     );
 
-    bindDirtyTracking();
+    elements.saveButton.disabled =
+      !editable;
+
+    elements.approveButton.disabled =
+      !editable;
+
+    elements.denyButton.disabled =
+      !editable;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Read-Only Detail
-  |--------------------------------------------------------------------------
-  */
-
-  function renderReadonlyFields(
-    review
-  ) {
-    replaceElement(
-      "gfloor-detail-suggested-question",
-      createReadonlyDiv(
-        "gfloor-detail-suggested-question",
-        review.suggested_question,
-        "No suggested question.",
-        false
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-suggested-answer",
-      createReadonlyDiv(
-        "gfloor-detail-suggested-answer",
-        review.suggested_answer,
-        "No suggested answer.",
-        true
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-suggested-category",
-      createReadonlyDiv(
-        "gfloor-detail-suggested-category",
-        review.suggested_category,
-        "Uncategorized",
-        false
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-response-type",
-      createReadonlyDiv(
-        "gfloor-detail-response-type",
-        review.suggested_response_type,
-        "AUTO",
-        false
-      )
-    );
-
-    const variationContainer =
-      document.createElement(
-        "div"
-      );
-
-    variationContainer.id =
-      "gfloor-detail-variations";
-
-    variationContainer.className =
-      "gfloor-variation-list";
-
-    replaceElement(
-      "gfloor-detail-variations",
-      variationContainer
-    );
-
-    renderArray(
-      "gfloor-detail-variations",
-      review.suggested_variations,
-      "No suggested variations."
-    );
-
-    const sourceUrl =
-      createReadonlyDiv(
-        "gfloor-detail-source-url",
-        review.suggested_source_url,
-        "No source URL.",
-        false
-      );
-
-    replaceElement(
-      "gfloor-detail-source-url",
-      sourceUrl
-    );
-
-    replaceElement(
-      "gfloor-detail-reviewer",
-      createReadonlyDiv(
-        "gfloor-detail-reviewer",
-        review.reviewer_name,
-        "Not reviewed",
-        false
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-reviewer-notes",
-      createReadonlyDiv(
-        "gfloor-detail-reviewer-notes",
-        review.reviewer_notes,
-        "No reviewer notes.",
-        true
-      )
-    );
-
-    replaceElement(
-      "gfloor-detail-sensitive-completed",
-      createReadonlyDiv(
-        "gfloor-detail-sensitive-completed",
-        review.sensitive_review_completed
-          ? "Yes"
-          : "No",
-        "No",
-        false
-      )
-    );
-
-    setupReadonlyActionArea(
-      review
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Action Area
-  |--------------------------------------------------------------------------
-  */
-
-  function ensureValidationBox() {
-    let box =
-      document.getElementById(
-        "gfloor-action-validation"
-      );
-
-    if (box) {
-      return box;
-    }
-
-    box =
-      document.createElement(
-        "div"
-      );
-
-    box.id =
-      "gfloor-action-validation";
-
-    box.className =
-      "gfloor-action-validation is-hidden";
-
-    const actionSection =
-      document.querySelector(
-        ".gfloor-detail-actions-section"
-      );
-
-    if (
-      actionSection &&
-      actionNote
-    ) {
-      actionSection.insertBefore(
-        box,
-        actionNote
-      );
-    }
-
-    return box;
-  }
-
-  function showValidation(
-    message
-  ) {
-    const box =
-      ensureValidationBox();
-
-    box.textContent =
-      message;
-
-    box.classList.remove(
-      "is-hidden"
-    );
-
-    box.scrollIntoView({
-      behavior:
-        "smooth",
-
-      block:
-        "nearest"
-    });
-  }
-
-  function clearValidation() {
-    const box =
-      document.getElementById(
-        "gfloor-action-validation"
-      );
-
-    if (!box) {
+  function renderReviewStateMessage(status) {
+    if (!elements.reviewStateMessage) {
       return;
     }
 
-    box.textContent =
-      "";
-
-    box.classList.add(
-      "is-hidden"
-    );
-  }
-
-  function setupPendingActionArea() {
-    clearValidation();
-
-    if (actionNote) {
-      actionNote.innerHTML = `
-        <strong>
-          Pending Review
-        </strong>
-
+    if (status === "approved") {
+      elements.reviewStateMessage.innerHTML = `
+        <strong>Approved</strong>
         <span>
-          Edit the proposed chatbot content, enter your reviewer
-          name, then Save, Approve, or Deny this item.
+          This review has been approved. Use the Approved Knowledge Status
+          section below to deactivate or reactivate the live chatbot answer.
         </span>
       `;
+
+      return;
     }
 
-    if (denyButton) {
-      denyButton.disabled =
-        false;
+    if (status === "denied") {
+      elements.reviewStateMessage.innerHTML = `
+        <strong>Denied</strong>
+        <span>
+          This review was denied and was not added to approved chatbot knowledge.
+        </span>
+      `;
 
-      denyButton.textContent =
-        "Deny";
+      return;
     }
 
-    if (saveButton) {
-      saveButton.disabled =
-        false;
-
-      saveButton.textContent =
-        "Save Changes";
-    }
-
-    if (approveButton) {
-      approveButton.disabled =
-        false;
-
-      approveButton.textContent =
-        "Approve";
-    }
-  }
-
-  function setupReadonlyActionArea(
-    review
-  ) {
-    clearValidation();
-
-    if (actionNote) {
-      if (
-        review.status ===
-        "approved"
-      ) {
-        actionNote.innerHTML = `
-          <strong>
-            Approved
-          </strong>
-
-          <span>
-            This review has been approved and copied into
-            approved chatbot knowledge.
-          </span>
-        `;
-
-      } else {
-        actionNote.innerHTML = `
-          <strong>
-            Denied
-          </strong>
-
-          <span>
-            This review was denied and was not added to
-            approved chatbot knowledge.
-          </span>
-        `;
-      }
-    }
-
-    if (denyButton) {
-      denyButton.disabled =
-        true;
-    }
-
-    if (saveButton) {
-      saveButton.disabled =
-        true;
-    }
-
-    if (approveButton) {
-      approveButton.disabled =
-        true;
-    }
+    elements.reviewStateMessage.innerHTML = `
+      <strong>Pending Review</strong>
+      <span>
+        Edit the proposed chatbot content, enter your reviewer name,
+        then Save, Approve, or Deny this item.
+      </span>
+    `;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Dirty Tracking
+  | Review Editing
   |--------------------------------------------------------------------------
   */
 
-  function bindDirtyTracking() {
-    document
-      .querySelectorAll(
-        ".gfloor-edit-control"
-      )
-      .forEach(
-        function (
-          control
-        ) {
-          control.addEventListener(
-            "input",
-            function () {
-              control.classList.add(
-                "gfloor-review-dirty"
-              );
-            }
-          );
-
-          control.addEventListener(
-            "change",
-            function () {
-              control.classList.add(
-                "gfloor-review-dirty"
-              );
-            }
-          );
-        }
-      );
-  }
-
-  function clearDirtyTracking() {
-    document
-      .querySelectorAll(
-        ".gfloor-review-dirty"
-      )
-      .forEach(
-        function (
-          control
-        ) {
-          control.classList.remove(
-            "gfloor-review-dirty"
-          );
-        }
-      );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Gather Editor Values
-  |--------------------------------------------------------------------------
-  */
-
-  function getEditorValue(
-    id
-  ) {
-    const element =
-      document.getElementById(
-        id
-      );
-
-    if (!element) {
-      return "";
-    }
-
-    return cleanText(
-      element.value
-    );
-  }
-
-  function getVariations() {
-    const value =
-      getEditorValue(
-        "gfloor-detail-variations"
-      );
-
-    if (!value) {
-      return [];
-    }
-
-    return value
-      .split(
-        /\r?\n/
-      )
-      .map(
-        function (
-          variation
-        ) {
-          return cleanText(
-            variation
-          );
-        }
-      )
-      .filter(Boolean);
-  }
-
-  function getSensitiveReviewCompleted() {
-    if (
-      !state.selectedReview ||
-      !state.selectedReview
-        .requires_sensitive_review
-    ) {
-      return false;
-    }
-
-    const checkbox =
-      document.getElementById(
-        "gfloor-sensitive-review-checkbox"
-      );
-
-    return Boolean(
-      checkbox &&
-      checkbox.checked
-    );
-  }
-
-  function getFormData() {
+  function collectReviewPayload() {
     return {
       suggestedQuestion:
-        getEditorValue(
-          "gfloor-detail-suggested-question"
-        ),
-
-      suggestedAnswer:
-        getEditorValue(
-          "gfloor-detail-suggested-answer"
-        ),
-
-      suggestedCategory:
-        getEditorValue(
-          "gfloor-detail-suggested-category"
+        cleanText(
+          elements.suggestedQuestion.value
         ),
 
       suggestedVariations:
-        getVariations(),
+        elements.suggestedVariations.value
+          .split(/\r?\n/)
+          .map(cleanText)
+          .filter(Boolean),
 
-      suggestedSourceUrl:
-        getEditorValue(
-          "gfloor-detail-source-url"
+      suggestedAnswer:
+        cleanText(
+          elements.suggestedAnswer.value
+        ),
+
+      suggestedCategory:
+        cleanText(
+          elements.suggestedCategory.value
         ),
 
       suggestedResponseType:
-        getEditorValue(
-          "gfloor-detail-response-type"
-        ) ||
-        "AUTO",
+        cleanText(
+          elements.suggestedResponseType.value
+        ),
+
+      suggestedSourceUrl:
+        cleanText(
+          elements.suggestedSourceUrl.value
+        ),
 
       sensitiveReviewCompleted:
-        getSensitiveReviewCompleted(),
+        Boolean(
+          elements.sensitiveCompleted.checked
+        ),
 
       reviewerName:
-        getEditorValue(
-          "gfloor-detail-reviewer"
+        cleanText(
+          elements.reviewerName.value
         ),
 
       reviewerNotes:
-        getEditorValue(
-          "gfloor-detail-reviewer-notes"
+        cleanText(
+          elements.reviewerNotes.value
         )
     };
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Validation
-  |--------------------------------------------------------------------------
-  */
-
-  function validateForSave(
-    form
+  function validatePendingReview(
+    payload,
+    action
   ) {
-    if (
-      !state.selectedReview ||
-      state.selectedReview.status !==
-      "pending-review"
-    ) {
-      return (
-        "Only pending reviews can be edited."
+    if (!payload.suggestedQuestion) {
+      return "Suggested question is required.";
+    }
+
+    if (!payload.suggestedAnswer) {
+      return "Suggested answer is required.";
+    }
+
+    if (!payload.suggestedCategory) {
+      return "Suggested category is required.";
+    }
+
+    if (!payload.reviewerName) {
+      return "Reviewer name is required.";
+    }
+
+    const sensitiveRequired =
+      Boolean(
+        getValue(
+          state.selectedReview,
+          "requires_sensitive_review",
+          "requiresSensitiveReview"
+        )
       );
+
+    if (
+      action === "approve" &&
+      sensitiveRequired &&
+      !payload.sensitiveReviewCompleted
+    ) {
+      return "Sensitive-information review must be completed before approval.";
     }
 
     if (
-      !form.suggestedResponseType
+      action === "deny" &&
+      !payload.reviewerNotes
     ) {
-      return (
-        "Select a response type."
-      );
+      return "A denial reason is required in Reviewer Notes.";
     }
 
     return "";
   }
 
-  function validateForApproval(
-    form
-  ) {
+  async function saveReview() {
     if (
-      !form.suggestedQuestion
+      !state.selectedReviewId ||
+      state.saving
     ) {
-      return (
-        "A Suggested Question is required before approval."
-      );
+      return;
     }
 
-    if (
-      !form.suggestedAnswer
-    ) {
-      return (
-        "A Suggested Answer is required before approval."
-      );
-    }
+    const payload =
+      collectReviewPayload();
 
-    if (
-      !form.suggestedCategory
-    ) {
-      return (
-        "A Category is required before approval."
-      );
-    }
-
-    if (
-      !form.reviewerName
-    ) {
-      return (
-        "Enter your reviewer name before approving this item."
-      );
-    }
-
-    if (
-      state.selectedReview &&
-      state.selectedReview
-        .requires_sensitive_review &&
-      !form
-        .sensitiveReviewCompleted
-    ) {
-      return (
-        "Sensitive information was detected. Complete the sensitive-information review checkbox before approving."
-      );
-    }
-
-    return "";
-  }
-
-  function validateForDenial(
-    form
-  ) {
-    if (
-      !form.reviewerName
-    ) {
-      return (
-        "Enter your reviewer name before denying this item."
-      );
-    }
-
-    if (
-      !form.reviewerNotes
-    ) {
-      return (
-        "Enter a denial reason in Reviewer Notes before denying this item."
-      );
-    }
-
-    return "";
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Save Changes
-  |--------------------------------------------------------------------------
-  */
-
-  async function saveChanges(
-    options
-  ) {
-    const settings =
-      options ||
-      {};
-
-    if (
-      state.saving ||
-      !state.selectedReviewId
-    ) {
-      return null;
-    }
-
-    const form =
-      getFormData();
-
-    const validationError =
-      validateForSave(
-        form
+    const validation =
+      validatePendingReview(
+        payload,
+        "save"
       );
 
-    if (validationError) {
-      showValidation(
-        validationError
+    if (validation) {
+      showReviewMessage(
+        validation,
+        false
       );
 
-      return null;
+      return;
     }
 
-    clearValidation();
-
-    state.saving =
-      true;
-
-    if (saveButton) {
-      saveButton.disabled =
-        true;
-
-      saveButton.classList.add(
-        "is-working"
-      );
-
-      saveButton.textContent =
-        "Saving...";
-    }
+    state.saving = true;
+    setReviewActionLoading(true);
 
     try {
       const result =
         await apiRequest(
           "/reviews/" +
-          encodeURIComponent(
-            state.selectedReviewId
-          ),
+          state.selectedReviewId,
           {
             method:
               "PUT",
 
             body:
-              form
+              payload
           }
         );
 
       state.selectedReview =
-        result.review;
+        result.review ||
+        state.selectedReview;
 
-      clearDirtyTracking();
-
-      if (
-        !settings.silent
-      ) {
-        showToast(
-          "Review changes saved.",
-          false
-        );
-      }
-
-      return result.review;
-
-    } catch (
-      error
-    ) {
-      showValidation(
-        error.message
-      );
-
-      showToast(
-        error.message,
+      showReviewMessage(
+        result.message ||
+        "Review changes were saved.",
         true
       );
 
-      return null;
-
+      await refreshDashboard(
+        state.selectedReviewId
+      );
+    } catch (error) {
+      showReviewMessage(
+        error.message,
+        false
+      );
     } finally {
-      state.saving =
-        false;
-
-      if (saveButton) {
-        saveButton.disabled =
-          false;
-
-        saveButton.classList.remove(
-          "is-working"
-        );
-
-        saveButton.textContent =
-          "Save Changes";
-      }
+      state.saving = false;
+      setReviewActionLoading(false);
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Approve
-  |--------------------------------------------------------------------------
-  */
-
   async function approveReview() {
     if (
-      state.approving ||
-      !state.selectedReviewId
+      !state.selectedReviewId ||
+      state.approving
     ) {
       return;
     }
 
-    const form =
-      getFormData();
+    const payload =
+      collectReviewPayload();
 
-    const validationError =
-      validateForApproval(
-        form
+    const validation =
+      validatePendingReview(
+        payload,
+        "approve"
       );
 
-    if (validationError) {
-      showValidation(
-        validationError
+    if (validation) {
+      showReviewMessage(
+        validation,
+        false
       );
 
       return;
     }
-
-    clearValidation();
 
     const confirmed =
       window.confirm(
         "Approve this information for use by the G-Floor chatbot?\n\n" +
-        "The edited Suggested Question and Suggested Answer will become approved chatbot knowledge."
+        "The edited Suggested Question and Suggested Answer will become " +
+        "approved chatbot knowledge."
       );
 
     if (!confirmed) {
       return;
     }
 
-    state.approving =
-      true;
-
-    setAllActionButtonsDisabled(
-      true
-    );
-
-    if (approveButton) {
-      approveButton.textContent =
-        "Approving...";
-    }
+    state.approving = true;
+    setReviewActionLoading(true);
 
     try {
-      /*
-       * Save the review first.
-       *
-       * This ensures the approval endpoint receives the
-       * reviewer's latest edited chatbot wording.
-       */
+      await apiRequest(
+        "/reviews/" +
+        state.selectedReviewId,
+        {
+          method:
+            "PUT",
 
-      const saved =
-        await saveChanges({
-          silent:
-            true
-        });
-
-      if (!saved) {
-        return;
-      }
-
-      const latestForm =
-        getFormData();
+          body:
+            payload
+        }
+      );
 
       const result =
         await apiRequest(
           "/reviews/" +
-          encodeURIComponent(
-            state.selectedReviewId
-          ) +
+          state.selectedReviewId +
           "/approve",
           {
             method:
@@ -2501,119 +1943,83 @@
 
             body: {
               reviewerName:
-                latestForm
-                  .reviewerName,
+                payload.reviewerName,
 
               reviewerNotes:
-                latestForm
-                  .reviewerNotes
+                payload.reviewerNotes
             }
           }
         );
 
-      state.selectedReview =
-        result.review;
-
-      showToast(
-        "Knowledge approved and added to approved chatbot knowledge.",
-        false
-      );
-
-      clearDetail();
-
-      await Promise.all([
-        loadCounts(),
-        loadReviews()
-      ]);
-
-    } catch (
-      error
-    ) {
-      showValidation(
-        error.message
-      );
-
-      showToast(
-        error.message,
+      showReviewMessage(
+        result.message ||
+        "Knowledge approved.",
         true
       );
 
+      state.status = "approved";
+      elements.statusFilter.value = "approved";
+
+      await refreshDashboard(
+        state.selectedReviewId
+      );
+    } catch (error) {
+      showReviewMessage(
+        error.message,
+        false
+      );
     } finally {
-      state.approving =
-        false;
-
-      if (approveButton) {
-        approveButton.textContent =
-          "Approve";
-      }
-
-      restoreActionButtons();
+      state.approving = false;
+      setReviewActionLoading(false);
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Deny
-  |--------------------------------------------------------------------------
-  */
-
   async function denyReview() {
     if (
-      state.denying ||
-      !state.selectedReviewId
+      !state.selectedReviewId ||
+      state.denying
     ) {
       return;
     }
 
-    const form =
-      getFormData();
+    const payload =
+      collectReviewPayload();
 
-    const validationError =
-      validateForDenial(
-        form
+    const validation =
+      validatePendingReview(
+        payload,
+        "deny"
       );
 
-    if (validationError) {
-      showValidation(
-        validationError
+    if (validation) {
+      showReviewMessage(
+        validation,
+        false
       );
 
       return;
     }
-
-    clearValidation();
 
     const confirmed =
       window.confirm(
         "Deny this review?\n\n" +
-        "This information will NOT be added to approved chatbot knowledge.\n\n" +
+        "This information will not be added to approved chatbot knowledge.\n\n" +
         "Denial reason:\n" +
-        form.reviewerNotes
+        payload.reviewerNotes
       );
 
     if (!confirmed) {
       return;
     }
 
-    state.denying =
-      true;
-
-    setAllActionButtonsDisabled(
-      true
-    );
-
-    if (denyButton) {
-      denyButton.textContent =
-        "Denying...";
-    }
+    state.denying = true;
+    setReviewActionLoading(true);
 
     try {
       const result =
         await apiRequest(
           "/reviews/" +
-          encodeURIComponent(
-            state.selectedReviewId
-          ) +
+          state.selectedReviewId +
           "/deny",
           {
             method:
@@ -2621,319 +2027,590 @@
 
             body: {
               reviewerName:
-                form.reviewerName,
+                payload.reviewerName,
 
               reviewerNotes:
-                form.reviewerNotes
+                payload.reviewerNotes
             }
           }
         );
 
-      state.selectedReview =
-        result.review;
-
-      showToast(
-        "Review denied. It was not added to chatbot knowledge.",
-        false
-      );
-
-      clearDetail();
-
-      await Promise.all([
-        loadCounts(),
-        loadReviews()
-      ]);
-
-    } catch (
-      error
-    ) {
-      showValidation(
-        error.message
-      );
-
-      showToast(
-        error.message,
+      showReviewMessage(
+        result.message ||
+        "Review denied.",
         true
       );
 
+      state.status = "denied";
+      elements.statusFilter.value = "denied";
+
+      await refreshDashboard();
+    } catch (error) {
+      showReviewMessage(
+        error.message,
+        false
+      );
     } finally {
-      state.denying =
-        false;
-
-      if (denyButton) {
-        denyButton.textContent =
-          "Deny";
-      }
-
-      restoreActionButtons();
+      state.denying = false;
+      setReviewActionLoading(false);
     }
   }
 
-  function setAllActionButtonsDisabled(
-    disabled
-  ) {
+  function setReviewActionLoading(loading) {
     [
-      denyButton,
-      saveButton,
-      approveButton
+      elements.saveButton,
+      elements.approveButton,
+      elements.denyButton
     ].forEach(
-      function (
-        button
-      ) {
+      function (button) {
         if (button) {
           button.disabled =
-            disabled;
+            loading;
         }
       }
     );
   }
 
-  function restoreActionButtons() {
-    const pending =
-      state.selectedReview &&
-      state.selectedReview
-        .status ===
-      "pending-review";
-
-    setAllActionButtonsDisabled(
-      !pending
-    );
-  }
-
   /*
   |--------------------------------------------------------------------------
-  | Render Review Detail
+  | Approved Knowledge Status
   |--------------------------------------------------------------------------
   */
 
-  function renderDetail(
-    review
-  ) {
-    if (!review) {
-      clearDetail();
+  function getKnowledgeIdFromReview(review) {
+    return cleanText(
+      getValue(
+        review,
+        "knowledge_id",
+        "knowledgeId",
+        "approved_knowledge_id",
+        "approvedKnowledgeId"
+      )
+    );
+  }
+
+  async function loadSelectedKnowledgeStatus() {
+    if (!state.selectedReview) {
+      return;
+    }
+
+    let knowledgeId =
+      getKnowledgeIdFromReview(
+        state.selectedReview
+      );
+
+    if (!knowledgeId) {
+      const embeddedKnowledge =
+        getValue(
+          state.selectedReview,
+          "knowledge",
+          "approvedKnowledge"
+        );
+
+      knowledgeId =
+        cleanText(
+          getValue(
+            embeddedKnowledge,
+            "knowledge_id",
+            "knowledgeId"
+          )
+        );
+    }
+
+    if (!knowledgeId) {
+      /*
+       * Some review detail endpoints do not return the knowledge ID.
+       * Search the active approved knowledge list using training review ID.
+       */
+
+      try {
+        const approvedResult =
+          await apiRequest(
+            "/reviews/" +
+            state.selectedReviewId
+          );
+
+        const returnedKnowledge =
+          approvedResult.knowledge;
+
+        knowledgeId =
+          cleanText(
+            getValue(
+              returnedKnowledge,
+              "knowledge_id",
+              "knowledgeId"
+            )
+          );
+      } catch (error) {
+        knowledgeId = "";
+      }
+    }
+
+    if (!knowledgeId) {
+      toggleHidden(
+        elements.knowledgeStatusPanel,
+        true
+      );
 
       return;
     }
 
-    state.selectedReview =
-      review;
+    try {
+      const result =
+        await apiRequest(
+          "/knowledge/" +
+          encodeURIComponent(
+            knowledgeId
+          ) +
+          "/status"
+        );
 
-    detailPlaceholder.classList.add(
-      "is-hidden"
-    );
+      state.selectedKnowledge =
+        result.knowledge;
 
-    detailPanel.classList.remove(
-      "is-hidden"
-    );
-
-    setText(
-      "gfloor-detail-title",
-      "Review #" +
-      review.id
-    );
-
-    const statusBadge =
-      document.getElementById(
-        "gfloor-detail-status"
+      renderKnowledgeStatus();
+    } catch (error) {
+      toggleHidden(
+        elements.knowledgeStatusPanel,
+        false
       );
 
-    statusBadge.className =
-      "gfloor-status-badge " +
-      cleanText(
-        review.status
-      );
-
-    statusBadge.textContent =
-      statusLabel(
-        review.status
-      );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Alerts
-    |--------------------------------------------------------------------------
-    */
-
-    const sensitiveAlert =
-      document.getElementById(
-        "gfloor-sensitive-alert"
-      );
-
-    if (
-      review.requires_sensitive_review
-    ) {
-      sensitiveAlert.classList.remove(
-        "is-hidden"
-      );
-
-    } else {
-      sensitiveAlert.classList.add(
-        "is-hidden"
+      showStatusMessage(
+        error.message,
+        false
       );
     }
+  }
 
-    const duplicateAlert =
-      document.getElementById(
-        "gfloor-duplicate-alert"
+  function renderKnowledgeStatus() {
+    const knowledge =
+      state.selectedKnowledge;
+
+    if (!knowledge) {
+      toggleHidden(
+        elements.knowledgeStatusPanel,
+        true
       );
 
-    if (
-      review.possible_duplicate
-    ) {
-      duplicateAlert.classList.remove(
-        "is-hidden"
-      );
-
-      setText(
-        "gfloor-duplicate-message",
-        review.duplicate_knowledge_id
-          ? (
-              "Possible match: " +
-              review.duplicate_knowledge_id
-            )
-          : "This review may match existing approved knowledge."
-      );
-
-    } else {
-      duplicateAlert.classList.add(
-        "is-hidden"
-      );
+      return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Source
-    |--------------------------------------------------------------------------
-    */
+    toggleHidden(
+      elements.knowledgeStatusPanel,
+      false
+    );
 
-    setText(
-      "gfloor-detail-source",
-      review.source_type,
-      "Unknown"
+    const active =
+      knowledge.active === true;
+
+    elements.knowledgeStatusBadge.textContent =
+      active
+        ? "Active"
+        : "Inactive";
+
+    elements.knowledgeStatusBadge.classList.toggle(
+      "is-inactive",
+      !active
     );
 
     setText(
-      "gfloor-detail-received",
+      elements.knowledgeId,
+      knowledge.knowledgeId
+    );
+
+    setText(
+      elements.knowledgeApprovedBy,
+      knowledge.approvedBy
+    );
+
+    setText(
+      elements.knowledgeApprovedAt,
       formatDate(
-        review.source_received_at ||
-        review.created_at
+        knowledge.approvedAt
       )
     );
 
     setText(
-      "gfloor-detail-sender",
-      review.source_sender,
-      "Not provided"
+      elements.knowledgeStatusUpdatedAt,
+      formatDate(
+        knowledge.statusUpdatedAt
+      )
+    );
+
+    const hasDeactivation =
+      Boolean(
+        knowledge.deactivatedAt ||
+        knowledge.deactivatedBy ||
+        knowledge.deactivationReason
+      );
+
+    toggleHidden(
+      elements.deactivationAudit,
+      !hasDeactivation
     );
 
     setText(
-      "gfloor-detail-category",
-      review.suggested_category,
-      "Uncategorized"
+      elements.deactivatedBy,
+      knowledge.deactivatedBy
     );
 
     setText(
-      "gfloor-detail-subject",
-      review.source_subject,
-      "No subject"
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Original Customer Information
-    |--------------------------------------------------------------------------
-    */
-
-    setText(
-      "gfloor-detail-customer-question",
-      review.customer_question,
-      "No customer question provided."
+      elements.deactivatedAt,
+      formatDate(
+        knowledge.deactivatedAt
+      )
     );
 
     setText(
-      "gfloor-detail-customer-response",
-      review.customer_service_response,
-      "No Customer Service response provided."
+      elements.deactivationReason,
+      knowledge.deactivationReason
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Safety
-    |--------------------------------------------------------------------------
-    */
+    const hasReactivation =
+      Boolean(
+        knowledge.reactivatedAt ||
+        knowledge.reactivatedBy ||
+        knowledge.reactivationReason
+      );
 
-    setText(
-      "gfloor-detail-sensitive-required",
-      review.requires_sensitive_review
-        ? "Yes"
-        : "No"
-    );
-
-    setText(
-      "gfloor-detail-duplicate",
-      review.possible_duplicate
-        ? "Yes"
-        : "No"
-    );
-
-    renderArray(
-      "gfloor-detail-sensitive-data",
-      review.sensitive_information_detected,
-      "None detected"
+    toggleHidden(
+      elements.reactivationAudit,
+      !hasReactivation
     );
 
     setText(
-      "gfloor-detail-reviewed-date",
-      review.reviewed_at
-        ? formatDate(
-            review.reviewed_at
-          )
-        : "Not reviewed"
+      elements.reactivatedBy,
+      knowledge.reactivatedBy
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pending vs Read-Only
-    |--------------------------------------------------------------------------
-    */
+    setText(
+      elements.reactivatedAt,
+      formatDate(
+        knowledge.reactivatedAt
+      )
+    );
+
+    setText(
+      elements.reactivationReason,
+      knowledge.reactivationReason
+    );
+
+    elements.statusActionTitle.textContent =
+      active
+        ? "Deactivate Approved Knowledge"
+        : "Reactivate Approved Knowledge";
+
+    toggleHidden(
+      elements.deactivateButton,
+      !active
+    );
+
+    toggleHidden(
+      elements.reactivateButton,
+      active
+    );
+
+    elements.statusReviewerName.value =
+      cleanText(
+        elements.reviewerName.value
+      ) ||
+      cleanText(
+        knowledge.approvedBy
+      );
+
+    elements.statusReason.value = "";
+
+    hideStatusMessage();
+  }
+
+  function validateStatusAction() {
+    const reviewerName =
+      cleanText(
+        elements.statusReviewerName.value
+      );
+
+    const reason =
+      cleanText(
+        elements.statusReason.value
+      );
+
+    if (!reviewerName) {
+      return {
+        valid:
+          false,
+
+        error:
+          "Reviewer name is required."
+      };
+    }
+
+    if (reason.length < 5) {
+      return {
+        valid:
+          false,
+
+        error:
+          "A reason of at least five characters is required."
+      };
+    }
+
+    return {
+      valid:
+        true,
+
+      reviewerName,
+      reason
+    };
+  }
+
+  function openStatusConfirmation(action) {
+    const validation =
+      validateStatusAction();
+
+    if (!validation.valid) {
+      showStatusMessage(
+        validation.error,
+        false
+      );
+
+      return;
+    }
+
+    if (!state.selectedKnowledge) {
+      showStatusMessage(
+        "No approved knowledge record is selected.",
+        false
+      );
+
+      return;
+    }
+
+    state.pendingStatusAction =
+      action;
+
+    const deactivating =
+      action === "deactivate";
+
+    elements.confirmTitle.textContent =
+      deactivating
+        ? "Deactivate Approved Knowledge?"
+        : "Reactivate Approved Knowledge?";
+
+    elements.confirmMessage.textContent =
+      deactivating
+        ? "This answer will no longer be available to the live G-Floor chatbot."
+        : "This answer will become available to the live G-Floor chatbot again.";
+
+    elements.confirmSubmit.textContent =
+      deactivating
+        ? "Deactivate"
+        : "Reactivate";
+
+    elements.confirmSubmit.classList.toggle(
+      "gfloor-button-success",
+      !deactivating
+    );
+
+    elements.confirmSubmit.classList.toggle(
+      "gfloor-button-danger",
+      deactivating
+    );
 
     if (
-      review.status ===
-      "pending-review"
+      elements.confirmDialog &&
+      typeof elements.confirmDialog.showModal ===
+        "function"
     ) {
-      renderPendingEditors(
-        review
+      elements.confirmDialog.showModal();
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        elements.confirmTitle.textContent +
+        "\n\n" +
+        elements.confirmMessage.textContent
       );
 
-    } else {
-      renderReadonlyFields(
-        review
+    if (confirmed) {
+      submitKnowledgeStatusChange();
+    }
+  }
+
+  async function submitKnowledgeStatusChange() {
+    if (
+      state.changingKnowledgeStatus ||
+      !state.selectedKnowledge ||
+      !state.pendingStatusAction
+    ) {
+      return;
+    }
+
+    const validation =
+      validateStatusAction();
+
+    if (!validation.valid) {
+      showStatusMessage(
+        validation.error,
+        false
       );
+
+      return;
+    }
+
+    const action =
+      state.pendingStatusAction;
+
+    const knowledgeId =
+      state.selectedKnowledge.knowledgeId;
+
+    state.changingKnowledgeStatus = true;
+
+    elements.deactivateButton.disabled = true;
+    elements.reactivateButton.disabled = true;
+
+    try {
+      const result =
+        await apiRequest(
+          "/knowledge/" +
+          encodeURIComponent(
+            knowledgeId
+          ) +
+          "/" +
+          action,
+          {
+            method:
+              "PUT",
+
+            body: {
+              reviewerName:
+                validation.reviewerName,
+
+              reason:
+                validation.reason
+            }
+          }
+        );
+
+      state.selectedKnowledge =
+        result.knowledge;
+
+      renderKnowledgeStatus();
+
+      showStatusMessage(
+        result.message ||
+        (
+          action === "deactivate"
+            ? "Approved knowledge was deactivated."
+            : "Approved knowledge was reactivated."
+        ),
+        true
+      );
+
+      await loadKnowledgeStatusCounts();
+
+      /*
+       * Force the approved-knowledge endpoint to return fresh PostgreSQL data.
+       */
+
+      try {
+        await fetch(
+          "/chat/approved-knowledge?refresh=" +
+          Date.now(),
+          {
+            method:
+              "GET",
+
+            cache:
+              "no-store",
+
+            credentials:
+              "omit"
+          }
+        );
+      } catch (error) {
+        console.warn(
+          "Approved knowledge cache refresh failed:",
+          error.message
+        );
+      }
+    } catch (error) {
+      showStatusMessage(
+        error.message,
+        false
+      );
+    } finally {
+      state.changingKnowledgeStatus = false;
+      state.pendingStatusAction = "";
+
+      elements.deactivateButton.disabled = false;
+      elements.reactivateButton.disabled = false;
     }
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Clear Detail
+  | Dashboard Refresh
   |--------------------------------------------------------------------------
   */
 
-  function clearDetail() {
-    state.selectedReviewId =
-      null;
+  async function refreshDashboard(
+    reselectReviewId
+  ) {
+    if (
+      state.loading ||
+      !state.adminToken
+    ) {
+      return;
+    }
 
-    state.selectedReview =
-      null;
+    refreshButtonState(true);
 
-    detailPanel.classList.add(
-      "is-hidden"
-    );
+    try {
+      await Promise.all([
+        loadHealth(),
+        loadReviewCounts(),
+        loadKnowledgeStatusCounts()
+      ]);
 
-    detailPlaceholder.classList.remove(
-      "is-hidden"
-    );
+      await loadReviews();
 
-    clearValidation();
+      if (reselectReviewId) {
+        const matching =
+          state.reviews.find(
+            function (review) {
+              return (
+                reviewId(review) ===
+                Number(reselectReviewId)
+              );
+            }
+          );
+
+        if (matching) {
+          await selectReview(
+            Number(reselectReviewId)
+          );
+        }
+      }
+    } catch (error) {
+      showReviewMessage(
+        error.message,
+        false
+      );
+    } finally {
+      refreshButtonState(false);
+    }
+  }
+
+  function refreshButtonState(loading) {
+    elements.refreshButton.disabled =
+      loading;
+
+    elements.applyFiltersButton.disabled =
+      loading;
+
+    elements.clearFiltersButton.disabled =
+      loading;
   }
 
   /*
@@ -2942,357 +2619,231 @@
   |--------------------------------------------------------------------------
   */
 
-  async function applyFilters() {
+  function applyFilters() {
     state.status =
       cleanText(
-        statusFilter.value
+        elements.statusFilter.value
       );
 
     state.category =
       cleanText(
-        categoryFilter.value
+        elements.categoryFilter.value
       );
 
     state.search =
       cleanText(
-        searchFilter.value
+        elements.searchFilter.value
       );
 
-    state.page =
-      1;
+    state.page = 1;
+    state.selectedReviewId = null;
+    state.selectedReview = null;
+    state.selectedKnowledge = null;
 
-    state.selectedReviewId =
-      null;
-
-    state.selectedReview =
-      null;
-
-    updateActiveCountCard();
-
+    updateCountCardSelection();
     clearDetail();
-
-    try {
-      await loadReviews();
-
-    } catch (
-      error
-    ) {
-      showToast(
-        error.message,
-        true
-      );
-    }
+    loadReviews();
   }
 
-  async function clearFilters() {
+  function clearFilters() {
     state.status =
       "pending-review";
 
-    state.category =
-      "";
+    state.category = "";
+    state.search = "";
+    state.page = 1;
 
-    state.search =
-      "";
+    elements.statusFilter.value =
+      "pending-review";
 
-    state.page =
-      1;
+    elements.categoryFilter.value = "";
+    elements.searchFilter.value = "";
 
-    statusFilter.value =
-      state.status;
-
-    categoryFilter.value =
-      "";
-
-    searchFilter.value =
-      "";
-
-    updateActiveCountCard();
-
+    updateCountCardSelection();
     clearDetail();
-
-    try {
-      await loadReviews();
-
-    } catch (
-      error
-    ) {
-      showToast(
-        error.message,
-        true
-      );
-    }
+    loadReviews();
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Count Card Filtering
-  |--------------------------------------------------------------------------
-  */
+  function setStatusFilter(status) {
+    state.status =
+      status;
 
-  function updateActiveCountCard() {
+    state.page = 1;
+
+    elements.statusFilter.value =
+      status;
+
+    updateCountCardSelection();
+    clearDetail();
+    loadReviews();
+  }
+
+  function updateCountCardSelection() {
     document
       .querySelectorAll(
         "[data-status-filter]"
       )
       .forEach(
-        function (
-          card
-        ) {
-          const status =
-            card.dataset
-              .statusFilter ||
-            "";
-
+        function (card) {
           card.classList.toggle(
             "is-active",
-            status ===
+            card.dataset.statusFilter ===
               state.status
           );
         }
       );
   }
 
-  async function handleCountCard(
-    status
-  ) {
-    state.status =
-      status;
-
-    state.page =
-      1;
-
-    state.selectedReviewId =
-      null;
-
-    state.selectedReview =
-      null;
-
-    statusFilter.value =
-      status;
-
-    updateActiveCountCard();
-
-    clearDetail();
-
-    try {
-      await loadReviews();
-
-    } catch (
-      error
-    ) {
-      showToast(
-        error.message,
-        true
-      );
-    }
-  }
-
   /*
   |--------------------------------------------------------------------------
-  | Refresh
+  | Event Binding
   |--------------------------------------------------------------------------
   */
 
-  async function refreshDashboard() {
-    refreshButton.disabled =
-      true;
+  function bindEvents() {
+    elements.loginButton.addEventListener(
+      "click",
+      login
+    );
 
-    refreshButton.textContent =
-      "Refreshing...";
-
-    try {
-      await Promise.all([
-        loadHealth(),
-        loadCounts()
-      ]);
-
-      await loadReviews();
-
-    } catch (
-      error
-    ) {
-      showToast(
-        error.message,
-        true
-      );
-
-      if (
-        error.message
-          .toLowerCase()
-          .includes(
-            "token"
-          )
-      ) {
-        logout();
-      }
-
-    } finally {
-      refreshButton.disabled =
-        false;
-
-      refreshButton.textContent =
-        "Refresh";
-    }
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Events
-  |--------------------------------------------------------------------------
-  */
-
-  loginButton.addEventListener(
-    "click",
-    login
-  );
-
-  tokenInput.addEventListener(
-    "keydown",
-    function (
-      event
-    ) {
-      if (
-        event.key ===
-        "Enter"
-      ) {
-        login();
-      }
-    }
-  );
-
-  logoutButton.addEventListener(
-    "click",
-    logout
-  );
-
-  refreshButton.addEventListener(
-    "click",
-    refreshDashboard
-  );
-
-  applyFiltersButton.addEventListener(
-    "click",
-    applyFilters
-  );
-
-  clearFiltersButton.addEventListener(
-    "click",
-    clearFilters
-  );
-
-  searchFilter.addEventListener(
-    "keydown",
-    function (
-      event
-    ) {
-      if (
-        event.key ===
-        "Enter"
-      ) {
-        applyFilters();
-      }
-    }
-  );
-
-  previousButton.addEventListener(
-    "click",
-    async function () {
-      if (
-        state.page <=
-        1
-      ) {
-        return;
-      }
-
-      state.page -=
-        1;
-
-      clearDetail();
-
-      try {
-        await loadReviews();
-
-      } catch (
-        error
-      ) {
-        showToast(
-          error.message,
-          true
-        );
-      }
-    }
-  );
-
-  nextButton.addEventListener(
-    "click",
-    async function () {
-      if (
-        state.page >=
-        state.pages
-      ) {
-        return;
-      }
-
-      state.page +=
-        1;
-
-      clearDetail();
-
-      try {
-        await loadReviews();
-
-      } catch (
-        error
-      ) {
-        showToast(
-          error.message,
-          true
-        );
-      }
-    }
-  );
-
-  document
-    .querySelectorAll(
-      "[data-status-filter]"
-    )
-    .forEach(
-      function (
-        card
-      ) {
-        card.addEventListener(
-          "click",
-          function () {
-            handleCountCard(
-              card.dataset
-                .statusFilter ||
-              ""
-            );
-          }
-        );
+    elements.token.addEventListener(
+      "keydown",
+      function (event) {
+        if (event.key === "Enter") {
+          login();
+        }
       }
     );
 
-  if (saveButton) {
-    saveButton.addEventListener(
+    elements.logoutButton.addEventListener(
+      "click",
+      logout
+    );
+
+    elements.refreshButton.addEventListener(
       "click",
       function () {
-        saveChanges();
+        refreshDashboard(
+          state.selectedReviewId
+        );
       }
     );
-  }
 
-  if (approveButton) {
-    approveButton.addEventListener(
+    elements.applyFiltersButton.addEventListener(
+      "click",
+      applyFilters
+    );
+
+    elements.clearFiltersButton.addEventListener(
+      "click",
+      clearFilters
+    );
+
+    elements.searchFilter.addEventListener(
+      "keydown",
+      function (event) {
+        if (event.key === "Enter") {
+          applyFilters();
+        }
+      }
+    );
+
+    document
+      .querySelectorAll(
+        "[data-status-filter]"
+      )
+      .forEach(
+        function (card) {
+          card.addEventListener(
+            "click",
+            function () {
+              setStatusFilter(
+                card.dataset.statusFilter
+              );
+            }
+          );
+        }
+      );
+
+    elements.previousButton.addEventListener(
+      "click",
+      function () {
+        if (state.page <= 1) {
+          return;
+        }
+
+        state.page -= 1;
+        loadReviews();
+      }
+    );
+
+    elements.nextButton.addEventListener(
+      "click",
+      function () {
+        if (
+          state.page >=
+          state.pages
+        ) {
+          return;
+        }
+
+        state.page += 1;
+        loadReviews();
+      }
+    );
+
+    elements.saveButton.addEventListener(
+      "click",
+      saveReview
+    );
+
+    elements.approveButton.addEventListener(
       "click",
       approveReview
     );
-  }
 
-  if (denyButton) {
-    denyButton.addEventListener(
+    elements.denyButton.addEventListener(
       "click",
       denyReview
+    );
+
+    elements.deactivateButton.addEventListener(
+      "click",
+      function () {
+        openStatusConfirmation(
+          "deactivate"
+        );
+      }
+    );
+
+    elements.reactivateButton.addEventListener(
+      "click",
+      function () {
+        openStatusConfirmation(
+          "reactivate"
+        );
+      }
+    );
+
+    elements.confirmDialog.addEventListener(
+      "close",
+      function () {
+        if (
+          elements.confirmDialog.returnValue ===
+          "confirm"
+        ) {
+          submitKnowledgeStatusChange();
+        } else {
+          state.pendingStatusAction = "";
+        }
+      }
+    );
+
+    elements.confirmCancel.addEventListener(
+      "click",
+      function () {
+        state.pendingStatusAction = "";
+      }
     );
   }
 
@@ -3302,13 +2853,28 @@
   |--------------------------------------------------------------------------
   */
 
-  injectStep20DStyles();
+  async function initialize() {
+    cacheElements();
+    bindEvents();
+    updateCountCardSelection();
 
-  updateActiveCountCard();
+    console.log(
+      "G-Floor knowledge review dashboard loaded:",
+      VERSION
+    );
 
-  console.log(
-    "G-Floor knowledge review dashboard loaded:",
-    VERSION
-  );
+    await restoreSession();
+  }
 
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      initialize
+    );
+  } else {
+    initialize();
+  }
 })();
