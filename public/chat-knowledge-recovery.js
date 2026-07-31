@@ -6,23 +6,21 @@
   | G-Floor Chat Knowledge Recovery
   |--------------------------------------------------------------------------
   |
-  | Version: 20.15
+  | Version: 20.16
   |
-  | Purpose:
+  | Fixes:
   |
-  | - Loads the approved static knowledge base independently of widget.js
-  | - Provides a reliable fallback when widget.js fails to populate its
-  |   private knowledgeBase array
-  | - Handles approved cleaning questions before widget.js returns a
-  |   zero-confidence escalation
-  | - Does not interfere with Shopify product questions, small talk,
-  |   unrelated questions, or Customer Service handoff
+  | - prevents duplicate event listeners
+  | - prevents duplicate answer rendering
+  | - prevents duplicate analytics events
+  | - prevents repeated submissions while an answer is loading
+  | - remains safe if Shopify accidentally loads this script twice
   |
   |--------------------------------------------------------------------------
   */
 
   const VERSION =
-    "20.15";
+    "20.16";
 
   const KNOWLEDGE_BASE_URL =
     "https://gfloor-chatfeature.onrender.com/knowledge-base.js?v=" +
@@ -37,14 +35,71 @@
   const INITIALIZATION_INTERVAL_MS =
     250;
 
-  let initialized =
-    false;
+  const DUPLICATE_SUBMISSION_WINDOW_MS =
+    2000;
 
-  let knowledgeLoadPromise =
-    null;
+  const GLOBAL_STATE_KEY =
+    "__GFloorChatKnowledgeRecovery";
 
-  let cachedKnowledge =
-    [];
+  /*
+  |--------------------------------------------------------------------------
+  | Prevent Duplicate Script Initialization
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    window[GLOBAL_STATE_KEY] &&
+    window[GLOBAL_STATE_KEY].initialized
+  ) {
+    console.log(
+      "G-Floor chat knowledge recovery already initialized:",
+      window[GLOBAL_STATE_KEY].version
+    );
+
+    return;
+  }
+
+  const state =
+    window[GLOBAL_STATE_KEY] || {
+      initialized:
+        false,
+
+      version:
+        VERSION,
+
+      knowledgeLoadPromise:
+        null,
+
+      cachedKnowledge:
+        [],
+
+      processing:
+        false,
+
+      lastQuestionSignature:
+        "",
+
+      lastSubmissionTime:
+        0,
+
+      lastRenderedSignature:
+        "",
+
+      lastAnalyticsSignature:
+        "",
+
+      initializationAttempts:
+        0,
+
+      listenersAttached:
+        false
+    };
+
+  state.version =
+    VERSION;
+
+  window[GLOBAL_STATE_KEY] =
+    state;
 
   /*
   |--------------------------------------------------------------------------
@@ -78,23 +133,42 @@
       .replace(/'/g, "&#039;");
   }
 
+  function createSignature(
+    question,
+    entryId
+  ) {
+    return [
+      normalizeText(
+        question
+      ),
+      String(
+        entryId ||
+        CLEANING_ENTRY_ID
+      )
+    ].join(
+      "::"
+    );
+  }
+
   /*
   |--------------------------------------------------------------------------
-  | Approved Cleaning Intent
-  |--------------------------------------------------------------------------
-  |
-  | This is intentionally narrow so product price, SKU, availability,
-  | installation, small talk, and unrelated questions continue through
-  | the normal widget logic.
-  |
+  | Cleaning Intent Detection
   |--------------------------------------------------------------------------
   */
 
   function isApprovedCleaningQuestion(question) {
     const normalized =
-      normalizeText(question);
+      normalizeText(
+        question
+      );
 
-    const exactCleaningQuestions =
+    if (
+      !normalized
+    ) {
+      return false;
+    }
+
+    const exactQuestions =
       new Set([
         "how do i clean gfloor",
         "how do i clean my gfloor",
@@ -116,7 +190,7 @@
       ]);
 
     if (
-      exactCleaningQuestions.has(
+      exactQuestions.has(
         normalized
       )
     ) {
@@ -124,7 +198,7 @@
     }
 
     const hasCleaningAction =
-      /\b(clean|cleaning|wash|washing|mop|mopping|rinse|scrub)\b/.test(
+      /\b(clean|cleaning|wash|washing|mop|mopping|rinse|rinsing|scrub|scrubbing)\b/.test(
         normalized
       );
 
@@ -157,10 +231,10 @@
         window.GFloorKnowledgeBase
       )
     ) {
-      cachedKnowledge =
+      state.cachedKnowledge =
         window.GFloorKnowledgeBase.slice();
 
-      return cachedKnowledge;
+      return state.cachedKnowledge;
     }
 
     return [];
@@ -179,24 +253,37 @@
     }
 
     if (
-      knowledgeLoadPromise
+      state.knowledgeLoadPromise
     ) {
-      return knowledgeLoadPromise;
+      return state.knowledgeLoadPromise;
     }
 
-    knowledgeLoadPromise =
+    state.knowledgeLoadPromise =
       new Promise(
         function (
           resolve
         ) {
           const existingScript =
             document.querySelector(
-              'script[data-gfloor-knowledge-recovery="true"]'
+              'script[data-gfloor-knowledge-recovery-loader="true"]'
             );
 
           if (
             existingScript
           ) {
+            const existingKnowledgeAfterScript =
+              readGlobalKnowledgeBase();
+
+            if (
+              existingKnowledgeAfterScript.length
+            ) {
+              resolve(
+                existingKnowledgeAfterScript
+              );
+
+              return;
+            }
+
             existingScript.remove();
           }
 
@@ -211,7 +298,7 @@
           script.async =
             true;
 
-          script.dataset.gfloorKnowledgeRecovery =
+          script.dataset.gfloorKnowledgeRecoveryLoader =
             "true";
 
           script.onload =
@@ -220,7 +307,7 @@
                 readGlobalKnowledgeBase();
 
               console.log(
-                "G-Floor knowledge recovery loaded:",
+                "G-Floor knowledge recovery database loaded:",
                 {
                   version:
                     VERSION,
@@ -240,7 +327,7 @@
               error
             ) {
               console.error(
-                "G-Floor knowledge recovery could not load the knowledge base:",
+                "G-Floor knowledge recovery database failed to load:",
                 error
               );
 
@@ -256,17 +343,17 @@
       )
         .finally(
           function () {
-            knowledgeLoadPromise =
+            state.knowledgeLoadPromise =
               null;
           }
         );
 
-    return knowledgeLoadPromise;
+    return state.knowledgeLoadPromise;
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Approved Cleaning Entry
+  | Cleaning Entry
   |--------------------------------------------------------------------------
   */
 
@@ -280,7 +367,7 @@
         ? knowledge
         : [];
 
-    const byId =
+    const exactEntry =
       entries.find(
         function (
           item
@@ -294,9 +381,9 @@
       );
 
     if (
-      byId
+      exactEntry
     ) {
-      return byId;
+      return exactEntry;
     }
 
     return entries.find(
@@ -352,7 +439,7 @@
 
   /*
   |--------------------------------------------------------------------------
-  | Chat Elements
+  | Element Helpers
   |--------------------------------------------------------------------------
   */
 
@@ -415,13 +502,86 @@
 
   /*
   |--------------------------------------------------------------------------
+  | Duplicate Protection
+  |--------------------------------------------------------------------------
+  */
+
+  function isDuplicateSubmission(
+    signature
+  ) {
+    const now =
+      Date.now();
+
+    const isSameQuestion =
+      state.lastQuestionSignature ===
+      signature;
+
+    const isWithinWindow =
+      (
+        now -
+        state.lastSubmissionTime
+      ) <
+      DUPLICATE_SUBMISSION_WINDOW_MS;
+
+    if (
+      state.processing
+    ) {
+      return true;
+    }
+
+    if (
+      isSameQuestion &&
+      isWithinWindow
+    ) {
+      return true;
+    }
+
+    state.lastQuestionSignature =
+      signature;
+
+    state.lastSubmissionTime =
+      now;
+
+    return false;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Analytics
   |--------------------------------------------------------------------------
   */
 
   function pushAnalytics(
+    question,
     entry
   ) {
+    const entryId =
+      entry &&
+      entry.id
+        ? entry.id
+        : CLEANING_ENTRY_ID;
+
+    const analyticsSignature =
+      createSignature(
+        question,
+        entryId
+      );
+
+    if (
+      state.lastAnalyticsSignature ===
+      analyticsSignature
+    ) {
+      console.log(
+        "Duplicate G-Floor recovery analytics prevented:",
+        analyticsSignature
+      );
+
+      return;
+    }
+
+    state.lastAnalyticsSignature =
+      analyticsSignature;
+
     window.dataLayer =
       window.dataLayer || [];
 
@@ -445,10 +605,10 @@
         "not_escalated",
 
       knowledge_entry_id:
-        entry &&
-        entry.id
-          ? entry.id
-          : CLEANING_ENTRY_ID
+        entryId,
+
+      recovery_version:
+        VERSION
     });
 
     window.dataLayer.push({
@@ -465,20 +625,18 @@
         "approved_cleaning_answer",
 
       knowledge_entry_id:
-        entry &&
-        entry.id
-          ? entry.id
-          : CLEANING_ENTRY_ID
+        entryId
     });
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Render Approved Answer
+  | Render Approved Cleaning Answer
   |--------------------------------------------------------------------------
   */
 
   function renderCleaningAnswer(
+    question,
     entry
   ) {
     const elements =
@@ -489,6 +647,35 @@
     ) {
       return;
     }
+
+    const entryId =
+      entry &&
+      entry.id
+        ? entry.id
+        : CLEANING_ENTRY_ID;
+
+    const renderSignature =
+      createSignature(
+        question,
+        entryId
+      );
+
+    if (
+      state.lastRenderedSignature ===
+      renderSignature
+    ) {
+      hideProcessingState();
+
+      console.log(
+        "Duplicate G-Floor recovery rendering prevented:",
+        renderSignature
+      );
+
+      return;
+    }
+
+    state.lastRenderedSignature =
+      renderSignature;
 
     const answer =
       getApprovedCleaningAnswer(
@@ -524,10 +711,7 @@
       "Cleaning & Maintenance";
 
     elements.responseBox.dataset.knowledgeEntryId =
-      entry &&
-      entry.id
-        ? entry.id
-        : CLEANING_ENTRY_ID;
+      entryId;
 
     elements.responseBox.innerHTML =
       [
@@ -586,21 +770,28 @@
     hideProcessingState();
 
     pushAnalytics(
+      question,
       entry
     );
 
-    elements.responseBox.scrollIntoView({
-      behavior:
-        "smooth",
+    try {
+      elements.responseBox.scrollIntoView({
+        behavior:
+          "smooth",
 
-      block:
-        "nearest"
-    });
+        block:
+          "nearest"
+      });
+    } catch (
+      error
+    ) {
+      elements.responseBox.scrollIntoView();
+    }
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Question Submission
+  | Handle Cleaning Submission
   |--------------------------------------------------------------------------
   */
 
@@ -618,7 +809,10 @@
     }
 
     const question =
-      elements.questionInput.value;
+      String(
+        elements.questionInput.value ||
+        ""
+      ).trim();
 
     if (
       !isApprovedCleaningQuestion(
@@ -628,9 +822,31 @@
       return;
     }
 
+    const submissionSignature =
+      createSignature(
+        question,
+        CLEANING_ENTRY_ID
+      );
+
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+
+    if (
+      isDuplicateSubmission(
+        submissionSignature
+      )
+    ) {
+      console.log(
+        "Duplicate G-Floor recovery submission prevented:",
+        submissionSignature
+      );
+
+      return;
+    }
+
+    state.processing =
+      true;
 
     elements.questionButton.disabled =
       true;
@@ -650,6 +866,7 @@
         );
 
       renderCleaningAnswer(
+        question,
         cleaningEntry
       );
     } catch (
@@ -661,9 +878,13 @@
       );
 
       renderCleaningAnswer(
+        question,
         null
       );
     } finally {
+      state.processing =
+        false;
+
       elements.questionButton.disabled =
         false;
 
@@ -672,6 +893,12 @@
       );
     }
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Enter-Key Submission
+  |--------------------------------------------------------------------------
+  */
 
   function handleQuestionKeydown(
     event
@@ -689,6 +916,7 @@
 
     if (
       !elements.questionInput ||
+      !elements.questionButton ||
       event.target !==
         elements.questionInput
     ) {
@@ -707,7 +935,54 @@
     event.stopPropagation();
     event.stopImmediatePropagation();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dispatch One Controlled Click
+    |--------------------------------------------------------------------------
+    */
+
     elements.questionButton.click();
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Reset Duplicate State When Question Changes
+  |--------------------------------------------------------------------------
+  */
+
+  function handleQuestionInput() {
+    const elements =
+      getElements();
+
+    if (
+      !elements.questionInput
+    ) {
+      return;
+    }
+
+    const currentQuestion =
+      normalizeText(
+        elements.questionInput.value
+      );
+
+    const previousQuestion =
+      String(
+        state.lastQuestionSignature ||
+        ""
+      ).split(
+        "::"
+      )[0];
+
+    if (
+      currentQuestion !==
+      previousQuestion
+    ) {
+      state.lastRenderedSignature =
+        "";
+
+      state.lastAnalyticsSignature =
+        "";
+    }
   }
 
   /*
@@ -718,7 +993,8 @@
 
   function initialize() {
     if (
-      initialized
+      state.initialized &&
+      state.listenersAttached
     ) {
       return true;
     }
@@ -734,12 +1010,35 @@
       return false;
     }
 
+    if (
+      elements.questionButton.dataset
+        .gfloorKnowledgeRecoveryAttached ===
+      "true"
+    ) {
+      state.initialized =
+        true;
+
+      state.listenersAttached =
+        true;
+
+      return true;
+    }
+
+    elements.questionButton.dataset
+      .gfloorKnowledgeRecoveryAttached =
+      "true";
+
+    elements.questionInput.dataset
+      .gfloorKnowledgeRecoveryAttached =
+      "true";
+
     /*
     |--------------------------------------------------------------------------
-    | Capture Phase
+    | Capture-Phase Listeners
     |--------------------------------------------------------------------------
     |
-    | The recovery handler must run before widget.js receives the click.
+    | Capture phase allows this approved recovery handler to stop widget.js
+    | before widget.js produces a zero-confidence fallback.
     |
     |--------------------------------------------------------------------------
     */
@@ -756,40 +1055,69 @@
       true
     );
 
-    initialized =
+    elements.questionInput.addEventListener(
+      "input",
+      handleQuestionInput,
+      true
+    );
+
+    state.initialized =
+      true;
+
+    state.listenersAttached =
       true;
 
     loadKnowledgeBase();
 
     console.log(
-      "G-Floor chat knowledge recovery loaded:",
-      VERSION
+      "G-Floor chat knowledge recovery initialized:",
+      {
+        version:
+          VERSION,
+
+        duplicateProtection:
+          true
+      }
     );
 
     return true;
   }
 
-  let attempts =
-    0;
+  /*
+  |--------------------------------------------------------------------------
+  | Initialization Retry
+  |--------------------------------------------------------------------------
+  */
 
-  const initializationTimer =
-    window.setInterval(
-      function () {
-        attempts +=
-          1;
+  function beginInitialization() {
+    if (
+      initialize()
+    ) {
+      return;
+    }
 
-        if (
-          initialize() ||
-          attempts >=
-            MAX_INITIALIZATION_ATTEMPTS
-        ) {
-          window.clearInterval(
-            initializationTimer
-          );
-        }
-      },
-      INITIALIZATION_INTERVAL_MS
-    );
+    const initializationTimer =
+      window.setInterval(
+        function () {
+          state.initializationAttempts +=
+            1;
+
+          const initializedNow =
+            initialize();
+
+          if (
+            initializedNow ||
+            state.initializationAttempts >=
+              MAX_INITIALIZATION_ATTEMPTS
+          ) {
+            window.clearInterval(
+              initializationTimer
+            );
+          }
+        },
+        INITIALIZATION_INTERVAL_MS
+      );
+  }
 
   if (
     document.readyState ===
@@ -797,13 +1125,13 @@
   ) {
     document.addEventListener(
       "DOMContentLoaded",
-      initialize,
+      beginInitialization,
       {
         once:
           true
       }
     );
   } else {
-    initialize();
+    beginInitialization();
   }
 })();
