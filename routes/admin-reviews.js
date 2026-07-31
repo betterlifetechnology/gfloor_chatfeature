@@ -5,7 +5,7 @@
 | G-Floor Knowledge Review Admin API
 |--------------------------------------------------------------------------
 |
-| STEP 20B
+| STEP 20J.6F4
 |
 | Protected endpoints for:
 |
@@ -15,6 +15,7 @@
 | - approving knowledge
 | - denying knowledge
 | - dashboard counts
+| - linking approved reviews to approved knowledge status
 |
 | All routes require ADMIN_TOKEN.
 |
@@ -185,9 +186,61 @@ function parseReviewId(
   return id;
 }
 
+function slugify(
+  value
+) {
+  return cleanText(
+    value,
+    200
+  )
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    )
+    .slice(
+      0,
+      80
+    );
+}
+
+function buildKnowledgeId(
+  category,
+  question,
+  reviewId
+) {
+  const categoryPart =
+    slugify(
+      category
+    ) ||
+    "general";
+
+  const questionPart =
+    slugify(
+      question
+    ) ||
+    "knowledge";
+
+  return (
+    "email-" +
+    categoryPart +
+    "-" +
+    questionPart +
+    "-" +
+    reviewId
+  ).slice(
+    0,
+    150
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
-| ADMIN TOKEN AUTHENTICATION
+| Admin Token Authentication
 |--------------------------------------------------------------------------
 */
 
@@ -209,7 +262,9 @@ function getRequestAdminToken(
       1000
     );
 
-  if (headerToken) {
+  if (
+    headerToken
+  ) {
     return headerToken;
   }
 
@@ -264,11 +319,10 @@ function secureTokenMatch(
     return false;
   }
 
-  return crypto
-    .timingSafeEqual(
-      suppliedBuffer,
-      expectedBuffer
-    );
+  return crypto.timingSafeEqual(
+    suppliedBuffer,
+    expectedBuffer
+  );
 }
 
 function requireAdmin(
@@ -279,7 +333,9 @@ function requireAdmin(
   const expectedToken =
     getConfiguredAdminToken();
 
-  if (!expectedToken) {
+  if (
+    !expectedToken
+  ) {
     console.error(
       "ADMIN_TOKEN is not configured."
     );
@@ -322,7 +378,7 @@ function requireAdmin(
 
 /*
 |--------------------------------------------------------------------------
-| Protect Every Route In This Router
+| Protect Every Route
 |--------------------------------------------------------------------------
 */
 
@@ -332,7 +388,69 @@ router.use(
 
 /*
 |--------------------------------------------------------------------------
-| Admin API Health Check
+| Approved Knowledge Lookup
+|--------------------------------------------------------------------------
+*/
+
+async function findApprovedKnowledgeByReviewId(
+  reviewId,
+  databaseClient
+) {
+  const database =
+    databaseClient || {
+      query
+    };
+
+  const result =
+    await database.query(
+      `
+        SELECT
+          id,
+          training_review_id,
+          knowledge_id,
+          category,
+          question,
+          variations,
+          answer,
+          source_url,
+          response_type,
+          active,
+          approved_by,
+          approved_at,
+          deactivated_by,
+          deactivated_at,
+          deactivation_reason,
+          reactivated_by,
+          reactivated_at,
+          reactivation_reason,
+          status_updated_at,
+          created_at,
+          updated_at
+        FROM
+          chat_approved_knowledge
+        WHERE
+          training_review_id = $1
+        ORDER BY
+          approved_at DESC,
+          id DESC
+        LIMIT 1;
+      `,
+      [
+        reviewId
+      ]
+    );
+
+  return result.rows[0] ||
+    null;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Admin API Health
+|--------------------------------------------------------------------------
+|
+| GET /admin/reviews/health
+|
 |--------------------------------------------------------------------------
 */
 
@@ -353,8 +471,10 @@ router.get(
         adminApi:
           true,
 
-        database:
-          database
+        approvedKnowledgeLink:
+          true,
+
+        database
       });
     } catch (
       error
@@ -408,8 +528,7 @@ router.get(
         );
 
       const counts =
-        result.rows[0] ||
-        {
+        result.rows[0] || {
           pending_review:
             0,
 
@@ -427,8 +546,7 @@ router.get(
         success:
           true,
 
-        counts:
-          counts
+        counts
       });
     } catch (
       error
@@ -542,27 +660,33 @@ router.get(
       const parameters =
         [];
 
-      if (status) {
+      if (
+        status
+      ) {
         parameters.push(
           status
         );
 
         conditions.push(
-          `status = $${parameters.length}`
+          `reviews.status = $${parameters.length}`
         );
       }
 
-      if (category) {
+      if (
+        category
+      ) {
         parameters.push(
           category
         );
 
         conditions.push(
-          `suggested_category = $${parameters.length}`
+          `reviews.suggested_category = $${parameters.length}`
         );
       }
 
-      if (search) {
+      if (
+        search
+      ) {
         parameters.push(
           "%" +
           search +
@@ -575,11 +699,12 @@ router.get(
 
         conditions.push(
           `(
-            customer_question ILIKE ${searchParameter}
-            OR customer_service_response ILIKE ${searchParameter}
-            OR suggested_question ILIKE ${searchParameter}
-            OR suggested_answer ILIKE ${searchParameter}
-            OR source_subject ILIKE ${searchParameter}
+            reviews.customer_question ILIKE ${searchParameter}
+            OR reviews.customer_service_response ILIKE ${searchParameter}
+            OR reviews.suggested_question ILIKE ${searchParameter}
+            OR reviews.suggested_answer ILIKE ${searchParameter}
+            OR reviews.source_subject ILIKE ${searchParameter}
+            OR approved.knowledge_id ILIKE ${searchParameter}
           )`
         );
       }
@@ -598,9 +723,13 @@ router.get(
         await query(
           `
             SELECT
-              COUNT(*)::integer AS total
+              COUNT(DISTINCT reviews.id)::integer AS total
             FROM
-              chat_training_reviews
+              chat_training_reviews reviews
+            LEFT JOIN
+              chat_approved_knowledge approved
+            ON
+              approved.training_review_id = reviews.id
             ${whereClause};
           `,
           parameters
@@ -629,46 +758,71 @@ router.get(
         await query(
           `
             SELECT
-              id,
-              source_type,
-              source_message_id,
-              source_thread_id,
-              source_folder,
-              source_subject,
-              source_sender,
-              source_received_at,
-              source_url,
-              customer_question,
-              customer_service_response,
-              suggested_question,
-              suggested_answer,
-              suggested_category,
-              suggested_variations,
-              suggested_source_url,
-              suggested_response_type,
-              sensitive_information_detected,
-              requires_sensitive_review,
-              sensitive_review_completed,
-              possible_duplicate,
-              duplicate_knowledge_id,
-              status,
-              reviewer_name,
-              reviewer_notes,
-              reviewed_at,
-              created_at,
-              updated_at
+              reviews.id,
+              reviews.source_type,
+              reviews.source_message_id,
+              reviews.source_thread_id,
+              reviews.source_folder,
+              reviews.source_subject,
+              reviews.source_sender,
+              reviews.source_received_at,
+              reviews.source_url,
+              reviews.customer_question,
+              reviews.customer_service_response,
+              reviews.suggested_question,
+              reviews.suggested_answer,
+              reviews.suggested_category,
+              reviews.suggested_variations,
+              reviews.suggested_source_url,
+              reviews.suggested_response_type,
+              reviews.sensitive_information_detected,
+              reviews.requires_sensitive_review,
+              reviews.sensitive_review_completed,
+              reviews.possible_duplicate,
+              reviews.duplicate_knowledge_id,
+              reviews.status,
+              reviews.reviewer_name,
+              reviews.reviewer_notes,
+              reviews.reviewed_at,
+              reviews.created_at,
+              reviews.updated_at,
+
+              approved.knowledge_id,
+              approved.active AS approved_knowledge_active
+
             FROM
-              chat_training_reviews
+              chat_training_reviews reviews
+
+            LEFT JOIN LATERAL
+              (
+                SELECT
+                  knowledge.knowledge_id,
+                  knowledge.active
+                FROM
+                  chat_approved_knowledge knowledge
+                WHERE
+                  knowledge.training_review_id = reviews.id
+                ORDER BY
+                  knowledge.approved_at DESC,
+                  knowledge.id DESC
+                LIMIT 1
+              ) approved
+            ON
+              TRUE
+
             ${whereClause}
+
             ORDER BY
               CASE
-                WHEN status = 'pending-review'
+                WHEN reviews.status = 'pending-review'
                 THEN 0
                 ELSE 1
               END,
-              created_at DESC
+              reviews.created_at DESC
+
             LIMIT
               ${limitParameter}
+
             OFFSET
               ${offsetParameter};
           `,
@@ -676,8 +830,10 @@ router.get(
         );
 
       const total =
-        countResult.rows[0]
-          .total;
+        Number(
+          countResult.rows[0] &&
+          countResult.rows[0].total
+        ) || 0;
 
       response.json({
         success:
@@ -687,14 +843,9 @@ router.get(
           result.rows,
 
         pagination: {
-          page:
-            page,
-
-          limit:
-            limit,
-
-          total:
-            total,
+          page,
+          limit,
+          total,
 
           pages:
             Math.max(
@@ -734,6 +885,14 @@ router.get(
 |
 | GET /admin/reviews/:id
 |
+| Returns:
+|
+| {
+|   success: true,
+|   review: {},
+|   knowledge: {} | null
+| }
+|
 |--------------------------------------------------------------------------
 */
 
@@ -749,7 +908,9 @@ router.get(
           request.params.id
         );
 
-      if (!reviewId) {
+      if (
+        !reviewId
+      ) {
         return response
           .status(400)
           .json({
@@ -761,7 +922,7 @@ router.get(
           });
       }
 
-      const result =
+      const reviewResult =
         await query(
           `
             SELECT
@@ -778,7 +939,7 @@ router.get(
         );
 
       if (
-        !result.rows.length
+        !reviewResult.rows.length
       ) {
         return response
           .status(404)
@@ -791,12 +952,57 @@ router.get(
           });
       }
 
+      const review =
+        reviewResult.rows[0];
+
+      const knowledge =
+        await findApprovedKnowledgeByReviewId(
+          reviewId
+        );
+
+      const reviewWithKnowledge =
+        {
+          ...review,
+
+          knowledge_id:
+            knowledge
+              ? knowledge.knowledge_id
+              : null,
+
+          knowledgeId:
+            knowledge
+              ? knowledge.knowledge_id
+              : null,
+
+          approved_knowledge_id:
+            knowledge
+              ? knowledge.knowledge_id
+              : null,
+
+          approvedKnowledgeId:
+            knowledge
+              ? knowledge.knowledge_id
+              : null,
+
+          approved_knowledge_active:
+            knowledge
+              ? knowledge.active === true
+              : null,
+
+          approvedKnowledgeActive:
+            knowledge
+              ? knowledge.active === true
+              : null
+        };
+
       response.json({
         success:
           true,
 
         review:
-          result.rows[0]
+          reviewWithKnowledge,
+
+        knowledge
       });
     } catch (
       error
@@ -826,18 +1032,6 @@ router.get(
 |
 | PUT /admin/reviews/:id
 |
-| Editable:
-|
-| suggestedQuestion
-| suggestedAnswer
-| suggestedCategory
-| suggestedVariations
-| suggestedSourceUrl
-| suggestedResponseType
-| sensitiveReviewCompleted
-| reviewerName
-| reviewerNotes
-|
 |--------------------------------------------------------------------------
 */
 
@@ -853,7 +1047,9 @@ router.put(
           request.params.id
         );
 
-      if (!reviewId) {
+      if (
+        !reviewId
+      ) {
         return response
           .status(400)
           .json({
@@ -882,9 +1078,7 @@ router.put(
         );
 
       if (
-        !existingResult
-          .rows
-          .length
+        !existingResult.rows.length
       ) {
         return response
           .status(404)
@@ -916,8 +1110,7 @@ router.put(
       }
 
       const body =
-        request.body ||
-        {};
+        request.body || {};
 
       const suggestedQuestion =
         body.suggestedQuestion !==
@@ -926,8 +1119,7 @@ router.put(
               body.suggestedQuestion,
               5000
             )
-          : existing
-              .suggested_question;
+          : existing.suggested_question;
 
       const suggestedAnswer =
         body.suggestedAnswer !==
@@ -936,8 +1128,7 @@ router.put(
               body.suggestedAnswer,
               20000
             )
-          : existing
-              .suggested_answer;
+          : existing.suggested_answer;
 
       const suggestedCategory =
         body.suggestedCategory !==
@@ -946,8 +1137,7 @@ router.put(
               body.suggestedCategory,
               150
             )
-          : existing
-              .suggested_category;
+          : existing.suggested_category;
 
       const suggestedVariations =
         body.suggestedVariations !==
@@ -955,8 +1145,13 @@ router.put(
           ? cleanJsonArray(
               body.suggestedVariations
             )
-          : existing
-              .suggested_variations;
+          : (
+              Array.isArray(
+                existing.suggested_variations
+              )
+                ? existing.suggested_variations
+                : []
+            );
 
       const suggestedSourceUrl =
         body.suggestedSourceUrl !==
@@ -965,8 +1160,7 @@ router.put(
               body.suggestedSourceUrl,
               3000
             )
-          : existing
-              .suggested_source_url;
+          : existing.suggested_source_url;
 
       const suggestedResponseType =
         body.suggestedResponseType !==
@@ -974,10 +1168,12 @@ router.put(
           ? cleanText(
               body.suggestedResponseType,
               50
-            )
-              .toUpperCase()
-          : existing
-              .suggested_response_type;
+            ).toUpperCase()
+          : cleanText(
+              existing.suggested_response_type ||
+              "AUTO",
+              50
+            ).toUpperCase();
 
       if (
         !VALID_RESPONSE_TYPES.has(
@@ -1001,8 +1197,7 @@ router.put(
           ? cleanBoolean(
               body.sensitiveReviewCompleted
             )
-          : existing
-              .sensitive_review_completed;
+          : existing.sensitive_review_completed;
 
       const reviewerName =
         body.reviewerName !==
@@ -1011,8 +1206,7 @@ router.put(
               body.reviewerName,
               200
             )
-          : existing
-              .reviewer_name;
+          : existing.reviewer_name;
 
       const reviewerNotes =
         body.reviewerNotes !==
@@ -1021,8 +1215,7 @@ router.put(
               body.reviewerNotes,
               10000
             )
-          : existing
-              .reviewer_notes;
+          : existing.reviewer_notes;
 
       const result =
         await query(
@@ -1038,7 +1231,8 @@ router.put(
               suggested_response_type = $7,
               sensitive_review_completed = $8,
               reviewer_name = $9,
-              reviewer_notes = $10
+              reviewer_notes = $10,
+              updated_at = NOW()
             WHERE
               id = $1
             RETURNING
@@ -1093,64 +1287,6 @@ router.put(
 
 /*
 |--------------------------------------------------------------------------
-| Generate Knowledge ID
-|--------------------------------------------------------------------------
-*/
-
-function slugify(
-  value
-) {
-  return cleanText(
-    value,
-    200
-  )
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      "-"
-    )
-    .replace(
-      /^-+|-+$/g,
-      ""
-    )
-    .slice(
-      0,
-      80
-    );
-}
-
-function buildKnowledgeId(
-  category,
-  question,
-  reviewId
-) {
-  const categoryPart =
-    slugify(
-      category
-    ) ||
-    "general";
-
-  const questionPart =
-    slugify(
-      question
-    ) ||
-    "knowledge";
-
-  return (
-    "email-" +
-    categoryPart +
-    "-" +
-    questionPart +
-    "-" +
-    reviewId
-  ).slice(
-    0,
-    150
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
 | Approve Review
 |--------------------------------------------------------------------------
 |
@@ -1179,7 +1315,9 @@ router.post(
           request.params.id
         );
 
-      if (!reviewId) {
+      if (
+        !reviewId
+      ) {
         return response
           .status(400)
           .json({
@@ -1194,20 +1332,20 @@ router.post(
       const reviewerName =
         cleanText(
           request.body &&
-          request.body
-            .reviewerName,
+          request.body.reviewerName,
           200
         );
 
       const reviewerNotes =
         cleanOptionalText(
           request.body &&
-          request.body
-            .reviewerNotes,
+          request.body.reviewerNotes,
           10000
         );
 
-      if (!reviewerName) {
+      if (
+        !reviewerName
+      ) {
         return response
           .status(400)
           .json({
@@ -1241,9 +1379,7 @@ router.post(
               );
 
             if (
-              !reviewResult
-                .rows
-                .length
+              !reviewResult.rows.length
             ) {
               const error =
                 new Error(
@@ -1275,10 +1411,8 @@ router.post(
             }
 
             if (
-              review
-                .requires_sensitive_review &&
-              !review
-                .sensitive_review_completed
+              review.requires_sensitive_review &&
+              !review.sensitive_review_completed
             ) {
               const error =
                 new Error(
@@ -1293,22 +1427,19 @@ router.post(
 
             const question =
               cleanText(
-                review
-                  .suggested_question,
+                review.suggested_question,
                 5000
               );
 
             const answer =
               cleanText(
-                review
-                  .suggested_answer,
+                review.suggested_answer,
                 20000
               );
 
             const category =
               cleanText(
-                review
-                  .suggested_category,
+                review.suggested_category,
                 150
               );
 
@@ -1330,8 +1461,7 @@ router.post(
 
             const responseType =
               cleanText(
-                review
-                  .suggested_response_type ||
+                review.suggested_response_type ||
                 "AUTO",
                 50
               ).toUpperCase();
@@ -1348,6 +1478,26 @@ router.post(
 
               error.statusCode =
                 400;
+
+              throw error;
+            }
+
+            const existingKnowledge =
+              await findApprovedKnowledgeByReviewId(
+                reviewId,
+                client
+              );
+
+            if (
+              existingKnowledge
+            ) {
+              const error =
+                new Error(
+                  "This review already has an approved knowledge record."
+                );
+
+              error.statusCode =
+                409;
 
               throw error;
             }
@@ -1375,7 +1525,8 @@ router.post(
                       response_type,
                       active,
                       approved_by,
-                      approved_at
+                      approved_at,
+                      status_updated_at
                     )
                   VALUES
                     (
@@ -1389,6 +1540,7 @@ router.post(
                       $8,
                       TRUE,
                       $9,
+                      NOW(),
                       NOW()
                     )
                   RETURNING
@@ -1401,16 +1553,13 @@ router.post(
                   question,
                   JSON.stringify(
                     Array.isArray(
-                      review
-                        .suggested_variations
+                      review.suggested_variations
                     )
-                      ? review
-                          .suggested_variations
+                      ? review.suggested_variations
                       : []
                   ),
                   answer,
-                  review
-                    .suggested_source_url,
+                  review.suggested_source_url,
                   responseType,
                   reviewerName
                 ]
@@ -1425,7 +1574,8 @@ router.post(
                     status = 'approved',
                     reviewer_name = $2,
                     reviewer_notes = $3,
-                    reviewed_at = NOW()
+                    reviewed_at = NOW(),
+                    updated_at = NOW()
                   WHERE
                     id = $1
                   RETURNING
@@ -1440,12 +1590,10 @@ router.post(
 
             return {
               review:
-                updatedReviewResult
-                  .rows[0],
+                updatedReviewResult.rows[0],
 
               knowledge:
-                knowledgeResult
-                  .rows[0]
+                knowledgeResult.rows[0]
             };
           }
         );
@@ -1516,7 +1664,9 @@ router.post(
           request.params.id
         );
 
-      if (!reviewId) {
+      if (
+        !reviewId
+      ) {
         return response
           .status(400)
           .json({
@@ -1531,20 +1681,20 @@ router.post(
       const reviewerName =
         cleanText(
           request.body &&
-          request.body
-            .reviewerName,
+          request.body.reviewerName,
           200
         );
 
       const reviewerNotes =
         cleanText(
           request.body &&
-          request.body
-            .reviewerNotes,
+          request.body.reviewerNotes,
           10000
         );
 
-      if (!reviewerName) {
+      if (
+        !reviewerName
+      ) {
         return response
           .status(400)
           .json({
@@ -1556,7 +1706,9 @@ router.post(
           });
       }
 
-      if (!reviewerNotes) {
+      if (
+        !reviewerNotes
+      ) {
         return response
           .status(400)
           .json({
@@ -1577,7 +1729,8 @@ router.post(
               status = 'denied',
               reviewer_name = $2,
               reviewer_notes = $3,
-              reviewed_at = NOW()
+              reviewed_at = NOW(),
+              updated_at = NOW()
             WHERE
               id = $1
               AND status = 'pending-review'
@@ -1603,7 +1756,8 @@ router.post(
               FROM
                 chat_training_reviews
               WHERE
-                id = $1;
+                id = $1
+              LIMIT 1;
             `,
             [
               reviewId
