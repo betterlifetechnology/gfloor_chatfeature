@@ -1,69 +1,153 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
-
-const ROOT = path.resolve(__dirname, "..");
-
-const results = [];
-
-let failures = 0;
-let warnings = 0;
-
 /*
 |--------------------------------------------------------------------------
-| Helpers
+| G-Floor Custom Chat Pre-Launch Check
+|--------------------------------------------------------------------------
+|
+| Step 20L
+|
+| Validates:
+|
+| - required project files
+| - JavaScript syntax
+| - package configuration
+| - environment-variable documentation
+| - accidental credential exposure
+| - admin authentication protection
+| - knowledge approval safety
+| - analytics foundation
+| - Microsoft Graph launch status
+|
 |--------------------------------------------------------------------------
 */
 
-function pass(message) {
+const fs =
+  require("fs");
+
+const path =
+  require("path");
+
+const {
+  execFileSync
+} =
+  require("child_process");
+
+const ROOT =
+  path.resolve(
+    __dirname,
+    ".."
+  );
+
+let failures =
+  0;
+
+let warnings =
+  0;
+
+const results =
+  [];
+
+/*
+|--------------------------------------------------------------------------
+| Reporting
+|--------------------------------------------------------------------------
+*/
+
+function addResult(
+  type,
+  message
+) {
   results.push({
-    status: "PASS",
+    type,
     message
   });
+
+  if (
+    type ===
+    "FAIL"
+  ) {
+    failures +=
+      1;
+  }
+
+  if (
+    type ===
+    "WARN"
+  ) {
+    warnings +=
+      1;
+  }
 }
 
-function fail(message) {
-  failures += 1;
-
-  results.push({
-    status: "FAIL",
+function pass(
+  message
+) {
+  addResult(
+    "PASS",
     message
-  });
+  );
 }
 
-function warn(message) {
-  warnings += 1;
-
-  results.push({
-    status: "WARN",
+function fail(
+  message
+) {
+  addResult(
+    "FAIL",
     message
-  });
+  );
 }
 
-function fileExists(relativePath) {
+function warn(
+  message
+) {
+  addResult(
+    "WARN",
+    message
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| File Helpers
+|--------------------------------------------------------------------------
+*/
+
+function resolvePath(
+  relativePath
+) {
+  return path.join(
+    ROOT,
+    relativePath
+  );
+}
+
+function exists(
+  relativePath
+) {
   return fs.existsSync(
-    path.join(
-      ROOT,
+    resolvePath(
       relativePath
     )
   );
 }
 
-function readFile(relativePath) {
+function read(
+  relativePath
+) {
   return fs.readFileSync(
-    path.join(
-      ROOT,
+    resolvePath(
       relativePath
     ),
     "utf8"
   );
 }
 
-function checkFile(relativePath) {
+function requireFile(
+  relativePath
+) {
   if (
-    fileExists(
+    exists(
       relativePath
     )
   ) {
@@ -81,9 +165,11 @@ function checkFile(relativePath) {
   return false;
 }
 
-function checkSyntax(relativePath) {
+function checkJavaScriptSyntax(
+  relativePath
+) {
   if (
-    !fileExists(
+    !exists(
       relativePath
     )
   ) {
@@ -91,20 +177,26 @@ function checkSyntax(relativePath) {
   }
 
   try {
-    execSync(
-      `node --check "${path.join(
-        ROOT,
-        relativePath
-      )}"`,
+    execFileSync(
+      process.execPath,
+      [
+        "--check",
+        resolvePath(
+          relativePath
+        )
+      ],
       {
-        stdio: "pipe"
+        stdio:
+          "pipe"
       }
     );
 
     pass(
-      `${relativePath} JavaScript syntax is valid`
+      `${relativePath} syntax is valid`
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     fail(
       `${relativePath} contains a JavaScript syntax error`
     );
@@ -113,35 +205,252 @@ function checkSyntax(relativePath) {
 
 /*
 |--------------------------------------------------------------------------
-| Required Application Files
+| Environment Parser
 |--------------------------------------------------------------------------
 */
 
-console.log("");
+function parseEnvironmentFile(
+  contents
+) {
+  const variables =
+    {};
+
+  String(
+    contents ||
+    ""
+  )
+    .split(
+      /\r?\n/
+    )
+    .forEach(
+      function (
+        originalLine
+      ) {
+        const line =
+          originalLine.trim();
+
+        if (
+          !line ||
+          line.startsWith(
+            "#"
+          )
+        ) {
+          return;
+        }
+
+        const equalsIndex =
+          line.indexOf(
+            "="
+          );
+
+        if (
+          equalsIndex <
+          1
+        ) {
+          return;
+        }
+
+        const variableName =
+          line
+            .slice(
+              0,
+              equalsIndex
+            )
+            .trim();
+
+        const variableValue =
+          line
+            .slice(
+              equalsIndex +
+              1
+            )
+            .trim();
+
+        if (
+          /^[A-Z][A-Z0-9_]*$/.test(
+            variableName
+          )
+        ) {
+          variables[
+            variableName
+          ] =
+            variableValue;
+        }
+      }
+    );
+
+  return variables;
+}
+
+function removeQuotes(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ""
+    ).trim();
+
+  if (
+    text.length >=
+      2 &&
+    (
+      (
+        text.startsWith(
+          "\""
+        ) &&
+        text.endsWith(
+          "\""
+        )
+      ) ||
+      (
+        text.startsWith(
+          "'"
+        ) &&
+        text.endsWith(
+          "'"
+        )
+      )
+    )
+  ) {
+    return text.slice(
+      1,
+      -1
+    );
+  }
+
+  return text;
+}
+
+function isBlankOrPlaceholder(
+  value
+) {
+  const text =
+    removeQuotes(
+      value
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    !text
+  ) {
+    return true;
+  }
+
+  return (
+    text ===
+      "placeholder" ||
+    text ===
+      "replace-me" ||
+    text ===
+      "replace_me" ||
+    text ===
+      "set-in-render" ||
+    text ===
+      "set_in_render" ||
+    text ===
+      "your-secret" ||
+    text ===
+      "your_secret" ||
+    text ===
+      "your-token" ||
+    text ===
+      "your_token" ||
+    text.startsWith(
+      "your-"
+    ) ||
+    text.startsWith(
+      "your_"
+    ) ||
+    text.startsWith(
+      "example-"
+    ) ||
+    text.startsWith(
+      "example_"
+    ) ||
+    text.includes(
+      "${"
+    )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Header
+|--------------------------------------------------------------------------
+*/
+
+console.log(
+  ""
+);
+
 console.log(
   "=============================================="
 );
+
 console.log(
   "G-FLOOR CUSTOM CHAT PRE-LAUNCH CHECK"
 );
+
 console.log(
   "=============================================="
 );
-console.log("");
 
-const requiredFiles = [
-  "server.js",
-  "package.json",
-  ".env.example",
-  "public/widget.js",
-  "public/knowledge-base.js",
-  "public/chat-analytics.js",
-  "data/training-queue.json",
-  "scripts/import-training-data.js"
-];
+console.log(
+  ""
+);
+
+/*
+|--------------------------------------------------------------------------
+| Required Files
+|--------------------------------------------------------------------------
+*/
+
+const requiredFiles =
+  [
+    "server.js",
+    "package.json",
+    ".env.example",
+    ".gitignore",
+
+    "db/review-db.js",
+    "db/schema-review.sql",
+    "db/schema-reporting.sql",
+    "db/schema-knowledge-status.sql",
+
+    "routes/admin-reviews.js",
+    "routes/admin-reporting.js",
+    "routes/admin-knowledge-status.js",
+    "routes/approved-knowledge.js",
+    "routes/approved-knowledge-events.js",
+
+    "public/widget.js",
+    "public/knowledge-base.js",
+    "public/chat-analytics.js",
+    "public/chat-approved-analytics.js",
+    "public/chat-approved-reporting.js",
+    "public/chat-mascot.js",
+    "public/chat-smalltalk.js",
+
+    "public/admin-review.html",
+    "public/admin-review.js",
+    "public/admin-review.css",
+
+    "public/admin-report.html",
+    "public/admin-report.js",
+    "public/admin-report.css",
+
+    "data/training-queue.json",
+
+    "scripts/import-training-data.js",
+    "scripts/init-review-db.js",
+    "scripts/init-reporting-db.js",
+    "scripts/init-knowledge-status-db.js"
+  ];
 
 requiredFiles.forEach(
-  checkFile
+  requireFile
 );
 
 /*
@@ -150,31 +459,53 @@ requiredFiles.forEach(
 |--------------------------------------------------------------------------
 */
 
-[
-  "server.js",
-  "public/widget.js",
-  "public/knowledge-base.js",
-  "public/chat-analytics.js",
-  "scripts/import-training-data.js"
-].forEach(
-  checkSyntax
+const javascriptFiles =
+  [
+    "server.js",
+
+    "db/review-db.js",
+
+    "routes/admin-reviews.js",
+    "routes/admin-reporting.js",
+    "routes/admin-knowledge-status.js",
+    "routes/approved-knowledge.js",
+    "routes/approved-knowledge-events.js",
+
+    "public/widget.js",
+    "public/knowledge-base.js",
+    "public/chat-analytics.js",
+    "public/chat-approved-analytics.js",
+    "public/chat-approved-reporting.js",
+    "public/chat-mascot.js",
+    "public/chat-smalltalk.js",
+    "public/admin-review.js",
+    "public/admin-report.js",
+
+    "scripts/import-training-data.js",
+    "scripts/init-review-db.js",
+    "scripts/init-reporting-db.js",
+    "scripts/init-knowledge-status-db.js"
+  ];
+
+javascriptFiles.forEach(
+  checkJavaScriptSyntax
 );
 
 /*
 |--------------------------------------------------------------------------
-| package.json Checks
+| package.json
 |--------------------------------------------------------------------------
 */
 
 if (
-  fileExists(
+  exists(
     "package.json"
   )
 ) {
   try {
     const packageJson =
       JSON.parse(
-        readFile(
+        read(
           "package.json"
         )
       );
@@ -182,20 +513,6 @@ if (
     pass(
       "package.json contains valid JSON"
     );
-
-    if (
-      packageJson.engines &&
-      packageJson.engines.node ===
-        "20.x"
-    ) {
-      pass(
-        "Node.js 20.x is configured"
-      );
-    } else {
-      warn(
-        "Node.js engine is not explicitly set to 20.x"
-      );
-    }
 
     if (
       packageJson.scripts &&
@@ -212,19 +529,33 @@ if (
 
     if (
       packageJson.scripts &&
-      packageJson.scripts[
-        "training-import"
-      ]
+      packageJson.scripts.prelaunch
     ) {
       pass(
-        "training import script exists"
+        "npm prelaunch script exists"
+      );
+    } else {
+      fail(
+        "npm prelaunch script is missing"
+      );
+    }
+
+    if (
+      packageJson.engines &&
+      packageJson.engines.node ===
+        "20.x"
+    ) {
+      pass(
+        "Node.js 20.x is configured"
       );
     } else {
       warn(
-        "training-import npm script is missing"
+        "Node.js engine is not explicitly configured as 20.x"
       );
     }
-  } catch (error) {
+  } catch (
+    error
+  ) {
     fail(
       "package.json contains invalid JSON"
     );
@@ -233,200 +564,186 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Widget Checks
+| Administrative Authentication
+|--------------------------------------------------------------------------
+|
+| Authentication can live in server.js or inside protected route files.
+|
 |--------------------------------------------------------------------------
 */
 
-if (
-  fileExists(
-    "public/widget.js"
-  )
-) {
-  const widget =
-    readFile(
-      "public/widget.js"
-    );
-
-  const widgetChecks = [
-    {
-      text:
-        "gfloor-chat-panel",
-
-      message:
-        "Chat panel code detected"
-    },
-
-    {
-      text:
-        "gfloor-chat-question",
-
-      message:
-        "Customer question input detected"
-    },
-
-    {
-      text:
-        "gfloor-response-box",
-
-      message:
-        "Chat response container detected"
-    },
-
-    {
-      text:
-        "Customer Service",
-
-      message:
-        "Customer Service escalation language detected"
-    },
-
-    {
-      text:
-        "/chat/message",
-
-      message:
-        "Customer Service handoff endpoint detected"
-    }
+const administrativeFiles =
+  [
+    "server.js",
+    "routes/admin-reviews.js",
+    "routes/admin-reporting.js",
+    "routes/admin-knowledge-status.js"
   ];
 
-  widgetChecks.forEach(
-    function (check) {
-      if (
-        widget.includes(
-          check.text
-        )
-      ) {
-        pass(
-          check.message
+let administrativeCode =
+  "";
+
+administrativeFiles.forEach(
+  function (
+    relativePath
+  ) {
+    if (
+      exists(
+        relativePath
+      )
+    ) {
+      administrativeCode +=
+        "\n" +
+        read(
+          relativePath
         );
-      } else {
-        fail(
-          `${check.message} is missing`
-        );
-      }
     }
+  }
+);
+
+const adminTokenDetected =
+  administrativeCode.includes(
+    "ADMIN_TOKEN"
+  );
+
+const adminHeaderDetected =
+  administrativeCode.includes(
+    "X-Admin-Token"
+  ) ||
+  administrativeCode.includes(
+    "x-admin-token"
+  );
+
+const unauthorizedResponseDetected =
+  administrativeCode.includes(
+    "Unauthorized"
+  ) ||
+  administrativeCode.includes(
+    "401"
+  );
+
+if (
+  adminTokenDetected &&
+  adminHeaderDetected &&
+  unauthorizedResponseDetected
+) {
+  pass(
+    "Administrative token protection detected"
+  );
+} else {
+  fail(
+    "Administrative token protection was not detected"
+  );
+}
+
+if (
+  administrativeCode.includes(
+    "timingSafeEqual"
+  )
+) {
+  pass(
+    "Timing-safe administrative token comparison detected"
+  );
+} else {
+  warn(
+    "Timing-safe administrative token comparison was not detected"
+  );
+}
+
+if (
+  administrativeCode.includes(
+    "no-store"
+  ) ||
+  administrativeCode.includes(
+    "noStore"
+  )
+) {
+  pass(
+    "Administrative no-store protection detected"
+  );
+} else {
+  warn(
+    "Administrative no-store protection was not detected"
   );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Analytics Checks
+| Knowledge Status Controls
 |--------------------------------------------------------------------------
 */
 
 if (
-  fileExists(
-    "public/chat-analytics.js"
+  exists(
+    "routes/admin-knowledge-status.js"
   )
 ) {
-  const analytics =
-    readFile(
-      "public/chat-analytics.js"
+  const statusCode =
+    read(
+      "routes/admin-knowledge-status.js"
     );
 
-  const analyticsEvents = [
-    "gfloor_chat_open",
-    "gfloor_chat_question",
-    "gfloor_chat_question_result",
-    "gfloor_chat_unanswered",
-    "gfloor_chat_helpful_yes",
-    "gfloor_chat_helpful_no",
-    "gfloor_chat_customer_service_request",
-    "gfloor_chat_contact_submit"
-  ];
-
-  analyticsEvents.forEach(
-    function (eventName) {
-      if (
-        analytics.includes(
-          eventName
-        )
-      ) {
-        pass(
-          `Analytics event detected: ${eventName}`
-        );
-      } else {
-        warn(
-          `Analytics event not detected: ${eventName}`
-        );
-      }
-    }
-  );
-
   if (
-    analytics.includes(
-      "question_text"
+    statusCode.includes(
+      "deactivate"
+    ) &&
+    statusCode.includes(
+      "reactivate"
     )
   ) {
-    warn(
-      "Potential raw question_text analytics parameter detected. Review for GA4 PII risk."
-    );
-  } else {
     pass(
-      "No question_text analytics parameter detected"
-    );
-  }
-}
-
-/*
-|--------------------------------------------------------------------------
-| Knowledge Base Checks
-|--------------------------------------------------------------------------
-*/
-
-if (
-  fileExists(
-    "public/knowledge-base.js"
-  )
-) {
-  const knowledgeBase =
-    readFile(
-      "public/knowledge-base.js"
-    );
-
-  if (
-    knowledgeBase.length >
-    500
-  ) {
-    pass(
-      "Knowledge base contains content"
+      "Approved knowledge deactivate/reactivate endpoints detected"
     );
   } else {
     fail(
-      "Knowledge base appears empty"
+      "Approved knowledge status endpoints are incomplete"
     );
   }
+}
+
+if (
+  exists(
+    "public/admin-review.js"
+  )
+) {
+  const dashboardCode =
+    read(
+      "public/admin-review.js"
+    );
 
   if (
-    knowledgeBase.includes(
-      "answer"
+    dashboardCode.includes(
+      "submitKnowledgeStatusChange"
+    ) &&
+    dashboardCode.includes(
+      "loadKnowledgeStatusCounts"
     )
   ) {
     pass(
-      "Knowledge base answer content detected"
+      "Approved knowledge dashboard controls detected"
     );
   } else {
-    warn(
-      "Could not detect answer fields in knowledge base"
+    fail(
+      "Approved knowledge dashboard controls were not detected"
     );
   }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Training Queue Security
+| Training Approval Rules
 |--------------------------------------------------------------------------
 */
 
 if (
-  fileExists(
+  exists(
     "data/training-queue.json"
   )
 ) {
   try {
     const trainingQueue =
       JSON.parse(
-        readFile(
+        read(
           "data/training-queue.json"
         )
       );
@@ -455,45 +772,16 @@ if (
         true
     ) {
       pass(
-        "Human approval is required for training data"
+        "Human approval is required for training knowledge"
       );
     } else {
       fail(
-        "Training data must require human approval"
+        "Training knowledge must require human approval"
       );
     }
-
-    if (
-      Array.isArray(
-        trainingQueue.items
-      )
-    ) {
-      const unapprovedLiveItems =
-        trainingQueue.items.filter(
-          function (item) {
-            return (
-              item.status ===
-                "approved" &&
-              item.approved !==
-                true
-            );
-          }
-        );
-
-      if (
-        unapprovedLiveItems.length ===
-        0
-      ) {
-        pass(
-          "No inconsistent approved training records detected"
-        );
-      } else {
-        fail(
-          `${unapprovedLiveItems.length} inconsistent training approval records detected`
-        );
-      }
-    }
-  } catch (error) {
+  } catch (
+    error
+  ) {
     fail(
       "training-queue.json contains invalid JSON"
     );
@@ -502,44 +790,123 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Environment Template Checks
+| Analytics
 |--------------------------------------------------------------------------
 */
 
 if (
-  fileExists(
+  exists(
+    "public/chat-analytics.js"
+  )
+) {
+  const analyticsCode =
+    read(
+      "public/chat-analytics.js"
+    );
+
+  const requiredAnalyticsEvents =
+    [
+      "gfloor_chat_open",
+      "gfloor_chat_question",
+      "gfloor_chat_question_result",
+      "gfloor_chat_unanswered",
+      "gfloor_chat_helpful_yes",
+      "gfloor_chat_helpful_no",
+      "gfloor_chat_customer_service_request"
+    ];
+
+  requiredAnalyticsEvents.forEach(
+    function (
+      eventName
+    ) {
+      if (
+        analyticsCode.includes(
+          eventName
+        )
+      ) {
+        pass(
+          `Analytics event detected: ${eventName}`
+        );
+      } else {
+        warn(
+          `Analytics event not detected: ${eventName}`
+        );
+      }
+    }
+  );
+
+  if (
+    analyticsCode.includes(
+      "question_text"
+    )
+  ) {
+    warn(
+      "Potential raw question_text analytics parameter detected"
+    );
+  } else {
+    pass(
+      "No raw question_text analytics parameter detected"
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Environment Template
+|--------------------------------------------------------------------------
+*/
+
+let environmentVariables =
+  {};
+
+if (
+  exists(
     ".env.example"
   )
 ) {
-  const envExample =
-    readFile(
-      ".env.example"
+  environmentVariables =
+    parseEnvironmentFile(
+      read(
+        ".env.example"
+      )
     );
 
-  const expectedVariables = [
-    "SHOPIFY_ALLOWED_ORIGIN",
-    "CUSTOMER_SERVICE_EMAIL",
-    "EMAIL_DELIVERY_MODE",
-    "MICROSOFT_TENANT_ID",
-    "MICROSOFT_CLIENT_ID",
-    "MICROSOFT_CLIENT_SECRET",
-    "GRAPH_SENDER_EMAIL",
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_SECURE",
-    "SMTP_USER",
-    "SMTP_PASS",
-    "SMTP_FROM",
-    "LIVE_AGENT_QUEUE_STATUS",
-    "LIVE_AGENT_NORMAL_WAIT",
-    "LIVE_AGENT_BUSY_WAIT",
-    "NODE_ENV"
-  ];
+  const expectedVariables =
+    [
+      "SHOPIFY_ALLOWED_ORIGIN",
+      "CUSTOMER_SERVICE_EMAIL",
+      "EMAIL_DELIVERY_MODE",
+
+      "MICROSOFT_TENANT_ID",
+      "MICROSOFT_CLIENT_ID",
+      "MICROSOFT_CLIENT_SECRET",
+      "GRAPH_SENDER_EMAIL",
+
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_SECURE",
+      "SMTP_USER",
+      "SMTP_PASS",
+      "SMTP_FROM",
+
+      "DATABASE_URL",
+      "ADMIN_TOKEN",
+
+      "LIVE_AGENT_QUEUE_STATUS",
+      "LIVE_AGENT_NORMAL_WAIT",
+      "LIVE_AGENT_BUSY_WAIT",
+
+      "NODE_ENV",
+      "PORT"
+    ];
 
   expectedVariables.forEach(
-    function (variableName) {
+    function (
+      variableName
+    ) {
       if (
-        envExample.includes(
+        Object.prototype.hasOwnProperty.call(
+          environmentVariables,
           variableName
         )
       ) {
@@ -557,48 +924,104 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Secret Leak Checks
+| Secret Exposure Check
 |--------------------------------------------------------------------------
 */
 
-const filesToScan = [
-  "server.js",
-  "public/widget.js",
-  "public/knowledge-base.js",
-  "public/chat-analytics.js",
-  ".env.example"
-];
+const sensitiveTemplateVariables =
+  [
+    "MICROSOFT_CLIENT_SECRET",
+    "SMTP_PASS",
+    "ADMIN_TOKEN",
+    "DATABASE_URL"
+  ];
 
-const obviousSecretPatterns = [
-  {
-    pattern:
-      /MICROSOFT_CLIENT_SECRET\s*=\s*[A-Za-z0-9_\-.~]{20,}/,
+sensitiveTemplateVariables.forEach(
+  function (
+    variableName
+  ) {
+    const value =
+      environmentVariables[
+        variableName
+      ];
 
-    description:
-      "possible Microsoft client secret"
-  },
-
-  {
-    pattern:
-      /SMTP_PASS\s*=\s*(?!your-|YOUR_|example|$)[^\s]+/,
-
-    description:
-      "possible SMTP password"
-  },
-
-  {
-    pattern:
-      /ADMIN_TOKEN\s*=\s*(?!create-|your-|YOUR_|$)[^\s]+/,
-
-    description:
-      "possible admin token"
-  }
-];
-
-filesToScan.forEach(
-  function (relativePath) {
     if (
-      !fileExists(
+      value &&
+      !isBlankOrPlaceholder(
+        value
+      )
+    ) {
+      fail(
+        `.env.example may contain a real ${variableName}`
+      );
+    } else {
+      pass(
+        `.env.example does not contain a real ${variableName}`
+      );
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| Source Secret Scan
+|--------------------------------------------------------------------------
+*/
+
+const sourceFilesToScan =
+  [
+    "server.js",
+    "routes/admin-reviews.js",
+    "routes/admin-reporting.js",
+    "routes/admin-knowledge-status.js",
+    "routes/approved-knowledge.js",
+    "routes/approved-knowledge-events.js",
+    "public/widget.js",
+    "public/chat-analytics.js",
+    "public/chat-approved-reporting.js"
+  ];
+
+const dangerousPatterns =
+  [
+    {
+      pattern:
+        /MICROSOFT_CLIENT_SECRET[ \t]*=[ \t]*["'][^"'\r\n]{20,}["']/,
+
+      name:
+        "hard-coded Microsoft client secret"
+    },
+
+    {
+      pattern:
+        /SMTP_PASS[ \t]*=[ \t]*["'][^"'\r\n]{8,}["']/,
+
+      name:
+        "hard-coded SMTP password"
+    },
+
+    {
+      pattern:
+        /ADMIN_TOKEN[ \t]*=[ \t]*["'][^"'\r\n]{8,}["']/,
+
+      name:
+        "hard-coded admin token"
+    },
+
+    {
+      pattern:
+        /postgres(?:ql)?:\/\/[^:\s"']+:[^@\s"']+@/i,
+
+      name:
+        "hard-coded PostgreSQL credential"
+    }
+  ];
+
+sourceFilesToScan.forEach(
+  function (
+    relativePath
+  ) {
+    if (
+      !exists(
         relativePath
       )
     ) {
@@ -606,19 +1029,21 @@ filesToScan.forEach(
     }
 
     const contents =
-      readFile(
+      read(
         relativePath
       );
 
-    obviousSecretPatterns.forEach(
-      function (check) {
+    dangerousPatterns.forEach(
+      function (
+        dangerousPattern
+      ) {
         if (
-          check.pattern.test(
+          dangerousPattern.pattern.test(
             contents
           )
         ) {
           fail(
-            `${relativePath} may contain a real ${check.description}`
+            `${relativePath} may contain a ${dangerousPattern.name}`
           );
         }
       }
@@ -632,19 +1057,86 @@ pass(
 
 /*
 |--------------------------------------------------------------------------
-| Microsoft Graph Launch Gate
+| .gitignore Protection
 |--------------------------------------------------------------------------
 */
 
 if (
-  process.env
-    .MICROSOFT_TENANT_ID &&
-  process.env
-    .MICROSOFT_CLIENT_ID &&
-  process.env
-    .MICROSOFT_CLIENT_SECRET &&
-  process.env
-    .GRAPH_SENDER_EMAIL
+  exists(
+    ".gitignore"
+  )
+) {
+  const ignoredEntries =
+    read(
+      ".gitignore"
+    )
+      .split(
+        /\r?\n/
+      )
+      .map(
+        function (
+          line
+        ) {
+          return line.trim();
+        }
+      );
+
+  const environmentIgnored =
+    ignoredEntries.includes(
+      ".env"
+    ) ||
+    ignoredEntries.includes(
+      ".env*"
+    ) ||
+    ignoredEntries.includes(
+      "*.env"
+    );
+
+  if (
+    environmentIgnored
+  ) {
+    pass(
+      ".env is protected by .gitignore"
+    );
+  } else {
+    fail(
+      ".gitignore must exclude .env"
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Microsoft Graph Launch Gate
+|--------------------------------------------------------------------------
+*/
+
+const graphVariables =
+  [
+    "MICROSOFT_TENANT_ID",
+    "MICROSOFT_CLIENT_ID",
+    "MICROSOFT_CLIENT_SECRET",
+    "GRAPH_SENDER_EMAIL"
+  ];
+
+const graphConfigured =
+  graphVariables.every(
+    function (
+      variableName
+    ) {
+      return Boolean(
+        String(
+          process.env[
+            variableName
+          ] ||
+          ""
+        ).trim()
+      );
+    }
+  );
+
+if (
+  graphConfigured
 ) {
   pass(
     "Microsoft Graph environment variables are available locally"
@@ -657,45 +1149,66 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Final Report
+| Results
 |--------------------------------------------------------------------------
 */
 
-console.log("");
+console.log(
+  ""
+);
 
 results.forEach(
-  function (result) {
-    const symbol =
-      result.status ===
-        "PASS"
-        ? "✓"
-        : (
-            result.status ===
-              "WARN"
-              ? "!"
-              : "X"
-          );
+  function (
+    result
+  ) {
+    let symbol =
+      "✓";
+
+    if (
+      result.type ===
+      "FAIL"
+    ) {
+      symbol =
+        "X";
+    }
+
+    if (
+      result.type ===
+      "WARN"
+    ) {
+      symbol =
+        "!";
+    }
 
     console.log(
-      `[${symbol}] ${result.status}: ${result.message}`
+      `[${symbol}] ${result.type}: ${result.message}`
     );
   }
 );
 
-console.log("");
+console.log(
+  ""
+);
+
 console.log(
   "----------------------------------------------"
 );
+
 console.log(
   `Failures: ${failures}`
 );
+
 console.log(
   `Warnings: ${warnings}`
 );
+
 console.log(
   "----------------------------------------------"
 );
-console.log("");
+
+console.log(
+  ""
+);
 
 if (
   failures >
@@ -725,7 +1238,10 @@ if (
     );
   }
 
-  console.log("");
+  console.log(
+    ""
+  );
+
   console.log(
     "IMPORTANT: A successful Microsoft Graph live handoff must still be confirmed before disabling Shopify Inbox."
   );
