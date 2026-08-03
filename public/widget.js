@@ -7426,3 +7426,272 @@
     "important"
   );
 })();
+
+/*
+|--------------------------------------------------------------------------
+| G-Floor Conversation Persistence Across Pages
+|--------------------------------------------------------------------------
+*/
+
+(function () {
+  const STORAGE_KEY =
+    "gfloor_chat_conversation_history_v1";
+
+  /*
+   * Prevent this feature from being installed more than once.
+   */
+  if (
+    window.__gfloorChatPersistenceInstalled
+  ) {
+    return;
+  }
+
+  window.__gfloorChatPersistenceInstalled =
+    true;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Find the Conversation Elements
+  |--------------------------------------------------------------------------
+  */
+
+  function initializeConversationPersistence() {
+    const chatPanel =
+      document.querySelector(
+        "#gfloor-chat-panel"
+      );
+
+    const conversationChain =
+      document.querySelector(
+        "#gfloor-conversation-chain"
+      );
+
+    const topicList =
+      document.querySelector(
+        ".gfloor-topic-list"
+      );
+
+    if (
+      !chatPanel ||
+      !conversationChain
+    ) {
+      return false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save Conversation
+    |--------------------------------------------------------------------------
+    */
+
+    function saveConversation() {
+      try {
+        const hasMessages =
+          conversationChain.querySelector(
+            ".gfloor-conversation-message"
+          );
+
+        if (!hasMessages) {
+          return;
+        }
+
+        const conversationData = {
+          html:
+            conversationChain.innerHTML,
+
+          savedAt:
+            Date.now()
+        };
+
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(
+            conversationData
+          )
+        );
+      } catch (error) {
+        console.error(
+          "G-Floor chat history could not be saved:",
+          error
+        );
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Restore Conversation
+    |--------------------------------------------------------------------------
+    */
+
+    function restoreConversation() {
+      try {
+        const savedValue =
+          sessionStorage.getItem(
+            STORAGE_KEY
+          );
+
+        if (!savedValue) {
+          return;
+        }
+
+        const savedConversation =
+          JSON.parse(
+            savedValue
+          );
+
+        if (
+          !savedConversation ||
+          !savedConversation.html
+        ) {
+          return;
+        }
+
+        conversationChain.innerHTML =
+          savedConversation.html;
+
+        conversationChain.classList.add(
+          "show"
+        );
+
+        conversationChain.setAttribute(
+          "aria-hidden",
+          "false"
+        );
+
+        /*
+         * Keep suggested questions hidden because
+         * the customer already started a conversation.
+         */
+        if (topicList) {
+          topicList.style.setProperty(
+            "display",
+            "none",
+            "important"
+          );
+
+          topicList.setAttribute(
+            "aria-hidden",
+            "true"
+          );
+        }
+
+        /*
+         * Scroll to the newest restored message.
+         */
+        window.requestAnimationFrame(
+          function () {
+            conversationChain.scrollTop =
+              conversationChain.scrollHeight;
+          }
+        );
+      } catch (error) {
+        console.error(
+          "G-Floor chat history could not be restored:",
+          error
+        );
+
+        sessionStorage.removeItem(
+          STORAGE_KEY
+        );
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Restore Before Watching for Changes
+    |--------------------------------------------------------------------------
+    */
+
+    restoreConversation();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Watch for New Questions and Answers
+    |--------------------------------------------------------------------------
+    */
+
+    const conversationObserver =
+      new MutationObserver(
+        function () {
+          saveConversation();
+
+          window.requestAnimationFrame(
+            function () {
+              conversationChain.scrollTop =
+                conversationChain.scrollHeight;
+            }
+          );
+        }
+      );
+
+    conversationObserver.observe(
+      conversationChain,
+      {
+        childList: true,
+        subtree: true,
+        characterData: true
+      }
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save Before Leaving the Current Page
+    |--------------------------------------------------------------------------
+    */
+
+    window.addEventListener(
+      "pagehide",
+      saveConversation
+    );
+
+    window.addEventListener(
+      "beforeunload",
+      saveConversation
+    );
+
+    /*
+     * Save immediately in case messages were already
+     * added before this block initialized.
+     */
+    saveConversation();
+
+    return true;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initialize
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    initializeConversationPersistence()
+  ) {
+    return;
+  }
+
+  /*
+   * Retry briefly if the main chat code has not finished
+   * building the conversation interface yet.
+   */
+  let attempts =
+    0;
+
+  const initializationTimer =
+    window.setInterval(
+      function () {
+        attempts +=
+          1;
+
+        if (
+          initializeConversationPersistence() ||
+          attempts >= 40
+        ) {
+          window.clearInterval(
+            initializationTimer
+          );
+        }
+      },
+      250
+    );
+})();
