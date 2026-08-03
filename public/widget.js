@@ -6564,3 +6564,132 @@
     500
   );
 })();
+/*
+|--------------------------------------------------------------------------
+| Hide Suggested Questions After Customer Starts a Conversation
+|--------------------------------------------------------------------------
+*/
+
+(function () {
+  const chatPanel =
+    document.querySelector(
+      "#gfloor-chat-panel"
+    );
+
+  if (!chatPanel) {
+    return;
+  }
+
+  const topicList =
+    chatPanel.querySelector(
+      ".gfloor-topic-list"
+    );
+
+  const questionInput =
+    chatPanel.querySelector(
+      "#gfloor-chat-question"
+    );
+
+  const questionSubmit =
+    chatPanel.querySelector(
+      "#gfloor-question-submit"
+    );
+
+  const topicButtons =
+    chatPanel.querySelectorAll(
+      ".gfloor-topic-button"
+    );
+
+  if (
+    !topicList ||
+    !questionInput ||
+    !questionSubmit
+  ) {
+    return;
+  }
+
+  let conversationStarted =
+    false;
+
+  function updateSuggestedQuestions() {
+    const hasTypedQuestion =
+      questionInput.value
+        .trim()
+        .length > 0;
+
+    const shouldHide =
+      conversationStarted ||
+      hasTypedQuestion;
+
+    topicList.style.display =
+      shouldHide
+        ? "none"
+        : "";
+
+    topicList.setAttribute(
+      "aria-hidden",
+      shouldHide
+        ? "true"
+        : "false"
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Hide While Customer Types
+  |--------------------------------------------------------------------------
+  */
+
+  questionInput.addEventListener(
+    "input",
+    function () {
+      updateSuggestedQuestions();
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Permanently Hide After Typed Question Is Submitted
+  |--------------------------------------------------------------------------
+  */
+
+  questionSubmit.addEventListener(
+    "click",
+    function () {
+      if (
+        questionInput.value
+          .trim()
+          .length === 0
+      ) {
+        return;
+      }
+
+      conversationStarted =
+        true;
+
+      updateSuggestedQuestions();
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Permanently Hide After Suggested Question Is Selected
+  |--------------------------------------------------------------------------
+  */
+
+  topicButtons.forEach(
+    function (button) {
+      button.addEventListener(
+        "click",
+        function () {
+          conversationStarted =
+            true;
+
+          updateSuggestedQuestions();
+        }
+      );
+    }
+  );
+
+  updateSuggestedQuestions();
+})();
