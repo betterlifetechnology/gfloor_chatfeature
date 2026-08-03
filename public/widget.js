@@ -6693,3 +6693,736 @@
 
   updateSuggestedQuestions();
 })();
+
+/*
+|--------------------------------------------------------------------------
+| G-Floor Visible Conversation Chain
+|--------------------------------------------------------------------------
+*/
+
+(function () {
+  const chatPanel =
+    document.querySelector(
+      "#gfloor-chat-panel"
+    );
+
+  if (!chatPanel) {
+    return;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Prevent Duplicate Installation
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    chatPanel.querySelector(
+      "#gfloor-conversation-chain"
+    )
+  ) {
+    return;
+  }
+
+  const homeView =
+    chatPanel.querySelector(
+      "#gfloor-chat-home"
+    );
+
+  const questionRow =
+    chatPanel.querySelector(
+      ".gfloor-question-row"
+    );
+
+  const questionInput =
+    chatPanel.querySelector(
+      "#gfloor-chat-question"
+    );
+
+  const questionSubmit =
+    chatPanel.querySelector(
+      "#gfloor-question-submit"
+    );
+
+  const responseBox =
+    chatPanel.querySelector(
+      "#gfloor-response-box"
+    );
+
+  const topicList =
+    chatPanel.querySelector(
+      ".gfloor-topic-list"
+    );
+
+  const topicButtons =
+    chatPanel.querySelectorAll(
+      ".gfloor-topic-button"
+    );
+
+  if (
+    !homeView ||
+    !questionRow ||
+    !questionInput ||
+    !questionSubmit ||
+    !responseBox
+  ) {
+    return;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Conversation Chain Styling
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    !document.querySelector(
+      "#gfloor-conversation-chain-styles"
+    )
+  ) {
+    const style =
+      document.createElement(
+        "style"
+      );
+
+    style.id =
+      "gfloor-conversation-chain-styles";
+
+    style.textContent = `
+      #gfloor-conversation-chain {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 310px;
+        margin: 0 0 16px;
+        padding: 4px 3px 10px;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+        scrollbar-width: thin;
+      }
+
+      #gfloor-conversation-chain.show {
+        display: flex;
+      }
+
+      #gfloor-conversation-chain::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      #gfloor-conversation-chain::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      #gfloor-conversation-chain::-webkit-scrollbar-thumb {
+        border-radius: 20px;
+        background: #c7c7c7;
+      }
+
+      .gfloor-conversation-message {
+        display: flex;
+        width: 100%;
+      }
+
+      .gfloor-conversation-message.customer {
+        justify-content: flex-end;
+      }
+
+      .gfloor-conversation-message.support {
+        justify-content: flex-start;
+      }
+
+      .gfloor-conversation-bubble {
+        max-width: 84%;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 14px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        word-break: normal;
+      }
+
+      .gfloor-conversation-message.customer
+      .gfloor-conversation-bubble {
+        border-bottom-right-radius: 4px;
+        background: #d2232a;
+        color: #ffffff;
+      }
+
+      .gfloor-conversation-message.support
+      .gfloor-conversation-bubble {
+        border: 1px solid #e2e2e2;
+        border-bottom-left-radius: 4px;
+        background: #f3f4f5;
+        color: #222222;
+      }
+
+      .gfloor-conversation-role {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .gfloor-conversation-message.customer
+      .gfloor-conversation-role {
+        color: rgba(255, 255, 255, 0.82);
+        text-align: right;
+      }
+
+      .gfloor-conversation-message.support
+      .gfloor-conversation-role {
+        color: #555555;
+      }
+
+      .gfloor-conversation-content {
+        display: block;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-response-category {
+        display: inline-block;
+        margin: 0 0 8px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #e1e4e6;
+        color: #4c5156;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-context-note {
+        margin: 0 0 10px;
+        padding: 8px;
+        border-radius: 6px;
+        background: #e7ebed;
+        color: #555555;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-review-note {
+        margin-top: 10px;
+        padding: 9px;
+        border-left: 4px solid #d79b00;
+        background: #fffaf0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-escalation-note {
+        margin-top: 10px;
+        padding: 9px;
+        border-left: 4px solid #d2232a;
+        background: #fff7f7;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-response-source {
+        margin-top: 10px;
+      }
+
+      .gfloor-conversation-content
+      .gfloor-response-source a {
+        color: #b91f25;
+        font-weight: 700;
+        text-decoration: underline;
+      }
+
+      .gfloor-question-row {
+        margin-top: 10px;
+      }
+
+      @media (max-width: 480px) {
+        #gfloor-conversation-chain {
+          max-height: 275px;
+        }
+
+        .gfloor-conversation-bubble {
+          max-width: 88%;
+          font-size: 13px;
+        }
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create Conversation Chain
+  |--------------------------------------------------------------------------
+  */
+
+  const conversationChain =
+    document.createElement(
+      "div"
+    );
+
+  conversationChain.id =
+    "gfloor-conversation-chain";
+
+  conversationChain.setAttribute(
+    "role",
+    "log"
+  );
+
+  conversationChain.setAttribute(
+    "aria-live",
+    "polite"
+  );
+
+  conversationChain.setAttribute(
+    "aria-label",
+    "Chat conversation"
+  );
+
+  questionRow.parentNode.insertBefore(
+    conversationChain,
+    questionRow
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Conversation State
+  |--------------------------------------------------------------------------
+  */
+
+  let lastCustomerMessage =
+    "";
+
+  let lastCustomerMessageTime =
+    0;
+
+  let lastSupportMarkup =
+    "";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Helpers
+  |--------------------------------------------------------------------------
+  */
+
+  function scrollToNewestMessage() {
+    window.requestAnimationFrame(
+      function () {
+        conversationChain.scrollTop =
+          conversationChain.scrollHeight;
+      }
+    );
+  }
+
+  function showConversationChain() {
+    conversationChain.classList.add(
+      "show"
+    );
+
+    if (topicList) {
+      topicList.style.display =
+        "none";
+
+      topicList.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+    }
+  }
+
+  function createMessageElement(
+    role,
+    content,
+    useHtml
+  ) {
+    const message =
+      document.createElement(
+        "div"
+      );
+
+    message.className =
+      "gfloor-conversation-message " +
+      role;
+
+    const bubble =
+      document.createElement(
+        "div"
+      );
+
+    bubble.className =
+      "gfloor-conversation-bubble";
+
+    const roleLabel =
+      document.createElement(
+        "span"
+      );
+
+    roleLabel.className =
+      "gfloor-conversation-role";
+
+    roleLabel.textContent =
+      role === "customer"
+        ? "You"
+        : "G-Floor Support";
+
+    const messageContent =
+      document.createElement(
+        "div"
+      );
+
+    messageContent.className =
+      "gfloor-conversation-content";
+
+    if (useHtml) {
+      messageContent.innerHTML =
+        content;
+    } else {
+      messageContent.textContent =
+        content;
+    }
+
+    bubble.appendChild(
+      roleLabel
+    );
+
+    bubble.appendChild(
+      messageContent
+    );
+
+    message.appendChild(
+      bubble
+    );
+
+    return message;
+  }
+
+  function appendCustomerMessage(
+    question
+  ) {
+    const cleanQuestion =
+      String(
+        question || ""
+      ).trim();
+
+    if (!cleanQuestion) {
+      return;
+    }
+
+    const currentTime =
+      Date.now();
+
+    /*
+     * Prevent the same click or keyboard event
+     * from adding the message twice.
+     */
+
+    if (
+      cleanQuestion ===
+        lastCustomerMessage &&
+      currentTime -
+        lastCustomerMessageTime <
+        1000
+    ) {
+      return;
+    }
+
+    lastCustomerMessage =
+      cleanQuestion;
+
+    lastCustomerMessageTime =
+      currentTime;
+
+    showConversationChain();
+
+    const message =
+      createMessageElement(
+        "customer",
+        cleanQuestion,
+        false
+      );
+
+    conversationChain.appendChild(
+      message
+    );
+
+    scrollToNewestMessage();
+  }
+
+  function appendSupportMessage() {
+    const currentMarkup =
+      responseBox.innerHTML.trim();
+
+    if (!currentMarkup) {
+      return;
+    }
+
+    const temporaryContainer =
+      document.createElement(
+        "div"
+      );
+
+    temporaryContainer.innerHTML =
+      currentMarkup;
+
+    /*
+     * The helpful buttons remain below the input,
+     * so this repeated question is removed from bubbles.
+     */
+
+    temporaryContainer
+      .querySelectorAll(
+        ".gfloor-helpful-question"
+      )
+      .forEach(
+        function (element) {
+          element.remove();
+        }
+      );
+
+    /*
+     * The bubble already displays the G-Floor Support label.
+     */
+
+    const originalTitle =
+      temporaryContainer.querySelector(
+        ".gfloor-response-title"
+      );
+
+    const originalTitleText =
+      originalTitle
+        ? originalTitle.textContent.trim()
+        : "";
+
+    if (originalTitle) {
+      originalTitle.remove();
+    }
+
+    let cleanedMarkup =
+      temporaryContainer.innerHTML.trim();
+
+    /*
+     * Preserve messages such as "Glad we could help!"
+     * when the title is the only response content.
+     */
+
+    if (
+      !temporaryContainer.textContent.trim() &&
+      originalTitleText
+    ) {
+      const titleMessage =
+        document.createElement(
+          "div"
+        );
+
+      titleMessage.textContent =
+        originalTitleText;
+
+      temporaryContainer.appendChild(
+        titleMessage
+      );
+
+      cleanedMarkup =
+        temporaryContainer.innerHTML.trim();
+    }
+
+    if (!cleanedMarkup) {
+      return;
+    }
+
+    const normalizedMarkup =
+      cleanedMarkup
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .trim();
+
+    if (
+      normalizedMarkup ===
+      lastSupportMarkup
+    ) {
+      return;
+    }
+
+    lastSupportMarkup =
+      normalizedMarkup;
+
+    showConversationChain();
+
+    const message =
+      createMessageElement(
+        "support",
+        cleanedMarkup,
+        true
+      );
+
+    conversationChain.appendChild(
+      message
+    );
+
+    /*
+     * The original response box is still used internally
+     * by the chat, but it is hidden visually.
+     */
+
+    responseBox.style.setProperty(
+      "display",
+      "none",
+      "important"
+    );
+
+    scrollToNewestMessage();
+  }
+
+  function clearQuestionField() {
+    window.setTimeout(
+      function () {
+        questionInput.value =
+          "";
+
+        questionInput.focus();
+      },
+      0
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Typed Question Submission
+  |--------------------------------------------------------------------------
+  */
+
+  questionSubmit.addEventListener(
+    "click",
+    function () {
+      const question =
+        questionInput.value;
+
+      appendCustomerMessage(
+        question
+      );
+
+      clearQuestionField();
+    },
+    true
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Enter Key Submission
+  |--------------------------------------------------------------------------
+  */
+
+  questionInput.addEventListener(
+    "keydown",
+    function (event) {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
+        const question =
+          questionInput.value;
+
+        appendCustomerMessage(
+          question
+        );
+
+        clearQuestionField();
+      }
+    },
+    true
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Suggested Question Submission
+  |--------------------------------------------------------------------------
+  */
+
+  const topicPrompts = {
+    flooring:
+      "What is the best flooring for a garage?",
+
+    installation:
+      "Do I have to glue this down?",
+
+    shipping:
+      "What are your shipping and delivery details?",
+
+    order:
+      "Where can I buy G-Floor?",
+
+    cleaning:
+      "How do I clean this?",
+
+    warranty:
+      "I have a warranty or return question."
+  };
+
+  topicButtons.forEach(
+    function (button) {
+      button.addEventListener(
+        "click",
+        function () {
+          const topic =
+            button.dataset.topic;
+
+          if (
+            topic === "other" ||
+            !topicPrompts[topic]
+          ) {
+            return;
+          }
+
+          appendCustomerMessage(
+            topicPrompts[topic]
+          );
+
+          clearQuestionField();
+        },
+        true
+      );
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Watch for New G-Floor Responses
+  |--------------------------------------------------------------------------
+  */
+
+  const responseObserver =
+    new MutationObserver(
+      function () {
+        appendSupportMessage();
+      }
+    );
+
+  responseObserver.observe(
+    responseBox,
+    {
+      childList: true,
+      subtree: true,
+      characterData: true
+    }
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Hide Original Empty Response Area
+  |--------------------------------------------------------------------------
+  */
+
+  responseBox.style.setProperty(
+    "display",
+    "none",
+    "important"
+  );
+})();
