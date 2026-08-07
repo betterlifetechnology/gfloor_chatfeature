@@ -6,6 +6,7 @@ on:
       - "live-bootstrap.js"
       - "routes/live-chat.js"
       - "public/admin-live.js"
+      - "public/admin-live.css"
       - "public/live-chat-client.js"
       - "package.json"
       - "Procfile"
@@ -17,6 +18,7 @@ on:
       - "live-bootstrap.js"
       - "routes/live-chat.js"
       - "public/admin-live.js"
+      - "public/admin-live.css"
       - "public/live-chat-client.js"
       - "package.json"
       - "Procfile"
@@ -50,11 +52,12 @@ jobs:
           ready=0
           for attempt in $(seq 1 36); do
             code=$(curl -L -sS -o /tmp/admin.html -w '%{http_code}' https://gfloor-chatfeature.onrender.com/admin/live || true)
-            if [ "$code" = "200" ] && grep -q "Live Conversations" /tmp/admin.html; then
+            css_code=$(curl -L -sS -o /tmp/admin.css -w '%{http_code}' https://gfloor-chatfeature.onrender.com/admin-live.css || true)
+            if [ "$code" = "200" ] && [ "$css_code" = "200" ] && grep -q "Live Conversations" /tmp/admin.html && grep -q '\[hidden\]{display:none!important}' /tmp/admin.css; then
               ready=1
               break
             fi
-            echo "Waiting for Render deployment (attempt $attempt/36, HTTP $code)..."
+            echo "Waiting for Render deployment (attempt $attempt/36, HTML $code, CSS $css_code)..."
             sleep 10
           done
 
