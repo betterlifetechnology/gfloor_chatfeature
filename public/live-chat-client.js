@@ -9,7 +9,11 @@
   const humanView = panel.querySelector("#gfloor-human-view");
   const contactView = panel.querySelector("#gfloor-contact-view");
   const conversationIdElement = panel.querySelector(".gfloor-conversation-id");
-  if (!form || !contactView || !conversationIdElement) return;
+  const submitButton = panel.querySelector("#gfloor-chat-submit");
+  const result = panel.querySelector("#gfloor-chat-result");
+  const connectButton = panel.querySelector("#gfloor-connect-button");
+
+  if (!form || !contactView || !conversationIdElement || !submitButton) return;
 
   const API_BASE = "https://gfloor-chatfeature.onrender.com";
   const STATUS_URL = API_BASE + "/chat/status";
@@ -19,6 +23,7 @@
   let activeSession = null;
   let pollTimer = null;
   let lastMessageId = 0;
+  let bypassToEmail = false;
 
   const style = document.createElement("style");
   style.textContent = `
@@ -131,7 +136,7 @@
     if (!activeSession) return;
     try {
       const url = LIVE_URL + "/" + encodeURIComponent(activeSession.conversationId) + "?token=" + encodeURIComponent(activeSession.token) + "&after=" + encodeURIComponent(lastMessageId);
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Conversation could not be loaded.");
       updateStatus(data.conversation);
@@ -147,58 +152,151 @@
     pollTimer = window.setInterval(pollConversation, 1800);
   }
 
-  async function startLiveChat(details) {
-    try {
-      const statusResponse = await fetch(STATUS_URL);
-      const support = await statusResponse.json();
-      if (!statusResponse.ok || !support.liveAgentAvailable) return;
+  async function getSupportStatus() {
+    const statusResponse = await fetch(STATUS_URL, { cache: "no-store" });
+    const support = await statusResponse.json();
 
-      const response = await fetch(LIVE_URL + "/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(details)
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status !== 409) console.error("G-Floor live chat request error:", data.error);
-        return;
-      }
+    if (!statusResponse.ok) {
+      throw new Error(support.error || "Live support status could not be checked.");
+    }
 
-      activeSession = {
-        conversationId: data.conversationId,
-        token: data.customerToken
-      };
-      saveSession();
-      lastMessageId = 0;
-      showLiveView();
-      liveStatus.className = "gfloor-live-status waiting";
-      liveStatus.textContent = "You're in the live support queue. A Customer Service representative will join shortly.";
-      liveReply.hidden = true;
-      startPolling();
-    } catch (error) {
-      console.error("G-Floor live chat start error:", error);
+    return support;
+  }
+
+  function setFormMode(support) {
+    if (!submitButton || submitButton.disabled) return;
+
+    if (support && support.liveAgentAvailable) {
+      submitButton.textContent = "Start Live Chat";
+      form.dataset.gfloorLiveMode = "live";
+    } else {
+      submitButton.textContent = "Send Message";
+      form.dataset.gfloorLiveMode = "email";
     }
   }
 
-  form.addEventListener("submit", function () {
+  async function refreshFormMode() {
+    try {
+      const support = await getSupportStatus();
+      setFormMode(support);
+    } catch (error) {
+      console.error("G-Floor live support mode check error:", error);
+      setFormMode(null);
+    }
+  }
+
+  async function createLiveChat(details) {
+    const response = await fetch(LIVE_URL + "/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(details)
+    });
+
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = {};
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || "Live chat could not be started.");
+    }
+
+    activeSession = {
+      conversationId: data.conversationId,
+      token: data.customerToken
+    };
+    saveSession();
+    lastMessageId = 0;
+    showLiveView();
+    liveStatus.className = "gfloor-live-status waiting";
+    liveStatus.textContent = "You're in the live support queue. A Customer Service representative will join shortly.";
+    liveReply.hidden = true;
+    startPolling();
+  }
+
+  function sendThroughExistingEmailForm() {
+    bypassToEmail = true;
+    submitButton.disabled = false;
+    submitButton.textContent = "Send Message";
+    form.dataset.gfloorLiveMode = "email";
+    form.requestSubmit();
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Live-agent form routing
+  |--------------------------------------------------------------------------
+  |
+  | Capture-phase handling makes live chat the primary action while an agent
+  | is online. If nobody is online, or if the live queue cannot be started,
+  | the form is resubmitted once to the existing email handler as a fallback.
+  |--------------------------------------------------------------------------
+  */
+  form.addEventListener("submit", async function (event) {
+    if (bypassToEmail) {
+      bypassToEmail = false;
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
     const conversationId = String(conversationIdElement.textContent || "").trim();
     const name = String(form.name && form.name.value || "").trim();
     const email = String(form.email && form.email.value || "").trim();
     const phone = String(form.phone && form.phone.value || "").trim();
     const message = String(form.message && form.message.value || "").trim();
 
-    if (!conversationId || !name || !email || !phone || !message) return;
+    if (!conversationId || !name || !email || !phone || !message) {
+      return;
+    }
 
-    startLiveChat({
-      conversationId: conversationId,
-      name: name,
-      email: email,
-      phone: phone,
-      message: message,
-      pageUrl: window.location.href,
-      pageTitle: document.title
+    submitButton.disabled = true;
+    submitButton.textContent = "Checking live support...";
+
+    if (result) {
+      result.style.color = "#555555";
+      result.textContent = "";
+    }
+
+    try {
+      const support = await getSupportStatus();
+
+      if (!support.liveAgentAvailable) {
+        sendThroughExistingEmailForm();
+        return;
+      }
+
+      submitButton.textContent = "Joining live chat...";
+
+      await createLiveChat({
+        conversationId: conversationId,
+        name: name,
+        email: email,
+        phone: phone,
+        message: message,
+        pageUrl: window.location.href,
+        pageTitle: document.title
+      });
+    } catch (error) {
+      console.error("G-Floor live chat start error:", error);
+
+      if (result) {
+        result.style.color = "#7a4b00";
+        result.textContent = "Live chat could not be started, so your message is being sent to Customer Service instead.";
+      }
+
+      sendThroughExistingEmailForm();
+    }
+  }, true);
+
+  if (connectButton) {
+    connectButton.addEventListener("click", function () {
+      window.setTimeout(refreshFormMode, 0);
     });
-  });
+  }
 
   liveReply.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -239,5 +337,7 @@
   if (activeSession) {
     showLiveView();
     startPolling();
+  } else {
+    refreshFormMode();
   }
 })();
