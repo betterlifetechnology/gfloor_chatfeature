@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>G-Floor Live Conversations</title>
+  <link rel="stylesheet" href="/admin-live.css">
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <div class="brand-mark">G-FLOOR</div>
+      <h1>Live Conversations</h1>
+      <p>Sign in with the protected admin token to open the Customer Service queue.</p>
+      <label for="agent-name">Your name</label>
+      <input id="agent-name" name="agentName" autocomplete="name" required placeholder="Customer Service Agent">
+      <label for="admin-token">Admin token</label>
+      <input id="admin-token" name="adminToken" type="password" autocomplete="current-password" required placeholder="ADMIN_TOKEN">
+      <button type="submit">Open Live Chat</button>
+      <div id="login-error" class="error" role="alert"></div>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div>
+        <div class="brand-mark compact">G-FLOOR</div>
+        <h1>Live Conversations</h1>
+      </div>
+      <div class="topbar-actions">
+        <span id="presence-dot" class="presence-dot"></span>
+        <span id="presence-label">Connecting…</span>
+        <span id="agent-label" class="agent-label"></span>
+        <button id="logout-button" class="ghost-button" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="conversation-panel">
+        <div class="tabs" role="tablist" aria-label="Conversation status">
+          <button class="tab active" data-status="waiting" type="button">Waiting <span id="waiting-count">0</span></button>
+          <button class="tab" data-status="active" type="button">Active <span id="active-count">0</span></button>
+          <button class="tab" data-status="closed" type="button">Closed</button>
+        </div>
+        <div id="conversation-list" class="conversation-list"></div>
+      </aside>
+
+      <section class="chat-panel">
+        <div id="empty-state" class="empty-state">
+          <h2>Select a conversation</h2>
+          <p>Waiting customers will appear automatically while this dashboard is open.</p>
+        </div>
+
+        <div id="chat-view" class="chat-view" hidden>
+          <div class="chat-header">
+            <div>
+              <div class="status-row">
+                <span id="conversation-status" class="status-badge">Waiting</span>
+                <span id="conversation-id" class="conversation-id"></span>
+              </div>
+              <h2 id="customer-name"></h2>
+              <div id="customer-meta" class="customer-meta"></div>
+            </div>
+            <div class="chat-header-actions">
+              <button id="accept-button" class="primary-button" type="button">Accept Chat</button>
+              <button id="close-button" class="danger-button" type="button" hidden>Close Chat</button>
+            </div>
+          </div>
+
+          <div id="page-context" class="page-context" hidden></div>
+          <div id="messages" class="messages" aria-live="polite"></div>
+
+          <form id="reply-form" class="reply-form" hidden>
+            <textarea id="reply-input" placeholder="Type your reply…" required></textarea>
+            <button type="submit" class="primary-button">Send</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/admin-live.js"></script>
+</body>
+</html>

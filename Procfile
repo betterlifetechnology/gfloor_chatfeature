@@ -1,1 +1,1 @@
-web: npm start
+web: node -r ./live-bootstrap.js server.js
