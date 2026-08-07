@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node -r ./live-bootstrap.js server.js",
-    "learn": "node learn-inbox.js",
+    "learn": "node scripts/import-customer-service-email.js --write",
+    "email-import": "node scripts/import-customer-service-email.js",
     "training-import": "node scripts/import-training-data.js",
     "prelaunch": "node scripts/prelaunch-check.js",
     "db:init-review": "node scripts/init-review-db.js"
