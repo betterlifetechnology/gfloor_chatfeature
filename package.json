@@ -4,7 +4,7 @@
   "description": "Custom G-Floor chat backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node -r ./live-bootstrap.js server.js",
     "learn": "node learn-inbox.js",
     "training-import": "node scripts/import-training-data.js",
     "prelaunch": "node scripts/prelaunch-check.js",
