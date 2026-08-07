@@ -5,8 +5,9 @@
   if (!panel) return;
 
   const form = panel.querySelector("#gfloor-chat-form");
+  const homeView = panel.querySelector("#gfloor-chat-home");
+  const humanView = panel.querySelector("#gfloor-human-view");
   const contactView = panel.querySelector("#gfloor-contact-view");
-  const result = panel.querySelector("#gfloor-chat-result");
   const conversationIdElement = panel.querySelector(".gfloor-conversation-id");
   if (!form || !contactView || !conversationIdElement) return;
 
@@ -63,9 +64,14 @@
   }
 
   function showLiveView() {
+    if (homeView) homeView.hidden = true;
+    if (humanView) humanView.hidden = true;
+    contactView.hidden = false;
+
     Array.from(contactView.children).forEach(function (child) {
       if (child !== liveView && child.tagName !== "BUTTON") child.style.display = "none";
     });
+
     liveView.style.display = "block";
     liveReference.textContent = activeSession ? "Reference: " + activeSession.conversationId : "";
   }
@@ -116,6 +122,8 @@
       liveReply.hidden = true;
       if (pollTimer) window.clearInterval(pollTimer);
       pollTimer = null;
+      activeSession = null;
+      saveSession();
     }
   }
 
