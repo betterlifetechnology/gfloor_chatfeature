@@ -2,11 +2,49 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const originalExpress = require("express");
 const liveChat = require("./routes/live-chat");
+const outlookSync = require("./services/outlook-sync-runner");
 
 const expressModulePath = require.resolve("express");
+
+function clean(value) {
+  return String(value == null ? "" : value).trim();
+}
+
+function secureTokenMatch(supplied, expected) {
+  if (!supplied || !expected) return false;
+
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function requireAdmin(request, response, next) {
+  const expected = clean(process.env.ADMIN_TOKEN);
+  const supplied = clean(request.get("X-Admin-Token")) ||
+    clean(request.get("Authorization")).replace(/^Bearer\s+/i, "");
+
+  if (!expected) {
+    return response.status(503).json({
+      success: false,
+      error: "Admin access is not configured."
+    });
+  }
+
+  if (!secureTokenMatch(supplied, expected)) {
+    return response.status(401).json({
+      success: false,
+      error: "Unauthorized."
+    });
+  }
+
+  next();
+}
 
 function applyAdminHeaders(response) {
   response.set({
@@ -18,7 +56,7 @@ function applyAdminHeaders(response) {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    "Content-Security-Policy": "default-src 'self' https://cdn.shopify.com; connect-src 'self'; img-src 'self' https://cdn.shopify.com data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   });
 }
 
@@ -26,6 +64,21 @@ function sendPublicFile(response, fileName, contentType) {
   const filePath = path.join(__dirname, "public", fileName);
   response.type(contentType);
   response.send(fs.readFileSync(filePath, "utf8"));
+}
+
+function sendReviewDashboard(response) {
+  const filePath = path.join(__dirname, "public", "admin-review.html");
+  let html = fs.readFileSync(filePath, "utf8");
+
+  if (!html.includes("/outlook-sync-admin.js")) {
+    html = html.replace(
+      /<\/body>/i,
+      "  <script src=\"/outlook-sync-admin.js?v=1\"></script>\n</body>"
+    );
+  }
+
+  response.type("text/html; charset=utf-8");
+  response.send(html);
 }
 
 function createWrappedExpress() {
@@ -49,6 +102,49 @@ function createWrappedExpress() {
   app.get("/admin-live.js", function (request, response) {
     applyAdminHeaders(response);
     sendPublicFile(response, "admin-live.js", "application/javascript; charset=utf-8");
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Knowledge Review Outlook Sync Extension
+  |--------------------------------------------------------------------------
+  */
+  app.get("/admin-review.html", function (request, response) {
+    applyAdminHeaders(response);
+    sendReviewDashboard(response);
+  });
+
+  app.get("/outlook-sync-admin.js", function (request, response) {
+    applyAdminHeaders(response);
+    sendPublicFile(response, "outlook-sync-admin.js", "application/javascript; charset=utf-8");
+  });
+
+  app.get("/outlook-sync/status", function (request, response) {
+    response.set("Cache-Control", "no-store");
+    response.json({
+      success: true,
+      outlookSync: outlookSync.getStatus()
+    });
+  });
+
+  app.post("/admin/outlook-sync", requireAdmin, async function (request, response) {
+    applyAdminHeaders(response);
+
+    try {
+      const result = await outlookSync.runSync({ reason: "admin-dashboard" });
+
+      if (!result.success) {
+        return response.status(result.configured === false ? 503 : 500).json(result);
+      }
+
+      response.json(result);
+    } catch (error) {
+      console.error("Manual Outlook knowledge sync error:", error);
+      response.status(500).json({
+        success: false,
+        error: "Outlook knowledge sync failed."
+      });
+    }
   });
 
   app.get("/widget.js", function (request, response, next) {
@@ -119,3 +215,5 @@ function createWrappedExpress() {
 });
 
 require.cache[expressModulePath].exports = createWrappedExpress;
+
+outlookSync.startAutoSync();
