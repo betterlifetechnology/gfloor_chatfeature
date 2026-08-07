@@ -72,4 +72,5 @@ jobs:
           cat /tmp/admin-health.json
           test "$admin_code" = "401"
 
-          curl -fsS https://gfloor-chatfeature.onrender.com/widget.js | grep -q 'gfloorActiveLiveConversation'
+          curl -fsS https://gfloor-chatfeature.onrender.com/widget.js > /tmp/widget.js
+          grep -q 'gfloorActiveLiveConversation' /tmp/widget.js
