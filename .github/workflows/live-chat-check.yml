@@ -10,6 +10,17 @@ on:
       - "package.json"
       - "Procfile"
       - ".github/workflows/live-chat-check.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "live-bootstrap.js"
+      - "routes/live-chat.js"
+      - "public/admin-live.js"
+      - "public/live-chat-client.js"
+      - "package.json"
+      - "Procfile"
+      - ".github/workflows/live-chat-check.yml"
 
 jobs:
   syntax:
@@ -26,3 +37,39 @@ jobs:
       - run: node --check public/admin-live.js
       - run: node --check public/live-chat-client.js
       - run: node -r ./live-bootstrap.js -e "const express=require('express'); const app=express(); if(!app){process.exit(1)}; console.log('bootstrap ok')"
+
+  smoke:
+    if: github.event_name == 'push'
+    needs: syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Render and verify live chat
+        run: |
+          set -euo pipefail
+
+          ready=0
+          for attempt in $(seq 1 36); do
+            code=$(curl -L -sS -o /tmp/admin.html -w '%{http_code}' https://gfloor-chatfeature.onrender.com/admin/live || true)
+            if [ "$code" = "200" ] && grep -q "Live Conversations" /tmp/admin.html; then
+              ready=1
+              break
+            fi
+            echo "Waiting for Render deployment (attempt $attempt/36, HTTP $code)..."
+            sleep 10
+          done
+
+          test "$ready" = "1"
+
+          curl -fsS https://gfloor-chatfeature.onrender.com/chat/status > /tmp/status.json
+          cat /tmp/status.json
+          grep -q '"success":true' /tmp/status.json
+
+          request_code=$(curl -sS -o /tmp/request.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' https://gfloor-chatfeature.onrender.com/chat/live/request || true)
+          cat /tmp/request.json
+          test "$request_code" = "400"
+
+          admin_code=$(curl -sS -o /tmp/admin-health.json -w '%{http_code}' https://gfloor-chatfeature.onrender.com/admin/live/api/health || true)
+          cat /tmp/admin-health.json
+          test "$admin_code" = "401"
+
+          curl -fsS https://gfloor-chatfeature.onrender.com/widget.js | grep -q 'gfloorActiveLiveConversation'
